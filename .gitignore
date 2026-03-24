@@ -3,6 +3,8 @@ apps/*/node_modules/
 apps/server/dist/
 apps/web/.next/
 apps/server/.wwebjs_auth/
+apps/server/.wwebjs_cache/
+apps/server/.pulse-hub-store.json
 .env
 .env.local
 .env.*.local
