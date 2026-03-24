@@ -1,0 +1,3221 @@
+{
+  "channels": [],
+  "sessions": [
+    {
+      "id": "session-h6q5c498",
+      "name": "Sessao q5c498",
+      "phoneNumber": "Numero restaurado",
+      "channelId": "restored",
+      "channelName": "Restaurada",
+      "status": "active",
+      "attendants": 0,
+      "waiting": 0,
+      "unread": 0,
+      "lastHeartbeat": "2026-03-24T18:42:33.135Z",
+      "isDemo": false,
+      "qrCode": null,
+      "qrCodeDataUrl": null,
+      "lastError": null
+    }
+  ],
+  "conversations": [
+    {
+      "id": "553891769624-1629238306@g.us",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "Taiophone Cell Especialista Troca De Vidros",
+      "avatarUrl": null,
+      "participantId": "553891769624-1629238306@g.us",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "Há 1 mensagens não lidas\ndo número 31993840547\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+      "lastMessageAt": "2026-03-24T19:00:41.000Z",
+      "messages": [
+        {
+          "id": "A5B681ED8C6B09D61753F2D9117A3405",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "60$",
+          "timestamp": "2026-03-23T12:39:55.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A50FD738C13B036BD059175117C0D207",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T12:39:59.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A56E5CD01C09B116CC40F82205DFE8AC",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Tela 180",
+          "timestamp": "2026-03-23T12:40:04.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A5E89D1D8F32B14D1D48B4ABB7254603",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "120$",
+          "timestamp": "2026-03-23T12:40:07.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A5EC8E31E17564B5861028F813B0CBA7",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T12:40:32.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB04073892E8994446955",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 38991051978\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-23T12:41:45.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0440AA2679951493C14",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 0 mensagens não lidas\ndo número 38998026249\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-23T12:57:09.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0372D4F9C339FCFDD3E",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 11 mensagens não lidas\ndo número 38998026249\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-23T13:42:20.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0D97FFA792A23F122C6",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 38991142855\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-23T14:14:31.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0DA661EA52614A7781C",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 38998754823\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-23T14:34:39.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB06D1E97BB5097D8894F",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 38999192876\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-23T14:52:37.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB05A55B92EB318B061D1",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "*Bella:*\n@Kamile",
+          "timestamp": "2026-03-23T15:20:51.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0A560C28E0A0E0CC9F0",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "*Bella:*\ne melhor bater a foto",
+          "timestamp": "2026-03-23T15:20:57.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB04EC46F4AEE6BAC82A6",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "*Bella:*\ncliente, tem muita duvida",
+          "timestamp": "2026-03-23T15:21:04.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0B2C7910C92957AD0F2",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 0 mensagens não lidas\ndo número 38999192876\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-23T15:35:37.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB00401EC9E542559CE43",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 22 mensagens não lidas\ndo número 38991168992\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-23T15:44:37.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0EA972302AF83D722B3",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 38988568635\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-23T19:02:47.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "AC1917B8F273F04C925ACEFF47227C0A",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "e pra emborrachar as coloridas também?",
+          "timestamp": "2026-03-23T19:09:41.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0AECE90DDB9B88C63F7",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "*Bella:*\nTbm Samuel",
+          "timestamp": "2026-03-23T19:09:53.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0D1129060D03B86F375",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 38992518893\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-23T19:28:26.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB05227C9A3D954556DA4",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "*DIREÇÃO:*\n📢 COMUNICADO INTERNO – POSTURA NA ABERTURA DA LOJA\n\nEquipe,\n\nFoi identificado funcionários permanecendo na porta da loja no expediente de trabalho.\n\n❌ Isso NÃO é permitido.\n\nA loja deve transmitir:\n✔ Organização\n✔ Profissionalismo\n✔ Prontidão para atendimento\n\nCliente passando e vendo equipe na porta = imagem de bagunça e desleixo.\n\n🟢 A partir de agora:\n\n• Chegou → Entrou → Já inicia organização e atendimento\n• Porta da loja NÃO é lugar de permanência\n• Horário de trabalho = dentro da loja, em posição de trabalho\n\n⚠ Reforço:\nIsso não é sugestão. É padrão da Loja.\n\nQuem não seguir, será chamado diretamente.\n\n— Direção",
+          "timestamp": "2026-03-23T19:30:54.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0713AB4A342142F82AC",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 38991896684\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-23T20:03:23.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A58E03882AEED6D486F2215E5A05C98D",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "https://youtu.be/ZEVUn9Y4ck0",
+          "timestamp": "2026-03-24T12:12:14.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A52DC3F49FEFB70D9B7DDEE44A8A235C",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "https://youtu.be/WVIzALAO3y0",
+          "timestamp": "2026-03-24T12:12:43.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A5F7B45DD81912330391EA47F49D3D1E",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Fazer Pedido de Vendas",
+          "timestamp": "2026-03-24T12:12:50.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A55A0558EA73BA21815473400F7CAF35",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Fazer Ordem de Serviços",
+          "timestamp": "2026-03-24T12:13:00.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB02A4AC743AF9D319993",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 31971177776\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-24T12:16:21.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0FA03BA01617628D27C",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 38991412458\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-24T12:40:42.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0CC9077522F7FC51AD7",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 11964233089\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-24T14:27:18.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB005DD59627346B4BC9F",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 38920000831\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-24T14:29:12.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB09A01BDC83870592FD3",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 38988609472\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-24T16:28:02.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A502FDB6CD1C7545A3A8F7A5091AFF34",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T16:31:02.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB063BEDA73A777E5CE6A",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 38992469906\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-24T16:40:16.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB0E88674151DC813B67A",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 38988609472\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-24T16:47:19.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A5A2262E145E029376841CA26928A09C",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Esses pedido q cai",
+          "timestamp": "2026-03-24T17:17:11.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A58C05F5BCCCBB5E8C25AFD1549B24F5",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "No zap da loja",
+          "timestamp": "2026-03-24T17:17:15.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A5EDEDEB244FE264B1F3B7F812C24340",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "E a mesma",
+          "timestamp": "2026-03-24T17:17:17.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A5A9FF4748EB4126A364C3ADD5CF1B80",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Coisa",
+          "timestamp": "2026-03-24T17:17:18.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "A5BB343AF15642511413254B16CEEB33",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Separar e avisa q ta separado",
+          "timestamp": "2026-03-24T17:17:24.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        },
+        {
+          "id": "3EB090BFC4DDEA7AD0D132",
+          "conversationId": "553891769624-1629238306@g.us",
+          "direction": "incoming",
+          "body": "Há 1 mensagens não lidas\ndo número 31993840547\n\nTrata-se de um número sem presença no momento\nPor gentileza, verificar e atender quando possível",
+          "timestamp": "2026-03-24T19:00:41.000Z",
+          "author": "INFORMATIVO TAIOPHONE 👔"
+        }
+      ]
+    },
+    {
+      "id": "120363408320341687@g.us",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "~𝑹𝒂𝒉 ",
+      "avatarUrl": null,
+      "participantId": "120363408320341687@g.us",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "Já achamos",
+      "lastMessageAt": "2026-03-24T18:31:12.000Z",
+      "messages": [
+        {
+          "id": "3A2169B625051098A87D",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:19:10.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3A35658BA18C76A11F23",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:23:10.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "AC11833EE0D6A81E367CA8006E35D931",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "outgoing",
+          "body": "Nunca molhei tanto na minha vida",
+          "timestamp": "2026-03-23T16:26:59.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3AC24CEB2149B4BFBE0D",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "Espero que na hr que for pra eu subir, não esteja chovendo 🥲",
+          "timestamp": "2026-03-23T16:27:47.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "ACB005C5622F19E3CD0970B7EAA7FA10",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "outgoing",
+          "body": "Dps dessa se eu n pegar pneumonia é milagre",
+          "timestamp": "2026-03-23T16:27:48.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACA5418A01F50DDE5FF6A5F485BE2F5E",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:27:51.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3AE43D5E37931B4DF9F7",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "Simmm",
+          "timestamp": "2026-03-23T16:28:03.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "ACDB43D005843E3411271DF32541A08A",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "outgoing",
+          "body": "Pra vcs ter noção, meu sapato de couro molhou tudo e minha jaqueta de couro tbm",
+          "timestamp": "2026-03-23T16:28:13.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3A648704E427C296129E",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:28:15.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "ACB3ED92AF0BF1BA6D3E05E24DF11A99",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "outgoing",
+          "body": "N sobrou nada",
+          "timestamp": "2026-03-23T16:28:18.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC8225130177D84EF5D551F9FC6D545A",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:28:22.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3A51BC85BBC31716B05C",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:28:35.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3A1C558DD3170F1FD1E9",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "Essa moto não aguenta mais cair kkkkk",
+          "timestamp": "2026-03-23T16:29:03.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3AFAB6A85457E2168A9C",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "A bicicleta tá sendo mais forte do que ela",
+          "timestamp": "2026-03-23T16:29:55.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3A03B4CBFE2CB655B2F1",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T18:29:43.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3A833BEE34FEDF883A24",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "Deixe ele famoso",
+          "timestamp": "2026-03-23T18:29:50.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3AB375F7642FC5EA7307",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T19:20:28.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3A8DEECAC0E95721418A",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "https://tiktok.me/group/ZSuWsFCBn/",
+          "timestamp": "2026-03-23T19:54:55.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "AC7D70FFE3C6DAAD5FBDDECEE94DBEE8",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "outgoing",
+          "body": "Gente do céu ☠️",
+          "timestamp": "2026-03-23T20:14:15.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3A22FB2CA8AE279C9D59",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T20:15:05.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3AD42309EABADB15F7C3",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T20:32:04.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3A3B5724FACCACFCA191",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "É lá se foi 🥲🤣",
+          "timestamp": "2026-03-23T20:32:13.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3A75D6F5113A3EC88FBA",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T21:12:55.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3A39EAAA287938F5B00B",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "@8542908117089 nem entrou gente PQP",
+          "timestamp": "2026-03-23T21:13:33.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3AD99E664FA92CA41394",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T11:10:07.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3A20F55E458F3389D43F",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "20$ conto em um tapioca 🤡🙏🏻",
+          "timestamp": "2026-03-24T11:10:07.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "AC0BE384A3E1ED2F2F078D2EF7F3406A",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "outgoing",
+          "body": "Slk",
+          "timestamp": "2026-03-24T11:11:47.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACBA9CD5C23F017549D6351CAA92400A",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "outgoing",
+          "body": "Pagar 20 reais pra comer farinha",
+          "timestamp": "2026-03-24T11:12:02.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC86C3C5DAF833D055746584A944743A",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "outgoing",
+          "body": "A que ponto chegamos",
+          "timestamp": "2026-03-24T11:12:08.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC931D93DA98BE374A6A6B97FD30A76A",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T11:12:11.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3ABA08F903FE392D6C14",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T11:13:19.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3A6F7ACA91378528B089",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "Alguém sabe qual película é compatível com 14 pro ?",
+          "timestamp": "2026-03-24T18:22:49.000Z",
+          "author": "Inimigos"
+        },
+        {
+          "id": "3AE7F7C72910F81380EC",
+          "conversationId": "120363408320341687@g.us",
+          "direction": "incoming",
+          "body": "Já achamos",
+          "timestamp": "2026-03-24T18:31:12.000Z",
+          "author": "Inimigos"
+        }
+      ]
+    },
+    {
+      "id": "175978366132406@lid",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "O Milionário",
+      "avatarUrl": null,
+      "participantId": "175978366132406@lid",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "[midia]",
+      "lastMessageAt": "2026-03-24T19:00:34.000Z",
+      "messages": [
+        {
+          "id": "AC265ABC3AA9E5F294155623559365CB",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Já o meu n é qualquer um q faz pq tem engenharia por trás",
+          "timestamp": "2026-03-23T11:58:19.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACEC36A9D3204F8E72616B465B166145",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "N é só um site",
+          "timestamp": "2026-03-23T11:58:23.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC5E977C461CAF506A8715DA3B9BAAB3",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Tem backend completo",
+          "timestamp": "2026-03-23T11:58:28.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACD260B45291838A4AE2DD01F8DA4006",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Mas c tem acesso ao código fonte?",
+          "timestamp": "2026-03-23T16:12:12.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC347AA6CF0C0DE903AA96465BDA2331",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Ou só consegue buildar por esse seu aplicativo aí?",
+          "timestamp": "2026-03-23T16:12:20.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC5AA561E7E57C80E639C04692590860",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "<!doctype html>\n<html lang=\"pt-BR\">  <!-- Mude pra pt-BR pro teu caso -->\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    \n    <!-- Título e descrição reais -->\n    <title>Realista Hub – Meu Dashboard Pessoal</title>\n    <meta name=\"description\" content=\"Organize seu dia: agenda, treinos em casa, notícias de jogos (PC, Nintendo, PS2/PS3, Android), mini IA pra rotinas, hábitos e mais. Tudo personalizado pra você!\">\n    \n    <!-- Favicon (coloque arquivos na pasta public/) -->\n    <link rel=\"icon\" type=\"image/svg+xml\" href=\"/favicon.svg\" />\n    <link rel=\"icon\" type=\"image/png\" href=\"/favicon-32x32.png\" sizes=\"32x32\" />\n    <link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/apple-touch-icon.png\" />\n    \n    <!-- Open Graph (pra compartilhar bonito no Whats/Zap/FB/X) -->\n    <meta property=\"og:title\" content=\"Realista Hub – Meu Dia Organizado\" />\n    <meta property=\"og:description\" content=\"Agenda realista, treinos em casa, notícias de jogos retro e atuais, Pomodoro, hábitos gamificados e mini IA. Em português!\" />\n    <meta property=\"og:type\" content=\"website\" />\n    <meta property=\"og:url\" content=\"https://seu-dominio.com\" />  <!-- Mude pro teu deploy link -->\n    <meta property=\"og:image\" content=\"https://storage.googleapis.com/gpt-engineer-file-uploads/e8PmNE9Y3qRYg9yOrGsimSGeBi02/social-images/social-1774277987407-4f257dc1d263e1c5189c1bf8becb89b3.webp\" />  <!-- Mantenha ou troque por uma melhor -->\n    <meta property=\"og:site_name\" content=\"Realista Hub\" />\n    \n    <!-- Twitter/X cards -->\n    <meta name=\"twitter:card\" content=\"summary_large_image\" />\n    <meta name=\"twitter:title\" content=\"Realista Hub – Meu Dashboard Pessoal\" />\n    <meta name=\"twitter:description\" content=\"Seu hub diário: jogos, treinos, agenda e IA personalizada.\" />\n    <meta name=\"twitter:image\" content=\"https://storage.googleapis.com/gpt-engineer-file-uploads/e8PmNE9Y3qRYg9yOrGsimSGeBi02/social-images/social-1774277987407-4f257dc1d263e1c5189c1bf8becb89b3.webp\" />\n    \n    <!-- PWA basics (opcional, mas recomendado) -->\n    <meta name=\"theme-color\" content=\"#000000\" />  <!-- Mude pra tua cor principal -->\n    <link rel=\"manifest\" href=\"/manifest.json\" />  <!-- Crie um manifest.json simples na public/ se quiser PWA -->\n  </head>\n\n  <body>\n    <div id=\"root\"></div>\n    <script type=\"module\" src=\"/src/main.tsx\"></script>\n  </body>\n</html>",
+          "timestamp": "2026-03-23T16:12:29.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "ACB44481A0DBE0B3BFF8E0480C5FF13B",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "HTML puro",
+          "timestamp": "2026-03-23T16:12:58.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC9BF36BEEE0C539DD43D0E7EA1D09BB",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "KD o css?",
+          "timestamp": "2026-03-23T16:13:01.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACB44FF12CA59D0BD0CC7BCDF6A4A218",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Olha minha situação",
+          "timestamp": "2026-03-23T16:13:27.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACBFEA2E31056936FF562ADCCFF929AA",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:13:31.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC6349F251E0DFC0F3495982FBB0D6DF",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "Vixxx eu não achei",
+          "timestamp": "2026-03-23T16:13:31.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "ACA4A02F621510A31BD64EEFC04E293D",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:13:31.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACE2E7BE3E7F46A89BAF5737BFAA6F9B",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "😭😭😭",
+          "timestamp": "2026-03-23T16:13:36.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACD6925F6F6E0F3076BFCDA8907087B9",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Akakakakkakaakkaka é fd",
+          "timestamp": "2026-03-23T16:13:39.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACD4D7A30366933EA476605455E9DF62",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:13:53.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "AC3EFACF1864DF891BF86703F9355556",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:13:53.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "ACC21B8E81DCED068CCDD641F43B0200",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "Eu acho que não tem ND kkkk",
+          "timestamp": "2026-03-23T16:14:13.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "ACDD418C3503688286753086571FA1C7",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:14:56.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACE29B414B3E114EC7ED5B7B08645865",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:14:56.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC681E57B97FCE7308D78F72BF0E5D3A",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Skskskkskse",
+          "timestamp": "2026-03-23T16:16:23.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC284938E13038D8B2726F647B1768F7",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T16:16:29.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "AC2A41B7B41A62A7E6E3C45F63F696C9",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "Eai man",
+          "timestamp": "2026-03-24T15:35:28.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "ACA5548A98533F73E6EB4DB36E04E251",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "C consegue mim emprestar 25",
+          "timestamp": "2026-03-24T15:36:38.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "ACBD725E8DA10DB705E3E33862D8A81E",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "Eu esqueci minha carteira lá em salinas",
+          "timestamp": "2026-03-24T15:36:47.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "AC43373D42FADABA8E9530F4331E5743",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "🤦🏻🤦🏻🤦🏻",
+          "timestamp": "2026-03-24T15:36:53.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "ACB6D6B162EC7D913AB313955E6FE513",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "Ti devolvo dia 28",
+          "timestamp": "2026-03-24T15:37:07.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "ACDBC37CF160420C4B4119E54F6E88ED",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "Com juros",
+          "timestamp": "2026-03-24T15:37:12.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "ACF61B60927C92C91D5EE915B5D09C2A",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Tô sem dinheiro no pix mn",
+          "timestamp": "2026-03-24T15:39:05.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACE198643BAA54184D57260DAB917709",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "E já tem uns cara me devendo 700",
+          "timestamp": "2026-03-24T15:39:10.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC8DAB5E0B429D64F474ECCDE55B6B8E",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Outro 200",
+          "timestamp": "2026-03-24T15:39:13.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACB820520C3DF3B271D982BAD69D1639",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Skskskkskse",
+          "timestamp": "2026-03-24T15:39:14.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC45FC93B85CE8DAC6AB418BBF6B974E",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "tá pegando 700",
+          "timestamp": "2026-03-24T15:39:45.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "AC2EF8EF671E78557C977E9EA7139370",
+          "conversationId": "175978366132406@lid",
+          "direction": "incoming",
+          "body": "Quase mil",
+          "timestamp": "2026-03-24T15:40:00.000Z",
+          "author": "Kauan"
+        },
+        {
+          "id": "ACFA6CF1AD36AEEA4BC84248CA77885F",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Skskskksksekssksk pse",
+          "timestamp": "2026-03-24T15:40:59.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3EB0BAE7100141DEBB44CC",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "ola",
+          "timestamp": "2026-03-24T18:57:07.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3EB09F9170E13B59FD55BA",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "oiii",
+          "timestamp": "2026-03-24T18:57:20.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC5DBE5386CD3C524F0691B497749113",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Opa mn",
+          "timestamp": "2026-03-24T19:00:04.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC387D1B6158F4CA97B8361A53F3F0DF",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "Tô testando minha dashboard do whatsapp",
+          "timestamp": "2026-03-24T19:00:18.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC32EEF8A12C62BD736C3902A42924A1",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T19:00:29.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACAA2FC8E696597CFCDE8FDCCB970D35",
+          "conversationId": "175978366132406@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T19:00:34.000Z",
+          "author": "Operador"
+        }
+      ]
+    },
+    {
+      "id": "120363407816547470@g.us",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "Mah",
+      "participantId": "120363407816547470@g.us",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "[midia]",
+      "lastMessageAt": "2026-03-24T14:50:56.000Z",
+      "messages": [
+        {
+          "id": "AC0E09D5BEC2D1162A524FBA7E41F119",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Quando vi o preço ontem fiquei puto",
+          "timestamp": "2026-03-21T16:04:58.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "ACBBC37DC019A1E77C633E86853F3A69",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "outgoing",
+          "body": "Até 26 d março ze",
+          "timestamp": "2026-03-21T16:11:15.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC65D06D2A1349EDBA8C74E0DDFC32BE",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-21T16:11:17.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC5BFD13E6A93964BFCA07B36283C2E2",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-21T16:37:12.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "AC42FD423766B490219941C0265D4856",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Olha os cara aeeee  kkkkkk",
+          "timestamp": "2026-03-21T16:37:18.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "AC416CFF147F03A966EFE158D800DA7B",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "outgoing",
+          "body": "Os cara no teto",
+          "timestamp": "2026-03-21T16:39:15.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC2B3DC6B85D59CCE55AD957DE515E66",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-21T16:41:19.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "3A62CABDD7FCAA3F3E6A",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Alguém postou as fotos?kkkkkk",
+          "timestamp": "2026-03-22T00:40:56.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "AC0879C0E6365711353F1D4FE2A861CF",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Não",
+          "timestamp": "2026-03-22T00:44:08.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "AC7DC04837098E127EF74CC180654EAA",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-22T00:44:12.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "3A88660560F60D622E28",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Tem que postar",
+          "timestamp": "2026-03-22T14:55:56.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "3AE130AB0C3DD8A93926",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Pse",
+          "timestamp": "2026-03-22T16:26:10.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "ACAB9B61AFF47A2064F110338E295EA6",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-22T16:36:17.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "AC97DECD4040D906595C905031407F2E",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Dúvido vcs acharem o erro kkkkkkk",
+          "timestamp": "2026-03-22T16:36:30.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "ACC86ADADDC393EC7A27C4438E78EF63",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Kauã",
+          "timestamp": "2026-03-22T16:37:10.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "AC7460F6A4A6B8A38670248CFEC759EE",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "O cara simplesmente não existo kkkkkk",
+          "timestamp": "2026-03-22T16:39:23.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "3A2E44E44AC0793BE28B",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-22T16:39:45.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "AC1F5F7944966C4711CD3362C94FFE34",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "outgoing",
+          "body": "Akakakakkakaakkaka",
+          "timestamp": "2026-03-22T17:14:18.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACCD4377E362FEE5AD60893CFACE0F78",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "outgoing",
+          "body": "O cara levando o preto",
+          "timestamp": "2026-03-22T17:14:22.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC7830432D3270A7652072707F27470F",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "outgoing",
+          "body": "Prato*",
+          "timestamp": "2026-03-22T17:14:26.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC4E996F0155D0757262C33335FD43AD",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-22T17:14:31.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3A79D143C118F1A9574C",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-22T19:34:09.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "AC1FC40B8CAC7EB1AFDFCB098460F039",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "@36271065976883",
+          "timestamp": "2026-03-22T19:40:05.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "3A3140CCEB682F2E758D",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Q q tem eu",
+          "timestamp": "2026-03-22T19:40:56.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "AC523BD9C13C35B07B4DB18857DC6505",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Oai o vídeo",
+          "timestamp": "2026-03-22T19:45:57.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "3AAB2C1A8079CFEBC5B0",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "será q n vai ter um dia essa semana q n vai ter aula pra nós?",
+          "timestamp": "2026-03-23T20:17:10.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "3A966C40CB09C2AAA894",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Slk",
+          "timestamp": "2026-03-23T20:17:12.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "3A8BB25FA30568BE3A48",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Difícil eu acho",
+          "timestamp": "2026-03-23T20:17:25.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "3A4FCF2899A0050974F6",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "paia viu",
+          "timestamp": "2026-03-23T20:17:41.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "3A1DC901839743FB95C2",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "N tem nada a noite, ai n tem muito pq de n ter aula",
+          "timestamp": "2026-03-23T20:23:22.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "3AED420AD6F0C270CF8D",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "Mas vai q da sorte de algum dia eles deixarem a gnt dboa",
+          "timestamp": "2026-03-23T20:23:58.000Z",
+          "author": "Sala 3 Reg8"
+        },
+        {
+          "id": "3AA6E2B891BF2F518E91",
+          "conversationId": "120363407816547470@g.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T14:50:56.000Z",
+          "author": "Sala 3 Reg8"
+        }
+      ],
+      "avatarUrl": null
+    },
+    {
+      "id": "status@broadcast",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "Claudia P.S 💜🦋",
+      "participantId": "status@broadcast",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "Titia premium🩷🫰🏻",
+      "lastMessageAt": "2026-03-24T17:54:20.000Z",
+      "messages": [],
+      "avatarUrl": null
+    },
+    {
+      "id": "46003478593785@lid",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "Lucas Da Center Cell",
+      "participantId": "46003478593785@lid",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "Att mn ent vê o valor certinho aí cm eu passando X7 pro pra tu, aí se der eu pego quando tu for ir lá em sp dnv",
+      "lastMessageAt": "2026-03-23T22:17:00.000Z",
+      "messages": [
+        {
+          "id": "ACEE5303BE7E9D57EDB1658970C02C27",
+          "conversationId": "46003478593785@lid",
+          "direction": "outgoing",
+          "body": "Bom dia",
+          "timestamp": "2026-02-16T14:16:29.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACE3267C83F8632F528097E052F27791",
+          "conversationId": "46003478593785@lid",
+          "direction": "outgoing",
+          "body": "Tem o Pix ai Lucas pra eu t passar o dinheiro?",
+          "timestamp": "2026-02-16T14:16:43.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACB1E79A31C1C0E8683AC0D213A920FA",
+          "conversationId": "46003478593785@lid",
+          "direction": "incoming",
+          "body": "Bom dia",
+          "timestamp": "2026-02-16T14:17:05.000Z",
+          "author": "Lucas Da Center Cell"
+        },
+        {
+          "id": "AC00F9133F20AF26AD3BD92C8C9D1645",
+          "conversationId": "46003478593785@lid",
+          "direction": "incoming",
+          "body": "Cpf",
+          "timestamp": "2026-02-16T14:17:28.000Z",
+          "author": "Lucas Da Center Cell"
+        },
+        {
+          "id": "AC9CF2309A101F24F05662B0AF0EEA7A",
+          "conversationId": "46003478593785@lid",
+          "direction": "incoming",
+          "body": "06267860612",
+          "timestamp": "2026-02-16T14:17:38.000Z",
+          "author": "Lucas Da Center Cell"
+        },
+        {
+          "id": "AC853A39620F6B04ECBB580C0280E0C6",
+          "conversationId": "46003478593785@lid",
+          "direction": "incoming",
+          "body": "Ivone oliveira do santos bandeira",
+          "timestamp": "2026-02-16T14:17:43.000Z",
+          "author": "Lucas Da Center Cell"
+        },
+        {
+          "id": "AC2212B39D4E3B40BACF9ECAD4871383",
+          "conversationId": "46003478593785@lid",
+          "direction": "outgoing",
+          "body": "Fechou",
+          "timestamp": "2026-02-16T14:17:53.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC0E1FE519E4B5578C471B03069670D6",
+          "conversationId": "46003478593785@lid",
+          "direction": "incoming",
+          "body": "Banco Inter",
+          "timestamp": "2026-02-16T14:17:57.000Z",
+          "author": "Lucas Da Center Cell"
+        },
+        {
+          "id": "ACDB60913F713AE16BB2B3A296BB1752",
+          "conversationId": "46003478593785@lid",
+          "direction": "incoming",
+          "body": "Vc manda o comprovante pfv",
+          "timestamp": "2026-02-16T14:18:05.000Z",
+          "author": "Lucas Da Center Cell"
+        },
+        {
+          "id": "ACE6839AA66552531E8D83F36AA04EE3",
+          "conversationId": "46003478593785@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-02-16T14:18:59.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC7D70C551302ADC0BDB2A86F082B074",
+          "conversationId": "46003478593785@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-02-16T14:18:59.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC1E43912BC39A0E34A0AD6BF7EDBB20",
+          "conversationId": "46003478593785@lid",
+          "direction": "outgoing",
+          "body": "O Lucas, o poco x8 pro max lançou aí em, tem cm eu t passar esse X7 pro e pegar ele lançamento n?",
+          "timestamp": "2026-03-23T22:05:12.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC860F679FB22628B8CA14011E1CFD9A",
+          "conversationId": "46003478593785@lid",
+          "direction": "outgoing",
+          "body": "Vê oq tu consegue",
+          "timestamp": "2026-03-23T22:05:15.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC622E16731ABDCD12472367067DE34D",
+          "conversationId": "46003478593785@lid",
+          "direction": "incoming",
+          "body": "Opa",
+          "timestamp": "2026-03-23T22:09:37.000Z",
+          "author": "Lucas Da Center Cell"
+        },
+        {
+          "id": "ACE38065BB77DCAC53E65E84FD16F7B2",
+          "conversationId": "46003478593785@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T22:13:45.000Z",
+          "author": "Lucas Da Center Cell"
+        },
+        {
+          "id": "AC0F7AC1C9A34868898676214B860D69",
+          "conversationId": "46003478593785@lid",
+          "direction": "outgoing",
+          "body": "Att mn ent vê o valor certinho aí cm eu passando X7 pro pra tu, aí se der eu pego quando tu for ir lá em sp dnv",
+          "timestamp": "2026-03-23T22:17:00.000Z",
+          "author": "Operador"
+        }
+      ]
+    },
+    {
+      "id": "112098747101414@lid",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "Max Dogus",
+      "participantId": "112098747101414@lid",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "Obrigado por avisar",
+      "lastMessageAt": "2026-03-23T23:49:58.000Z",
+      "messages": [
+        {
+          "id": "3EB0D588C66197D9DE44C6",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "🌟 Da última vez que nos encontramos, você pediu:\n\n- *O duplo*\n- *Coca-Cola Lata*\n\nSe quiser repetir esse pedido, é só clicar no link abaixo e *finalizar pelo cardápio digital* 🍽️\n\nhttps://encurta.anota.ai/iAFYyypWfUPA",
+          "timestamp": "2026-02-08T00:09:08.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB066295124C4B89E3FB6",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Falta pouco para confirmar o seu pedido nº *46*, no valor de *R$ 40,00* 😄\n\nAgora é só realizar o pagamento através do *Pix Copia e Cola* abaixo 😉\n\nMas não esqueça, você tem *5 MINUTOS* para efetuar o pagamento 🕒⬇️",
+          "timestamp": "2026-02-08T00:10:34.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB04D96253919E13AA99F",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "00020101021226860014BR.GOV.BCB.PIX2564qrpix.bradesco.com.br/qr/v2/37787b7a-f0ee-40ba-82ef-d52e37c6a868520400005303986540540.005802BR5925IFOOD.COMAGENCIADERESTAUR6006OSASCO62070503***63046BE8",
+          "timestamp": "2026-02-08T00:10:38.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB0EBF8ACAA8BB5B56798",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Pedido *nº 46*\n\n*Itens:*\n➡ ```2x O duplo```\n      _Quantidade de molho de tomate _\n          ```1x ENCHARCADO```\n➡ ```1x Guarána Antártica Lata```\n\n📱 *Pix*\n\n🛵 *Delivery* (taxa de: *R$ 4,00*)\n🏠 Bom jardim 1182F, Nº 1182F - , Vila Formosa , Taiobeiras\n(Estimativa: *entre 30~60 minutos*)\n\nTotal: *R$ 40,00* \n\nObrigado pela preferência, se precisar de algo é só chamar! 😉",
+          "timestamp": "2026-02-08T00:10:56.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB0B182816549D01627CA",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "kisuke, o pedido Nº 46 está em produção.",
+          "timestamp": "2026-02-08T00:11:01.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "ACD6F2A3BA69894DDB2F22E71B2630D1",
+          "conversationId": "112098747101414@lid",
+          "direction": "outgoing",
+          "body": "Boa noite, se for possível pd tocar campainha? As vezes eu não escuto pq a casa é no fundo",
+          "timestamp": "2026-02-08T00:17:39.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3EB0085439298BBEF46F78",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Fiquei em dúvida sobre sua solicitação Kisuke.\nVocê gostaria de *avisar quando sair* ou *fazer uma observação a um pedido realizado*?",
+          "timestamp": "2026-02-08T00:17:50.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "AC2C66F19BA2B6F87FA05F7AD9BCFAC7",
+          "conversationId": "112098747101414@lid",
+          "direction": "outgoing",
+          "body": "Avisar tb pd ser",
+          "timestamp": "2026-02-08T00:18:08.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3EB0861222C5BF03F14B3F",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Fiquei em dúvida sobre sua solicitação Kisuke.\nVocê gostaria de *pedir por aqui* ou *avisar quando sair*?",
+          "timestamp": "2026-02-08T00:18:19.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "AC4D74BAE6E8E57EE8E41E944EEB42C5",
+          "conversationId": "112098747101414@lid",
+          "direction": "outgoing",
+          "body": "Avisar quando sair",
+          "timestamp": "2026-02-08T00:18:27.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3EB0C80BBB12B9BBCFFBD3",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Opa",
+          "timestamp": "2026-02-08T00:18:32.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB06FBCE70464A93CD78D",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Blz",
+          "timestamp": "2026-02-08T00:18:33.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB0B75FC8A47709D7EE7F",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Tô chegando! Seu pedido já está na rota de *entrega* 🛵",
+          "timestamp": "2026-02-08T00:55:17.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "ACCBB1C8EF184752639D5042651BF868",
+          "conversationId": "112098747101414@lid",
+          "direction": "outgoing",
+          "body": "Boa noite",
+          "timestamp": "2026-03-07T22:50:40.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3EB0D6008A90FD195325F4",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Olá, Boa noite Kisuke",
+          "timestamp": "2026-03-07T22:50:47.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB0862148A9C980990BC1",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Seja bem-vindo(a) ao nosso autoatendimento! 🤖 No que posso ajudar? Você pode realizar seu pedido por aqui: https://encurta.anota.ai/mo3YtXfFpvKO\n",
+          "timestamp": "2026-03-07T22:50:54.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB0FEE4EEAD92C36A9BD3",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "🌟 Da última vez que nos encontramos, você pediu:\n\n- *O duplo*\n- *Guarána Antártica Lata*\n\nSe quiser repetir esse pedido, é só clicar no link abaixo e *finalizar pelo cardápio digital* 🍽️\n\nhttps://encurta.anota.ai/mo3YtXfFpvKO",
+          "timestamp": "2026-03-07T22:51:00.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB0F95263D32CDCC52B11",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Pedido *nº 14*\n\n*Itens:*\n➡ ```1x O duplo```\n      _Quantidade de molho de tomate _\n          ```1x ENCHARCADO```\n➡ ```1x Guarána Antártica Lata```\n\n💵 *Dinheiro* (troco para *R$ 50,00*)\n\n🛵 *Delivery* (taxa de: *R$ 4,00*)\n🏠 Bom jardim 1182F, Nº 1182F - , Vila Formosa , Taiobeiras\n(Estimativa: *entre 60~80 minutos*)\n\nTotal: *R$ 25,00* \n\nObrigado pela preferência, se precisar de algo é só chamar! 😉",
+          "timestamp": "2026-03-07T22:53:39.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB0B83B4493D68750E692",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "kisuke, o pedido Nº 14 está em produção.",
+          "timestamp": "2026-03-07T22:53:45.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB082EA0553392791A636",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Tô chegando! Seu pedido já está na rota de *entrega* 🛵",
+          "timestamp": "2026-03-07T23:27:12.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "ACB8AD18818D29A40C4F4B660D3B6E31",
+          "conversationId": "112098747101414@lid",
+          "direction": "outgoing",
+          "body": "Ola boa noite receberam meu pedido?",
+          "timestamp": "2026-03-23T23:36:45.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3EB0F672BE996A7B28A007",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Olá, Boa noite Kisuke",
+          "timestamp": "2026-03-23T23:36:51.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "AC6552EB641202DE88A1D0A7DE12D36A",
+          "conversationId": "112098747101414@lid",
+          "direction": "outgoing",
+          "body": "Pedido #26",
+          "timestamp": "2026-03-23T23:37:00.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3EB0DB6923A1BA4926360C",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Olá!",
+          "timestamp": "2026-03-23T23:37:34.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB0E5242286B58CD13E28",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Sim",
+          "timestamp": "2026-03-23T23:38:05.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB0E0190DAC9523379046",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Certinho aqui",
+          "timestamp": "2026-03-23T23:38:07.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "AC66330451DFFA6A7930339AFA5D4762",
+          "conversationId": "112098747101414@lid",
+          "direction": "outgoing",
+          "body": "Muito obrigado",
+          "timestamp": "2026-03-23T23:38:09.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3EB0B7B95A35757DCC1646",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "😉",
+          "timestamp": "2026-03-23T23:40:37.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB095236C9E71439F4FC2",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "Tô chegando! Seu pedido já está na rota de *entrega* 🛵",
+          "timestamp": "2026-03-23T23:49:35.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "3EB044140BC4A3A26C1631",
+          "conversationId": "112098747101414@lid",
+          "direction": "incoming",
+          "body": "O entregador irá passar aí agora",
+          "timestamp": "2026-03-23T23:49:48.000Z",
+          "author": "Max Dogus"
+        },
+        {
+          "id": "AC11F63331368E466BAAFA020662C1E5",
+          "conversationId": "112098747101414@lid",
+          "direction": "outgoing",
+          "body": "Obrigado por avisar",
+          "timestamp": "2026-03-23T23:49:58.000Z",
+          "author": "Operador"
+        }
+      ]
+    },
+    {
+      "id": "0@c.us",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "WhatsApp",
+      "participantId": "0@c.us",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "[midia]",
+      "lastMessageAt": "2026-03-24T01:47:22.000Z",
+      "messages": [
+        {
+          "id": "1552252942767125-1",
+          "conversationId": "0@c.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-02-03T02:56:59.000Z",
+          "author": "WhatsApp"
+        },
+        {
+          "id": "1521834435734314-1",
+          "conversationId": "0@c.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-02-13T01:46:58.000Z",
+          "author": "WhatsApp"
+        },
+        {
+          "id": "804537472210319-1",
+          "conversationId": "0@c.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-02-24T02:09:42.000Z",
+          "author": "WhatsApp"
+        },
+        {
+          "id": "1201603818629636-1",
+          "conversationId": "0@c.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-04T01:48:31.000Z",
+          "author": "WhatsApp"
+        },
+        {
+          "id": "1526636171722386-1",
+          "conversationId": "0@c.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-14T01:40:54.000Z",
+          "author": "WhatsApp"
+        },
+        {
+          "id": "759236650564027-1",
+          "conversationId": "0@c.us",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T01:47:22.000Z",
+          "author": "WhatsApp"
+        }
+      ]
+    },
+    {
+      "id": "198535031091369@lid",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "Mae Elly Rainha",
+      "participantId": "198535031091369@lid",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "Dinovo",
+      "lastMessageAt": "2026-03-24T02:06:33.000Z",
+      "messages": [
+        {
+          "id": "ACCD0E583F4C04F003F413180107F670",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-21T22:59:20.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "ACE4B5309C7C4DF6499C68745B1422F8",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-21T22:59:25.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC433B56A26F3DB7DC18F4B876570F01",
+          "conversationId": "198535031091369@lid",
+          "direction": "outgoing",
+          "body": "Qq foi",
+          "timestamp": "2026-03-21T22:59:28.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC3138AFF566E536A286A62356536B82",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-21T22:59:33.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC3F0E1D1F53435ECA16A0F4F3EB4905",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-21T22:59:48.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "ACF5AABB0940566D681FF67F3DF63436",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "Banhar pra",
+          "timestamp": "2026-03-21T23:00:00.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC0029500D8BE6814915F6F0EBEF1D01",
+          "conversationId": "198535031091369@lid",
+          "direction": "outgoing",
+          "body": "Vou mãe",
+          "timestamp": "2026-03-21T23:00:12.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACC7924EBA09716568CB5CEC63A0A09E",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-21T23:00:18.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC27F8C07CD48974B3ACE55C89449F78",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-21T23:00:20.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC958A5B7F9257D4211B3C4FCF2AC8C9",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-21T23:00:24.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC259455ABE1DABE06BAF3119347FE27",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-21T23:00:30.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC93893F5A27736DF57A054EACBD03A6",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-21T23:00:42.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC5B770D31C2C08C0623528D7C2DD933",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "Oiiii Alan",
+          "timestamp": "2026-03-24T01:54:15.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC8C838456D2457AD58B994F83852038",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "Já está em casa",
+          "timestamp": "2026-03-24T01:54:22.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC6C952E838BE248529AA5CD6A221D13",
+          "conversationId": "198535031091369@lid",
+          "direction": "outgoing",
+          "body": "Oiiii mãe",
+          "timestamp": "2026-03-24T01:54:25.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACEDADBB0C1A9110BC5E04EB536169AB",
+          "conversationId": "198535031091369@lid",
+          "direction": "outgoing",
+          "body": "Estou sim",
+          "timestamp": "2026-03-24T01:54:28.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACC407C3071D422AEC5037CFE0CEC446",
+          "conversationId": "198535031091369@lid",
+          "direction": "outgoing",
+          "body": "Bença, cm a senhora tá?",
+          "timestamp": "2026-03-24T01:54:34.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACDD4EBDFC0D9BFC5F17E0E99887072A",
+          "conversationId": "198535031091369@lid",
+          "direction": "outgoing",
+          "body": "E vó",
+          "timestamp": "2026-03-24T01:54:36.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC86A50FCB65D96F0C9D7319192327C2",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "Foi no colégio",
+          "timestamp": "2026-03-24T01:54:41.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "ACAF601813FAA0F5A824BAD968939FDD",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "Deus te abençoe... estou bem não",
+          "timestamp": "2026-03-24T01:54:55.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC8F32D50A724A785B05BF739E65F46C",
+          "conversationId": "198535031091369@lid",
+          "direction": "outgoing",
+          "body": "Melhoras mãe",
+          "timestamp": "2026-03-24T01:55:04.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC7547DC3EFA0CF7C5C30F449D31A907",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "Dor de cabeça",
+          "timestamp": "2026-03-24T01:55:04.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC3469D2373999A34D043F0EE6E59D23",
+          "conversationId": "198535031091369@lid",
+          "direction": "outgoing",
+          "body": "A senhor vai sarar e vó tbm",
+          "timestamp": "2026-03-24T01:55:10.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACC4C2F10D78818ED9703219017A3F3B",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "Mãe tá com dor também",
+          "timestamp": "2026-03-24T01:55:19.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC8E539CF51CAF3A84F3D4698360CEFD",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "Amém",
+          "timestamp": "2026-03-24T01:55:25.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC624D3BEE86ED2AF1B5713D539C0F62",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "?????",
+          "timestamp": "2026-03-24T01:55:36.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC302370F416DD1FDF2E79F513B9D274",
+          "conversationId": "198535031091369@lid",
+          "direction": "outgoing",
+          "body": "Meeeeeeeeeeeeelhoras pra vcs duas",
+          "timestamp": "2026-03-24T01:56:16.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC2C394592BE9D538DA73728108DEFA5",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "Foi no colégio",
+          "timestamp": "2026-03-24T01:56:42.000Z",
+          "author": "Mae Elly Rainha"
+        },
+        {
+          "id": "AC5A05FAEAF34A550B1DA03ACFC6BE78",
+          "conversationId": "198535031091369@lid",
+          "direction": "outgoing",
+          "body": "Fui n mãe",
+          "timestamp": "2026-03-24T01:57:03.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC472E475EEFAD853CB8F19121DE2F71",
+          "conversationId": "198535031091369@lid",
+          "direction": "incoming",
+          "body": "Dinovo",
+          "timestamp": "2026-03-24T02:06:33.000Z",
+          "author": "Mae Elly Rainha"
+        }
+      ]
+    },
+    {
+      "id": "34433407160365@lid",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "+55 38 9100-8153",
+      "participantId": "34433407160365@lid",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "ola",
+      "lastMessageAt": "2026-03-24T14:39:56.747Z",
+      "messages": [
+        {
+          "id": "ACF8678CC4607AE5A1D15CA38C65A0A0",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Mi 9SE",
+          "timestamp": "2026-03-12T20:03:28.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC1F4BD6889A97C30F81DBE6E9D4A9F6",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 10 4g",
+          "timestamp": "2026-03-12T20:03:37.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACE8A86C546E735E5A3548EBC3B0BCA8",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 10 pro",
+          "timestamp": "2026-03-12T20:03:42.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC7C7A69AD8202612FD71E6AA826D6AB",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 10 pro max",
+          "timestamp": "2026-03-12T20:03:52.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC27731CE16AE5A44E8E6E08F21D1EC6",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi 10c",
+          "timestamp": "2026-03-12T20:03:57.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC981B46BC64DA14C8E75E3FC743A099",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 10s",
+          "timestamp": "2026-03-12T20:04:05.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACA0D7528BB27074AC5B5C98D1C95157",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 11 4g",
+          "timestamp": "2026-03-12T20:04:13.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC8089858B75EC93583DEB6C4E04FC20",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 11 4g",
+          "timestamp": "2026-03-12T20:04:19.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACF0DC81DCC9F26B4BB4224B3BDE9F25",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 11 pro 4g",
+          "timestamp": "2026-03-12T20:04:26.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC443534BD77005C71BF516116835BE7",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 11 pro 5g",
+          "timestamp": "2026-03-12T20:04:32.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC6A08FC562AB4A592E33E77E2111873",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 11s",
+          "timestamp": "2026-03-12T20:04:46.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC44746B6175AC7E232FA1328834574A",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Mi 11T pro",
+          "timestamp": "2026-03-12T20:04:51.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC477CA0FEA414856203EA0D7B39C01A",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 12 4g",
+          "timestamp": "2026-03-12T20:04:59.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACEBC2FF77277801CBE9580765B4AE92",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 12 pro",
+          "timestamp": "2026-03-12T20:05:05.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC43D69D0C732D5AA05B399A5F6A4A13",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 12 pro 5g",
+          "timestamp": "2026-03-12T20:05:19.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC35A70F5B521B37F015A752B5827A6E",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 12s",
+          "timestamp": "2026-03-12T20:05:23.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACD7EFC5B7250745DF7E63B99CABF8B4",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Redmi note 13 4g",
+          "timestamp": "2026-03-12T20:05:31.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC88F81F918D8FAC0241A5669CD58409",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Poco m3",
+          "timestamp": "2026-03-12T20:05:34.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC2874931A0F0469F9EC02B5033C332B",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Poco m6 pro",
+          "timestamp": "2026-03-12T20:05:37.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC0E36D066CCBC32ED16425928207DBB",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Poco x3",
+          "timestamp": "2026-03-12T20:05:40.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC8870912549CBAC9C2148250E3676AE",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Poco X3 GT",
+          "timestamp": "2026-03-12T20:05:46.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACD6E5363A650140821759DE2804936D",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Poco X4",
+          "timestamp": "2026-03-12T20:05:51.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC4C7EF04AEC3847B60E8BBDA7752C1D",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Poco X5",
+          "timestamp": "2026-03-12T20:05:54.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACB277EBDEE321711382ADCD4A7A9F4B",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Poco X7",
+          "timestamp": "2026-03-12T20:05:58.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC67E7DF8B5DA9C4EFEBD1F6785FD672",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Poco X7 pro",
+          "timestamp": "2026-03-12T20:06:01.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC4792FA193350F21B448A66F9D8175A",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Realme note 50",
+          "timestamp": "2026-03-12T20:06:08.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC21A84B064A71CCCB152C6FA2AF36A5",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Realme c53",
+          "timestamp": "2026-03-12T20:06:13.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC8631EAB4E96018E3AD3812CFBC6CBE",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Realme c61",
+          "timestamp": "2026-03-12T20:06:18.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACBB129826CB741BF86BD339DB33BDB0",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "Realme c75",
+          "timestamp": "2026-03-12T20:06:24.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC4CC8FF3BDAB274C3875E39541D341C",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "148.230.74.82:5173",
+          "timestamp": "2026-03-17T13:57:07.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC1ED61B29C4C7B533476A26E947BDB7",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "38999493213",
+          "timestamp": "2026-03-24T11:30:30.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "message-10n552j6",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "oi",
+          "timestamp": "2026-03-24T14:13:52.158Z",
+          "author": "Operador"
+        },
+        {
+          "id": "message-mhbjuojf",
+          "conversationId": "34433407160365@lid",
+          "direction": "outgoing",
+          "body": "ola",
+          "timestamp": "2026-03-24T14:39:56.747Z",
+          "author": "Operador"
+        }
+      ]
+    },
+    {
+      "id": "123798355501295@lid",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "Maryana",
+      "participantId": "123798355501295@lid",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "Era pra ti cochilar vei",
+      "lastMessageAt": "2026-03-24T18:38:29.000Z",
+      "messages": [
+        {
+          "id": "ACB9007E399D1E8459A4AB7C5262EDD3",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Suas onomatopeias",
+          "timestamp": "2026-03-24T17:54:31.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC5C29F586C8A375D1B9F1896F8058FD",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Tô indooo",
+          "timestamp": "2026-03-24T17:55:05.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACE30C18E2695182B6893BA0FF865E59",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Jajá chego e t mando msg",
+          "timestamp": "2026-03-24T17:55:08.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC6363DE2D9C68B24EA09E55533A805A",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Fique bem",
+          "timestamp": "2026-03-24T17:55:12.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC7327B7210BAA7A33DD8881FA6987E5",
+          "conversationId": "123798355501295@lid",
+          "direction": "incoming",
+          "body": "Ne",
+          "timestamp": "2026-03-24T17:55:13.000Z",
+          "author": "Maryana"
+        },
+        {
+          "id": "AC4A8E61B8F3F2D8CEB75AD0C4808C16",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Se cuida",
+          "timestamp": "2026-03-24T17:55:15.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC46589931B326F7CAD24180BAF1687A",
+          "conversationId": "123798355501295@lid",
+          "direction": "incoming",
+          "body": "Okokokok",
+          "timestamp": "2026-03-24T17:55:16.000Z",
+          "author": "Maryana"
+        },
+        {
+          "id": "ACA53AF9353DF0B2F603F50728C1F81B",
+          "conversationId": "123798355501295@lid",
+          "direction": "incoming",
+          "body": "Vc também",
+          "timestamp": "2026-03-24T17:55:22.000Z",
+          "author": "Maryana"
+        },
+        {
+          "id": "ACDFAECBF7D8224CD4B34015B8A46741",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Por vc sempre",
+          "timestamp": "2026-03-24T17:55:27.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC0CBD4D42941B701BFE3C8CD8AF2462",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Chegueiii",
+          "timestamp": "2026-03-24T18:03:15.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC025B77B2AC768778EC1B15633BA642",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Vou t mostrar aq",
+          "timestamp": "2026-03-24T18:04:59.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACF50C3FCEFA6E33B885C7BA48124C1D",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "O design da minha futura dashboard",
+          "timestamp": "2026-03-24T18:05:25.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC45B4112A33CB8BC35560EB7D9F703E",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Q conecta whatsapp, Instagram e Facebook",
+          "timestamp": "2026-03-24T18:05:33.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC7F90E6078960F111CCD8547C8DB064",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Isso q eu tô fznd agr",
+          "timestamp": "2026-03-24T18:05:58.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACA39CA0FB28F0F2ECF0DD6C00638D4B",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "No seu pingu 3D",
+          "timestamp": "2026-03-24T18:06:02.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC05F16E93E770474930D6132A6A146D",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Ti quer mais alguma coisa?",
+          "timestamp": "2026-03-24T18:06:06.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC5936B4DA5712305159C3CCD9F80A8B",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Ou ent outra coisa mais útil",
+          "timestamp": "2026-03-24T18:08:30.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC2A96957757BF1211907836DB4AE716",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Ti quer uma IA offline pra vc levar pra onde quiser?",
+          "timestamp": "2026-03-24T18:08:42.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC41D7CE8C502AE3FCD8A078D215D09E",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": ":3",
+          "timestamp": "2026-03-24T18:08:45.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACE77586F59567BED14AF86FFB686E5F",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Vei é mto caro ☠️ 2k pra fzr uma brincadeira dessa",
+          "timestamp": "2026-03-24T18:17:44.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC96BBBD67474870710AC4CBD29123BD",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Skskskksksekssksk",
+          "timestamp": "2026-03-24T18:17:50.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC61E7D1A1BD0F8A660F85DC2A9FB365",
+          "conversationId": "123798355501295@lid",
+          "direction": "incoming",
+          "body": "Nada, tá bom",
+          "timestamp": "2026-03-24T18:30:35.000Z",
+          "author": "Maryana"
+        },
+        {
+          "id": "AC4567448406FD1C17F36A858B37382E",
+          "conversationId": "123798355501295@lid",
+          "direction": "incoming",
+          "body": "Ent n",
+          "timestamp": "2026-03-24T18:30:50.000Z",
+          "author": "Maryana"
+        },
+        {
+          "id": "AC2641022C60D15F9FCEC02AB9F44486",
+          "conversationId": "123798355501295@lid",
+          "direction": "incoming",
+          "body": "Eu já falei",
+          "timestamp": "2026-03-24T18:30:53.000Z",
+          "author": "Maryana"
+        },
+        {
+          "id": "AC5B3D55FC592B109E90C41FF0943586",
+          "conversationId": "123798355501295@lid",
+          "direction": "incoming",
+          "body": "Q N quero nd d dinheiro",
+          "timestamp": "2026-03-24T18:31:00.000Z",
+          "author": "Maryana"
+        },
+        {
+          "id": "AC7C5953E0C04D7173F67BAB4ABB3604",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Poxa solta a memória só um tiquinho",
+          "timestamp": "2026-03-24T18:36:16.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC0330F1E9226F12004D6FB4C4429096",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Dx eu realizar oq sua cabeça imagina",
+          "timestamp": "2026-03-24T18:36:26.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC439927CE72EB8E5E94A7A4198299AB",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Vai ser legal :)",
+          "timestamp": "2026-03-24T18:36:29.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC2F2CD60FA267D0884BAAAA54B0F141",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Ksksksksksksk",
+          "timestamp": "2026-03-24T18:36:33.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC8D3D88493321297278AEAF0574E8D1",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Eu n esperava q fosse tão ABSURDO",
+          "timestamp": "2026-03-24T18:36:39.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC41DA32BC62BBF094764C788942EF81",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Mas é um mini pc né ent faz sentido",
+          "timestamp": "2026-03-24T18:36:47.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACB34BCB1C35638E378FC233D88B39DB",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Tá bommm",
+          "timestamp": "2026-03-24T18:36:52.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC9F43D2E8BC922A1559730696B11964",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Eu já entendi",
+          "timestamp": "2026-03-24T18:36:54.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC2ACFE11A605277D3DC40F6E27E7E5E",
+          "conversationId": "123798355501295@lid",
+          "direction": "incoming",
+          "body": "Eu tô com sono",
+          "timestamp": "2026-03-24T18:37:16.000Z",
+          "author": "Maryana"
+        },
+        {
+          "id": "AC811AE7EE122DC4A54478104B32FD5F",
+          "conversationId": "123798355501295@lid",
+          "direction": "incoming",
+          "body": "Tô capotando",
+          "timestamp": "2026-03-24T18:37:35.000Z",
+          "author": "Maryana"
+        },
+        {
+          "id": "AC21C2833E2DE8C79C6A3FF4DB0E4750",
+          "conversationId": "123798355501295@lid",
+          "direction": "incoming",
+          "body": "Vou sair com mãe",
+          "timestamp": "2026-03-24T18:37:38.000Z",
+          "author": "Maryana"
+        },
+        {
+          "id": "ACF5693DAC83B2145CFF47F2913CA947",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "O meudeuso",
+          "timestamp": "2026-03-24T18:38:18.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACAA26D97852A815992CAA916FAC98AC",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Cute cute",
+          "timestamp": "2026-03-24T18:38:21.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACFDF0EFCFC13B672E836D0C452BB8EC",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Vai cm Deussss",
+          "timestamp": "2026-03-24T18:38:24.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACDD59BA232C07BA8CC90E3D2854BA22",
+          "conversationId": "123798355501295@lid",
+          "direction": "outgoing",
+          "body": "Era pra ti cochilar vei",
+          "timestamp": "2026-03-24T18:38:29.000Z",
+          "author": "Operador"
+        }
+      ],
+      "avatarUrl": null
+    },
+    {
+      "id": "126409477513370@lid",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "+55 11 3631-8977",
+      "participantId": "126409477513370@lid",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "blz",
+      "lastMessageAt": "2026-03-24T13:59:31.000Z",
+      "messages": [
+        {
+          "id": "4DA711AE576CCD1FC2",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Olá! Sua fatura SParcelado no valor de R$88,56 vence em 25-02-2026. Para realizar o pagamento, basta acessar nosso aplicativo e escolher o melhor método para você: PIX ou Shopee Pay. Se o pagamento da fatura já foi efetuado, pedimos por gentileza, que ignore esta mensagem.",
+          "timestamp": "2026-02-21T17:21:39.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "13BBC15F3DE2B96CE9",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Olá! Sua fatura SParcelado no valor de R$88,56 vence em 25-02-2026. Para realizar o pagamento, basta acessar nosso aplicativo e escolher o melhor método para você: PIX ou Shopee Pay. Se o pagamento da fatura já foi efetuado, pedimos por gentileza, que ignore esta mensagem.",
+          "timestamp": "2026-02-22T17:51:50.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "0D719EC7FE879CC9DD",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Olá! Sua fatura SParcelado no valor de R$88,56 vence em 25-02-2026. Para realizar o pagamento, basta acessar nosso aplicativo e escolher o melhor método para você: PIX ou Shopee Pay. Se o pagamento da fatura já foi efetuado, pedimos por gentileza, que ignore esta mensagem.",
+          "timestamp": "2026-02-24T17:12:03.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "7126441C9B890CB816",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Olá! Sua fatura SParcelado no valor de R$88,56 vence hoje. Pague sua fatura e continue aproveitando nossos benefícios. Se o pagamento da fatura já foi efetuado, pedimos por gentileza, que ignore esta mensagem.",
+          "timestamp": "2026-02-25T15:20:48.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "5AFF595E10C586DA5B",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua fatura do SParcelado está vencida. Por favor, efetue o pagamento integral agora para evitar mais cobranças por atraso no pagamento! Ignore esta mensagem se o pagamento já houver sido feito. Clique no link para pagar agora: https://shopee.com.br/splhome",
+          "timestamp": "2026-02-26T16:10:30.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "41FA1B47B15B9C3DA1",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua fatura do SParcelado está vencida. Por favor, efetue o pagamento integral agora para evitar mais cobranças por atraso no pagamento! Ignore esta mensagem se o pagamento já houver sido feito. Clique no link para pagar agora: https://shopee.com.br/splhome",
+          "timestamp": "2026-02-27T15:55:58.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "8C2D320E879D87F939",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua fatura do SParcelado está vencida. Por favor, efetue o pagamento integral agora para evitar mais cobranças por atraso no pagamento! Ignore esta mensagem se o pagamento já houver sido feito. Clique no link para pagar agora: https://shopee.com.br/splhome",
+          "timestamp": "2026-02-28T15:50:43.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "C3FC218B7DEC730BDE",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua fatura do SParcelado está vencida. Por favor, efetue o pagamento integral agora para evitar mais cobranças por atraso no pagamento! Ignore esta mensagem se o pagamento já houver sido feito. Clique no link para pagar agora: https://shopee.com.br/splhome",
+          "timestamp": "2026-03-01T15:36:39.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "EECEFD9BFE5BE516DC",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua fatura do SParcelado está vencida. Por favor, efetue o pagamento integral agora para evitar mais cobranças por atraso no pagamento! Ignore esta mensagem se o pagamento já houver sido feito. Clique no link para pagar agora: https://shopee.com.br/splhome",
+          "timestamp": "2026-03-02T15:58:36.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "811C2E72E8DD04C509",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua fatura do SParcelado está vencida. Por favor, efetue o pagamento integral agora para evitar mais cobranças por atraso no pagamento! Ignore esta mensagem se o pagamento já houver sido feito. Clique no link para pagar agora: https://shopee.com.br/splhome",
+          "timestamp": "2026-03-03T16:35:10.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "9C477B2CA8206FA32C",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua fatura do SParcelado está vencida. Por favor, efetue o pagamento integral agora para evitar mais cobranças por atraso no pagamento! Ignore esta mensagem se o pagamento já houver sido feito. Clique no link para pagar agora: https://shopee.com.br/splhome",
+          "timestamp": "2026-03-04T16:19:39.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "BC723CC8B4BB5FF0E2",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Você tem uma fatura do SParcelado em atraso com um valor pendente de R$93,21. Sua conta foi atribuída aos nossos processos de cobrança e você será contatado em breve por um de nossos analistas. Por favor, clique aqui para fazer imediatamente o pagamento integral de sua fatura: https://shopee.com.br/splhome",
+          "timestamp": "2026-03-05T15:25:51.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "43028F1F124F096ADE",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Você tem uma fatura do SParcelado em atraso com um valor pendente de R$93,57. Sua conta foi atribuída aos nossos processos de cobrança e você será contatado em breve por um de nossos analistas. Por favor, clique aqui para fazer imediatamente o pagamento integral de sua fatura: https://shopee.com.br/splhome",
+          "timestamp": "2026-03-06T13:44:09.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "2CD671184B61E3FD17",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Você tem uma fatura do SParcelado em atraso com um valor pendente de R$93,93. Sua conta foi atribuída aos nossos processos de cobrança e você será contatado em breve por um de nossos analistas. Por favor, clique aqui para fazer imediatamente o pagamento integral de sua fatura: https://shopee.com.br/splhome",
+          "timestamp": "2026-03-07T13:46:09.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "997A4822CF33750519",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Você tem uma fatura do SParcelado em atraso com um valor pendente de R$94,29. Sua conta foi atribuída aos nossos processos de cobrança e você será contatado em breve por um de nossos analistas. Por favor, clique aqui para fazer imediatamente o pagamento integral de sua fatura: https://shopee.com.br/splhome",
+          "timestamp": "2026-03-08T13:16:41.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "E18EE5FB606E279AF1",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Você tem uma fatura do SParcelado em atraso com um valor pendente de R$94,65. Sua conta foi atribuída aos nossos processos de cobrança e você será contatado em breve por um de nossos analistas. Por favor, clique aqui para fazer imediatamente o pagamento integral de sua fatura: https://shopee.com.br/splhome",
+          "timestamp": "2026-03-09T13:04:47.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "0C9A78E07AA9A82CF6",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Você tem uma fatura do SParcelado em atraso com um valor pendente de R$95,01. Sua conta foi atribuída aos nossos processos de cobrança e você será contatado em breve por um de nossos analistas. Por favor, clique aqui para fazer imediatamente o pagamento integral de sua fatura: https://shopee.com.br/splhome",
+          "timestamp": "2026-03-10T13:07:51.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "8702FAB70BC79CC254",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Você tem uma fatura do SParcelado em atraso com um valor pendente de R$95,37. Sua conta foi atribuída aos nossos processos de cobrança e você será contatado em breve por um de nossos analistas. Por favor, clique aqui para fazer imediatamente o pagamento integral de sua fatura: https://shopee.com.br/splhome",
+          "timestamp": "2026-03-11T13:11:16.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "A9950DF95C58EDA66A",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Você tem uma fatura do SParcelado em atraso com um valor pendente de R$95,73. Sua conta foi atribuída aos nossos processos de cobrança e você será contatado em breve por um de nossos analistas. Por favor, clique aqui para fazer imediatamente o pagamento integral de sua fatura: https://shopee.com.br/splhome",
+          "timestamp": "2026-03-12T13:00:32.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "AD882DD049C9525797",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua conta Shopee pode ser suspensa devido a uma fatura pendente do SParcelado. Por favor, efetue o pagamento integral para permanecer ativo. Caso já tenha efetuado o pagamento da fatura, pedimos por gentileza que ignore esta mensagem.",
+          "timestamp": "2026-03-13T12:56:50.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "5F922DB83F7C21DBF5",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua conta Shopee pode ser suspensa devido a uma fatura pendente do SParcelado. Por favor, efetue o pagamento integral para permanecer ativo. Caso já tenha efetuado o pagamento da fatura, pedimos por gentileza que ignore esta mensagem.",
+          "timestamp": "2026-03-14T12:45:34.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "4A88B9785E4FCE6F6D",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua conta Shopee pode ser suspensa devido a uma fatura pendente do SParcelado. Por favor, efetue o pagamento integral para permanecer ativo. Caso já tenha efetuado o pagamento da fatura, pedimos por gentileza que ignore esta mensagem.",
+          "timestamp": "2026-03-15T11:35:51.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "BB963D4F78D5A341B9",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua conta Shopee pode ser suspensa devido a uma fatura pendente do SParcelado. Por favor, efetue o pagamento integral para permanecer ativo. Caso já tenha efetuado o pagamento da fatura, pedimos por gentileza que ignore esta mensagem.",
+          "timestamp": "2026-03-16T12:56:33.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "0ED982505A6A06B475",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua conta Shopee pode ser suspensa devido a uma fatura pendente do SParcelado. Por favor, efetue o pagamento integral para permanecer ativo. Caso já tenha efetuado o pagamento da fatura, pedimos por gentileza que ignore esta mensagem.",
+          "timestamp": "2026-03-17T12:46:37.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "D2781D4F7A88D167AD",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua conta Shopee pode ser suspensa devido a uma fatura pendente do SParcelado. Por favor, efetue o pagamento integral para permanecer ativo. Caso já tenha efetuado o pagamento da fatura, pedimos por gentileza que ignore esta mensagem.",
+          "timestamp": "2026-03-18T13:12:54.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "C7E8ED745BDD7F1458",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua conta Shopee pode ser suspensa devido a uma fatura pendente do SParcelado. Por favor, efetue o pagamento integral para permanecer ativo. Caso já tenha efetuado o pagamento da fatura, pedimos por gentileza que ignore esta mensagem.",
+          "timestamp": "2026-03-19T12:54:25.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "AA66A97022EC4AE950",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua conta Shopee pode ser suspensa devido a uma fatura pendente do SParcelado. Por favor, efetue o pagamento integral para permanecer ativo. Caso já tenha efetuado o pagamento da fatura, pedimos por gentileza que ignore esta mensagem.",
+          "timestamp": "2026-03-20T13:29:34.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "1D4AEC81F3AB650579",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua conta Shopee pode ser suspensa devido a uma fatura pendente do SParcelado. Por favor, efetue o pagamento integral para permanecer ativo. Caso já tenha efetuado o pagamento da fatura, pedimos por gentileza que ignore esta mensagem.",
+          "timestamp": "2026-03-21T13:15:46.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "530E35925D9AC40D57",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua conta Shopee pode ser suspensa devido a uma fatura pendente do SParcelado. Por favor, efetue o pagamento integral para permanecer ativo. Caso já tenha efetuado o pagamento da fatura, pedimos por gentileza que ignore esta mensagem.",
+          "timestamp": "2026-03-22T12:43:55.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "BF76FCCD2209EC7D51",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua conta Shopee pode ser suspensa devido a uma fatura pendente do SParcelado. Por favor, efetue o pagamento integral para permanecer ativo. Caso já tenha efetuado o pagamento da fatura, pedimos por gentileza que ignore esta mensagem.",
+          "timestamp": "2026-03-23T12:46:45.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "7EB7A3B894522EA503",
+          "conversationId": "126409477513370@lid",
+          "direction": "incoming",
+          "body": "Sua conta Shopee pode ser suspensa devido a uma fatura pendente do SParcelado. Por favor, efetue o pagamento integral para permanecer ativo. Caso já tenha efetuado o pagamento da fatura, pedimos por gentileza que ignore esta mensagem.",
+          "timestamp": "2026-03-24T12:42:42.000Z",
+          "author": "+55 11 3631-8977"
+        },
+        {
+          "id": "3EB0318750136205980E31",
+          "conversationId": "126409477513370@lid",
+          "direction": "outgoing",
+          "body": "blz",
+          "timestamp": "2026-03-24T13:59:31.000Z",
+          "author": "Operador"
+        }
+      ]
+    },
+    {
+      "id": "191362502758479@lid",
+      "sessionId": "session-h6q5c498",
+      "sessionName": "Sessao q5c498",
+      "contact": "Vitin",
+      "participantId": "191362502758479@lid",
+      "owner": "Livre",
+      "status": "Fila geral",
+      "channelName": "Restaurada",
+      "waitingTime": "agora",
+      "unread": 0,
+      "preview": "kskskksksk",
+      "lastMessageAt": "2026-03-24T14:40:08.000Z",
+      "messages": [
+        {
+          "id": "ACADF3B95A82E29BE5C7142BBACBD8AE",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T23:25:48.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACA2FC099525D3D95F04DB0D4C06855F",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "Semana q vem feriado",
+          "timestamp": "2026-03-23T23:25:53.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC0B6CECE404AACB45259551E8BDB9D1",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "Só progresso",
+          "timestamp": "2026-03-23T23:25:55.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC704E042F254D6FB7735B20B63ADB68",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Sim 🙂‍↕️",
+          "timestamp": "2026-03-23T23:42:18.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC5AEF3C2CC8C6C70DF26A820E582E6B",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Só descansar AGR",
+          "timestamp": "2026-03-23T23:42:22.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC5BCA00B8847896D13A200A0B6A65D3",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Ksksk",
+          "timestamp": "2026-03-23T23:42:23.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC0657140DC9CD132B9CE755BB5F165A",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "C tb faltou?",
+          "timestamp": "2026-03-23T23:42:31.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC21556555D19105BB1BB5032D9F18C9",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-23T23:42:39.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC0F2CA0F99FB555AAE692A6E4F6E7EB",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Não ksksks",
+          "timestamp": "2026-03-23T23:42:43.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC36B000A1F57E49E423107737C7D9D1",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "Akakakakkakaakkaka faltou nada",
+          "timestamp": "2026-03-23T23:42:46.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC30E7B2CFF829A36D19DB1C7A759CBB",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Jsksksk",
+          "timestamp": "2026-03-23T23:42:53.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC52035BC13DB08093A83B8B11959286",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Pode não",
+          "timestamp": "2026-03-23T23:42:54.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC0BD5D927FA28C6C514715D896A44F0",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "Minha situação hj indo pra casa",
+          "timestamp": "2026-03-23T23:43:01.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC6C421A26EC05A4621E1C79887D8CB8",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Só descansando eles ksksk",
+          "timestamp": "2026-03-23T23:43:01.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC31C2116E49D7454543F769CE6F7859",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "Akakakakkakaakkaka",
+          "timestamp": "2026-03-23T23:43:07.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC33B207C016435FE89B68EB0FAC040B",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Ksksksk",
+          "timestamp": "2026-03-24T11:03:29.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC6A3FF51C978FEB319E2667577B2786",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Se e doido",
+          "timestamp": "2026-03-24T11:03:35.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC3923708FDD5FED0FEAD78E9DDD9666",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "Pse fi",
+          "timestamp": "2026-03-24T11:03:47.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC86CBAD428FEB5F22254A7F759E0AC1",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "Tomara q hj n aconteça o msm",
+          "timestamp": "2026-03-24T11:03:54.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACE24CB5C4139D101F2ABE764EFC9943",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "Pq ontem eu molhei tudo",
+          "timestamp": "2026-03-24T11:03:58.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC2579DE4CB1713DFD26FCCBDD789B1A",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "Um banho de 1 mês",
+          "timestamp": "2026-03-24T11:04:01.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC630784B8CC87A2C1057BD9D368CD01",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "Só de chuva",
+          "timestamp": "2026-03-24T11:04:04.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACC10336AFC0F0E9FF4052B9B4081C88",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "PSE",
+          "timestamp": "2026-03-24T11:07:14.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "3EB05D10A5F7A419C7476C",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "eae ze",
+          "timestamp": "2026-03-24T14:03:05.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "3EB0DE722494B326CA061D",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "to testando uma pagina do zap aq",
+          "timestamp": "2026-03-24T14:03:19.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC8565F73D5F9AA5EA4CAE3459E7289B",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Blzzz",
+          "timestamp": "2026-03-24T14:03:32.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC5FBD1F337D6B07603230FB55369674",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T14:03:50.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC9B934F1162F8C1043D9595AE79DA4D",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T14:03:54.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC2647F3409EBF3B552B264AE34CAEF3",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "Vlw pae",
+          "timestamp": "2026-03-24T14:03:55.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC599168C3582C91E0AAD46C29F8C996",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Aí sim em",
+          "timestamp": "2026-03-24T14:04:11.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC1E69C3D54F3303A6700DAC2E303ACB",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T14:04:26.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "ACEFB99A231ED8DD6DFEF64EBF955DD4",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "C vai ver mn vou fzr uma página braba aq",
+          "timestamp": "2026-03-24T14:04:30.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "AC5D130B624D98BEF31896CD38672AC2",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "É pra ficar assim o",
+          "timestamp": "2026-03-24T14:04:40.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACEEB2682476B3BBEADCE7CB9E61948D",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Faz aí",
+          "timestamp": "2026-03-24T14:04:41.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "ACBCE6EFD9A31EC75050966DBBA867B8",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T14:04:45.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACF7C3F1DFF00DD8A7B50A8E644FDDB3",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Vai fica bom emmmm",
+          "timestamp": "2026-03-24T14:05:05.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "AC93A505CC30380B083E7783E9BF645B",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "[midia]",
+          "timestamp": "2026-03-24T14:06:12.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACE97425DF118E4B9F9CF70EAF75EFF1",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "Tomara q ss ksksksksksksk",
+          "timestamp": "2026-03-24T14:06:29.000Z",
+          "author": "Operador"
+        },
+        {
+          "id": "ACC93F7FA4FA550BA1B5DD39E55165CD",
+          "conversationId": "191362502758479@lid",
+          "direction": "incoming",
+          "body": "Vai moss",
+          "timestamp": "2026-03-24T14:07:02.000Z",
+          "author": "Vitin"
+        },
+        {
+          "id": "3EB02D6FA36F61597788B5",
+          "conversationId": "191362502758479@lid",
+          "direction": "outgoing",
+          "body": "kskskksksk",
+          "timestamp": "2026-03-24T14:40:08.000Z",
+          "author": "Operador"
+        }
+      ],
+      "avatarUrl": null
+    }
+  ]
+}

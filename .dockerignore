@@ -1,0 +1,11 @@
+node_modules
+apps/*/node_modules
+apps/server/.wwebjs_auth
+apps/server/dist
+apps/web/.next
+npm-debug.log
+*.log
+.git
+.env
+.env.local
+.env.*.local

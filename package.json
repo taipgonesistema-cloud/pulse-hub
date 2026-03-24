@@ -1,0 +1,16 @@
+{
+  "name": "projeto-main-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace web",
+    "dev:server": "npm run start:dev --workspace server",
+    "build:web": "npm run build --workspace web",
+    "build:server": "npm run build --workspace server",
+    "lint:web": "npm run lint --workspace web",
+    "lint:server": "npm run lint --workspace server"
+  }
+}

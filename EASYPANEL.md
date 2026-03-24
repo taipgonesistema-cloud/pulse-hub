@@ -1,0 +1,91 @@
+# Deploy no EasyPanel
+
+Este projeto esta pronto para subir no EasyPanel a partir do GitHub com 4 servicos separados:
+
+- `pulse-hub-postgres` - banco PostgreSQL gerenciado pelo EasyPanel;
+- `pulse-hub-redis` - Redis gerenciado pelo EasyPanel;
+- `pulse-hub-server` - app NestJS usando `apps/server/Dockerfile`;
+- `pulse-hub-web` - app Next.js usando `apps/web/Dockerfile`.
+
+## 1. Preparar o repositorio no GitHub
+
+- suba a raiz do monorepo, incluindo `package.json`, `package-lock.json`, `apps/server`, `apps/web`, `.dockerignore` e os dois `Dockerfile`;
+- nao suba `.env`, `node_modules`, `.next`, `dist` nem `apps/server/.wwebjs_auth`.
+
+## 2. Criar os servicos de infraestrutura
+
+### PostgreSQL
+
+- crie um servico `PostgreSQL` no EasyPanel;
+- nome sugerido: `pulse-hub-postgres`;
+- banco sugerido: `pulse_hub`.
+
+### Redis
+
+- crie um servico `Redis` no EasyPanel;
+- nome sugerido: `pulse-hub-redis`.
+
+## 3. Criar o backend pelo GitHub
+
+- tipo: `App`;
+- fonte: GitHub;
+- Dockerfile path: `apps/server/Dockerfile`;
+- porta interna: `3333`;
+- health check: `/health`.
+
+### Variaveis do backend
+
+Use no minimo:
+
+```env
+PORT=3333
+DATABASE_URL=postgres://USER:PASSWORD@pulse-hub-postgres:5432/pulse_hub
+REDIS_URL=redis://pulse-hub-redis:6379
+PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+PUPPETEER_HEADLESS=true
+```
+
+### Persistencia do WhatsApp
+
+- monte um volume persistente em `/app/apps/server/.wwebjs_auth`;
+- sem esse volume, a autenticacao do WhatsApp pode ser perdida a cada redeploy.
+
+## 4. Criar o frontend pelo GitHub
+
+- tipo: `App`;
+- fonte: GitHub;
+- Dockerfile path: `apps/web/Dockerfile`;
+- porta interna: `3000`.
+
+### Build args e variaveis do frontend
+
+Defina o endpoint publico do backend no build e no runtime:
+
+```env
+NEXT_PUBLIC_API_URL=https://api.seu-dominio.com
+```
+
+No EasyPanel, use esse mesmo valor como:
+
+- build arg `NEXT_PUBLIC_API_URL`;
+- env var `NEXT_PUBLIC_API_URL`.
+
+## 5. Dominios sugeridos
+
+- frontend: `app.seu-dominio.com`;
+- backend: `api.seu-dominio.com`.
+
+## 6. Ordem recomendada de deploy
+
+1. subir `pulse-hub-postgres`;
+2. subir `pulse-hub-redis`;
+3. subir `pulse-hub-server` e validar `/health`;
+4. subir `pulse-hub-web` apontando para a URL publica do backend.
+
+## 7. Checklist final
+
+- backend respondendo em `/health`;
+- frontend carregando sem erro de fetch;
+- `DATABASE_URL` e `REDIS_URL` resolvendo pelos nomes internos do EasyPanel;
+- volume de `apps/server/.wwebjs_auth` persistente;
+- `NEXT_PUBLIC_API_URL` apontando para o dominio publico do backend.
