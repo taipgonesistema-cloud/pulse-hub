@@ -40,9 +40,15 @@ Use no minimo:
 ```env
 PORT=3333
 DATABASE_URL=postgres://USER:PASSWORD@pulse-hub-postgres:5432/pulse_hub
-REDIS_URL=redis://pulse-hub-redis:6379
+REDIS_URL=redis://default:SUA_SENHA@pulse-hub-redis:6379
 PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 PUPPETEER_HEADLESS=true
+```
+
+Se o EasyPanel te entregar uma internal connection URL completa do Redis, use ela diretamente no `REDIS_URL`. Exemplo de formato:
+
+```env
+REDIS_URL=redis://default:SUA_SENHA@nome-interno-do-redis:6379
 ```
 
 ### Persistencia do WhatsApp

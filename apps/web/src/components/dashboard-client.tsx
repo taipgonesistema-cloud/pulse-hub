@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import {
   BarChart3,
   Bell,
@@ -34,6 +35,7 @@ import {
   useTransition,
 } from 'react';
 import type {
+  AuthUser,
   ChannelRecord,
   DashboardOverview,
   MessageRecord,
@@ -95,7 +97,10 @@ type SessionStreamEvent = {
 };
 
 export function DashboardClient({ initialOverview }: Props) {
+  const router = useRouter();
   const [overview, setOverview] = useState(initialOverview);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState(
     initialOverview.sessions[0]?.id ?? '',
   );
@@ -169,6 +174,31 @@ export function DashboardClient({ initialOverview }: Props) {
       phone: selectedConversation.participantId,
     };
   }, [selectedConversation, selectedSession?.phoneNumber]);
+
+  const signOut = useCallback(() => {
+    window.localStorage.removeItem('pulse-hub.auth-token');
+    window.localStorage.removeItem('pulse-hub.auth-user');
+    router.push('/login');
+  }, [router]);
+
+  useEffect(() => {
+    const token = window.localStorage.getItem('pulse-hub.auth-token');
+    const rawUser = window.localStorage.getItem('pulse-hub.auth-user');
+
+    if (!token || !rawUser) {
+      router.replace('/login');
+      return;
+    }
+
+    try {
+      setAuthUser(JSON.parse(rawUser) as AuthUser);
+      setIsAuthReady(true);
+    } catch {
+      window.localStorage.removeItem('pulse-hub.auth-token');
+      window.localStorage.removeItem('pulse-hub.auth-user');
+      router.replace('/login');
+    }
+  }, [router]);
 
   const loadOverview = useCallback(async () => {
     const response = await fetch(`${apiUrl}/dashboard/overview`, {
@@ -303,6 +333,10 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [selectedConversationId, selectedSession, sessionConversations]);
 
   useEffect(() => {
+    if (!isAuthReady) {
+      return;
+    }
+
     if (!selectedSession) {
       return;
     }
@@ -323,9 +357,13 @@ export function DashboardClient({ initialOverview }: Props) {
     }, intervalMs);
 
     return () => window.clearInterval(interval);
-  }, [loadOverview, selectedSession]);
+  }, [isAuthReady, loadOverview, selectedSession]);
 
   useEffect(() => {
+    if (!isAuthReady) {
+      return;
+    }
+
     if (!activeSessionId || !activeConversationId) {
       setMessages([]);
       return;
@@ -341,6 +379,7 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [
     activeConversationId,
     activeSessionId,
+    isAuthReady,
     loadMessages,
     markConversationAsRead,
   ]);
@@ -438,7 +477,7 @@ export function DashboardClient({ initialOverview }: Props) {
       }
       eventSource.close();
     };
-  }, [activeConversationId, activeSessionId, loadMessages, loadOverview]);
+  }, [activeConversationId, activeSessionId, isAuthReady, loadMessages, loadOverview]);
 
   useEffect(() => {
     if (!messagesRef.current) {
@@ -530,6 +569,16 @@ export function DashboardClient({ initialOverview }: Props) {
     });
   };
 
+  if (!isAuthReady) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#050505_0%,#111111_100%)] px-6 text-white">
+        <div className="rounded-[2rem] border border-white/10 bg-white/5 px-6 py-5 text-sm text-white/70 backdrop-blur-xl">
+          Validando sua sessao...
+        </div>
+      </main>
+    );
+  }
+
   const applyQuickReply = (reply: string) => {
     setComposer(reply);
   };
@@ -581,7 +630,11 @@ export function DashboardClient({ initialOverview }: Props) {
                 <CircleHelp className="h-4 w-4" strokeWidth={2.1} />
                 Support
               </button>
-              <button className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-rose-400 hover:bg-white/5">
+              <button
+                className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-rose-400 hover:bg-white/5"
+                onClick={signOut}
+                type="button"
+              >
                 <LogOut className="h-4 w-4" strokeWidth={2.1} />
                 Sign Out
               </button>
@@ -628,11 +681,20 @@ export function DashboardClient({ initialOverview }: Props) {
               <div className="h-10 w-px bg-white/10" />
               <div className="flex items-center gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-full bg-[var(--surface-high)] text-sm font-bold text-white">
-                  AR
+                  {authUser?.name
+                    ?.split(' ')
+                    .map((part) => part[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase() ?? 'PH'}
                 </div>
                 <div className="hidden sm:block">
-                  <p className="text-sm font-semibold text-white">Alex Rivera</p>
-                  <p className="text-xs text-[var(--primary)]">System Lead</p>
+                  <p className="text-sm font-semibold text-white">
+                    {authUser?.name ?? 'Pulse User'}
+                  </p>
+                  <p className="text-xs text-[var(--primary)]">
+                    {authUser?.role ?? 'operator'}
+                  </p>
                 </div>
               </div>
             </div>

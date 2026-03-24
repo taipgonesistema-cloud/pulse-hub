@@ -72,6 +72,27 @@ export type DashboardOverview = {
   conversations: ConversationRecord[];
 };
 
+export type AuthUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'supervisor' | 'attendant';
+  isActive: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SignInPayload = {
+  email: string;
+  password: string;
+};
+
+export type SignInResponse = {
+  user: AuthUser;
+  token: string;
+};
+
 const fallbackOverview: DashboardOverview = {
   product: 'Pulse Hub',
   phase: 'whatsapp-core',
@@ -102,4 +123,27 @@ export async function getDashboardOverview() {
   } catch {
     return fallbackOverview;
   }
+}
+
+export async function signIn(payload: SignInPayload) {
+  const response = await fetch(`${apiUrl}/auth/sign-in`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as {
+      message?: string | string[];
+    } | null;
+    const message = Array.isArray(errorPayload?.message)
+      ? errorPayload.message[0]
+      : errorPayload?.message;
+
+    throw new Error(message ?? 'Falha ao autenticar usuario.');
+  }
+
+  return (await response.json()) as SignInResponse;
 }

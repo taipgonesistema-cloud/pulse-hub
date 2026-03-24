@@ -107,11 +107,24 @@ export class PostgresService implements OnModuleInit, OnModuleDestroy {
           ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        last_login_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
       CREATE INDEX IF NOT EXISTS idx_channels_name ON channels(name);
       CREATE INDEX IF NOT EXISTS idx_sessions_channel_id ON whatsapp_sessions(channel_id);
       CREATE INDEX IF NOT EXISTS idx_conversations_session_id ON conversations(session_id);
       CREATE INDEX IF NOT EXISTS idx_conversations_last_message_at ON conversations(last_message_at DESC);
       CREATE INDEX IF NOT EXISTS idx_messages_lookup ON messages(session_id, conversation_id, message_timestamp ASC);
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     `);
   }
 }

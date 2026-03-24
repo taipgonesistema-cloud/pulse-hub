@@ -154,9 +154,15 @@ Guia completo em `EASYPANEL.md`.
 PORT=3333
 DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/pulse_hub
 REDIS_URL=redis://HOST:6379
+AUTH_SEED_EMAIL=admin@pulsehub.local
+AUTH_SEED_PASSWORD=PulseHub123!
+AUTH_SEED_NAME=Pulse Hub Admin
+AUTH_SEED_ROLE=admin
 PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 PUPPETEER_HEADLESS=true
 ```
+
+Quando a tabela `users` estiver vazia, o backend cria automaticamente o usuario inicial com essas variaveis para liberar o primeiro acesso.
 
 ### Frontend
 
