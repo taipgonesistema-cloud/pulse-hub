@@ -2,8 +2,7 @@ FROM node:20-bookworm-slim AS base
 
 ENV PUPPETEER_SKIP_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
-    PUPPETEER_HEADLESS=true \
-    NODE_ENV=production
+    PUPPETEER_HEADLESS=true
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
@@ -53,6 +52,8 @@ COPY . .
 RUN npm run build --workspace server
 
 WORKDIR /app/apps/server
+
+ENV NODE_ENV=production
 
 EXPOSE 3333
 
