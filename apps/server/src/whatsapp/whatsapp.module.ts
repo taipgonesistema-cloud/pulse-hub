@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PersistenceModule } from '../persistence/persistence.module';
-import { BaileysEngine } from './engine/baileys.engine';
 import { WHATSAPP_ENGINE } from './engine/whatsapp-engine.token';
+import { WppConnectEngine } from './engine/wppconnect.engine';
 import { WhatsappController } from './whatsapp.controller';
 import { WhatsappService } from './whatsapp.service';
 import { WhatsappStore } from './whatsapp.store';
@@ -12,10 +12,10 @@ import { WhatsappStore } from './whatsapp.store';
   providers: [
     WhatsappService,
     WhatsappStore,
-    BaileysEngine,
+    WppConnectEngine,
     {
       provide: WHATSAPP_ENGINE,
-      useExisting: BaileysEngine,
+      useExisting: WppConnectEngine,
     },
   ],
   exports: [WhatsappService, WhatsappStore],

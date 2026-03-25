@@ -1,6 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import fs from 'node:fs';
-import path from 'node:path';
+import { Injectable } from '@nestjs/common';
 import type { PoolClient } from 'pg';
 import {
   type ChannelRecord,
@@ -55,17 +53,8 @@ type MessageRow = {
 };
 
 @Injectable()
-export class WhatsappStore implements OnModuleInit {
-  private readonly authDirectoryPath = path.join(
-    process.cwd(),
-    '.baileys_auth',
-  );
-
+export class WhatsappStore {
   constructor(private readonly postgres: PostgresService) {}
-
-  async onModuleInit() {
-    await this.restoreSessionsFromAuthDirectory();
-  }
 
   async getChannels() {
     const { rows } = await this.postgres.query<{
@@ -395,44 +384,6 @@ export class WhatsappStore implements OnModuleInit {
     );
 
     return this.getConversation(sessionId, conversationId);
-  }
-
-  private async restoreSessionsFromAuthDirectory() {
-    if (!fs.existsSync(this.authDirectoryPath)) {
-      return;
-    }
-
-    const directories = fs
-      .readdirSync(this.authDirectoryPath, { withFileTypes: true })
-      .filter(
-        (entry) => entry.isDirectory() && entry.name.startsWith('session-'),
-      )
-      .map((entry) => entry.name.replace(/^session-/, ''));
-
-    for (const sessionId of directories) {
-      const existing = await this.getSession(sessionId);
-
-      if (existing) {
-        continue;
-      }
-
-      await this.saveSession({
-        id: sessionId,
-        name: `Sessao ${sessionId.slice(-6)}`,
-        phoneNumber: 'Numero restaurado',
-        channelId: 'restored',
-        channelName: 'Restaurada',
-        status: 'disconnected',
-        attendants: 0,
-        waiting: 0,
-        unread: 0,
-        lastHeartbeat: new Date().toISOString(),
-        isDemo: false,
-        qrCode: null,
-        qrCodeDataUrl: null,
-        lastError: null,
-      });
-    }
   }
 
   private sessionSelectQuery() {

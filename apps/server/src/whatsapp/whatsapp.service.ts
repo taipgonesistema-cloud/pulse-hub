@@ -379,12 +379,13 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
 
   private async updateQrPayload(sessionId: string, qr: string) {
     const session = await this.getSessionOrFail(sessionId);
+    const isQrImageDataUrl = qr.startsWith('data:image');
 
     await this.store.saveSession({
       ...session,
       status: 'qr_ready',
-      qrCode: qr,
-      qrCodeDataUrl: await QRCode.toDataURL(qr),
+      qrCode: isQrImageDataUrl ? null : qr,
+      qrCodeDataUrl: isQrImageDataUrl ? qr : await QRCode.toDataURL(qr),
       lastError: null,
       lastHeartbeat: new Date().toISOString(),
     });

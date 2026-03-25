@@ -12,15 +12,16 @@ O projeto foi estruturado como um monorepo com dashboard web e API separadas, pe
 - `NestJS 11` no backend em `apps/server`
 - `PostgreSQL` para persistencia de sessoes, conversas, mensagens e canais
 - `Redis` para cache do overview e distribuicao de eventos em tempo real
-- `Baileys` para conexao WhatsApp via WebSocket, sem Chromium
+- `WPPConnect Server` como servico dedicado para sessao e QR do WhatsApp
 
 ## Arquitetura
 
 ```text
 apps/web      -> dashboard operacional
-apps/server   -> API + SSE + integracao WhatsApp
+apps/server   -> API + SSE + integracao com WPPConnect
 PostgreSQL    -> persistencia principal
 Redis         -> cache e pub/sub
+WPPConnect    -> sessao, QR e operacao WhatsApp
 EasyPanel     -> deploy via GitHub com servicos separados
 ```
 
@@ -86,6 +87,8 @@ SERVER_PORT=3333
 NEXT_PUBLIC_API_URL=http://localhost:3333
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/pulse_hub
 REDIS_URL=redis://localhost:6379
+WPPCONNECT_API_URL=http://localhost:21465
+WPPCONNECT_SECRET_KEY=THISISMYSECURETOKEN
 ```
 
 ### 3. Rode backend e frontend
@@ -126,9 +129,7 @@ O Redis e usado para:
 
 ## Persistencia da Sessao do WhatsApp
 
-As credenciais do WhatsApp ficam em `apps/server/.baileys_auth`.
-
-Em ambiente local ou producao, esse diretorio deve ser persistido. Sem isso, a autenticacao pode ser perdida depois de restart ou redeploy.
+As credenciais do WhatsApp passam a ser mantidas pelo servico separado do `WPPConnect Server`, e nao mais pelo backend principal.
 
 ## Deploy no EasyPanel
 
@@ -139,7 +140,7 @@ Resumo rapido:
 - backend usando `apps/server/Dockerfile`
 - frontend usando `apps/web/Dockerfile`
 - PostgreSQL e Redis como servicos dedicados
-- volume persistente para `apps/server/.baileys_auth`
+- servico separado do `WPPConnect Server` para gerenciar QR e sessao
 - `NEXT_PUBLIC_API_URL` definido no build e no runtime do frontend
 
 Guia completo em `EASYPANEL.md`.
@@ -152,6 +153,8 @@ Guia completo em `EASYPANEL.md`.
 PORT=3333
 DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/pulse_hub
 REDIS_URL=redis://HOST:6379
+WPPCONNECT_API_URL=https://wpp.seu-dominio.com
+WPPCONNECT_SECRET_KEY=THISISMYSECURETOKEN
 AUTH_SEED_EMAIL=admin@pulsehub.local
 AUTH_SEED_PASSWORD=PulseHub123!
 AUTH_SEED_NAME=Pulse Hub Admin

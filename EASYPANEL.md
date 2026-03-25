@@ -1,9 +1,10 @@
 # Deploy no EasyPanel
 
-Este projeto esta pronto para subir no EasyPanel a partir do GitHub com 4 servicos separados:
+Este projeto esta pronto para subir no EasyPanel a partir do GitHub com 5 servicos separados:
 
 - `pulse-hub-postgres` - banco PostgreSQL gerenciado pelo EasyPanel;
 - `pulse-hub-redis` - Redis gerenciado pelo EasyPanel;
+- `pulse-hub-wppconnect` - servico dedicado ao WhatsApp;
 - `pulse-hub-server` - app NestJS usando `apps/server/Dockerfile`;
 - `pulse-hub-web` - app Next.js usando `apps/web/Dockerfile`.
 
@@ -25,6 +26,12 @@ Este projeto esta pronto para subir no EasyPanel a partir do GitHub com 4 servic
 - crie um servico `Redis` no EasyPanel;
 - nome sugerido: `pulse-hub-redis`.
 
+### WPPConnect Server
+
+- crie um servico dedicado para `WPPConnect Server` no EasyPanel;
+- publique uma URL interna ou publica para ele, por exemplo `https://wpp.seu-dominio.com`;
+- esse servico fica responsavel por QR, sessao e reconexao do WhatsApp.
+
 ## 3. Criar o backend pelo GitHub
 
 - tipo: `App`;
@@ -42,6 +49,8 @@ Use no minimo:
 PORT=3333
 DATABASE_URL=postgres://USER:PASSWORD@pulse-hub-postgres:5432/pulse_hub
 REDIS_URL=redis://default:SUA_SENHA@pulse-hub-redis:6379
+WPPCONNECT_API_URL=https://wpp.seu-dominio.com
+WPPCONNECT_SECRET_KEY=THISISMYSECURETOKEN
 AUTH_SEED_EMAIL=admin@pulsehub.local
 AUTH_SEED_PASSWORD=PulseHub123!
 AUTH_SEED_NAME=Pulse Hub Admin
@@ -56,8 +65,8 @@ REDIS_URL=redis://default:SUA_SENHA@nome-interno-do-redis:6379
 
 ### Persistencia do WhatsApp
 
-- monte um volume persistente em `/app/apps/server/.baileys_auth`;
-- sem esse volume, a autenticacao do WhatsApp pode ser perdida a cada redeploy.
+- a persistencia de sessao sai do backend principal e fica no servico do `WPPConnect Server`.
+- siga a documentacao do `WPPConnect Server` para o storage/token store do servico dedicado.
 
 ### Primeiro acesso
 
@@ -94,15 +103,16 @@ No EasyPanel, use esse mesmo valor como:
 
 1. subir `pulse-hub-postgres`;
 2. subir `pulse-hub-redis`;
-3. subir `pulse-hub-server` e validar `/health`;
-4. subir `pulse-hub-web` apontando para a URL publica do backend.
+3. subir `pulse-hub-wppconnect`;
+4. subir `pulse-hub-server` e validar `/health`;
+5. subir `pulse-hub-web` apontando para a URL publica do backend.
 
 ## 7. Checklist final
 
 - backend respondendo em `/health`;
 - frontend carregando sem erro de fetch;
 - `DATABASE_URL` e `REDIS_URL` resolvendo pelos nomes internos do EasyPanel;
-- volume de `apps/server/.baileys_auth` persistente;
+- `WPPCONNECT_API_URL` apontando para o servico WPPConnect;
 - `NEXT_PUBLIC_API_URL` apontando para o dominio publico do backend.
 
 ## 8. Checklist pronto para colar no EasyPanel
@@ -113,6 +123,8 @@ No EasyPanel, use esse mesmo valor como:
 PORT=3333
 DATABASE_URL=postgres://postgres:SUA_SENHA@SEU_HOST_POSTGRES:5432/SEU_BANCO?sslmode=disable
 REDIS_URL=redis://default:SUA_SENHA@SEU_HOST_REDIS:6379
+WPPCONNECT_API_URL=https://wpp.seu-dominio.com
+WPPCONNECT_SECRET_KEY=THISISMYSECURETOKEN
 AUTH_SEED_EMAIL=admin@seudominio.com
 AUTH_SEED_PASSWORD=UMA_SENHA_FORTE
 AUTH_SEED_NAME=Administrador Pulse Hub
@@ -131,18 +143,19 @@ NEXT_PUBLIC_API_URL=https://api.seu-dominio.com
 NEXT_PUBLIC_API_URL=https://api.seu-dominio.com
 ```
 
-### Volume persistente do backend
+### Infra adicional
 
 ```text
-/app/apps/server/.baileys_auth
+Subir um servico WPPConnect Server separado e usar a URL dele em WPPCONNECT_API_URL
 ```
 
 ## 9. Sequencia de deploy recomendada
 
 1. conectar o repositorio GitHub no EasyPanel;
 2. criar ou validar PostgreSQL e Redis;
-3. cadastrar envs do backend;
-4. subir o backend e validar `https://api.seu-dominio.com/health`;
-5. cadastrar build arg e env do frontend;
-6. subir o frontend;
-7. abrir `/login` e entrar com o usuario seed inicial.
+3. subir e validar o servico WPPConnect Server;
+4. cadastrar envs do backend;
+5. subir o backend e validar `https://api.seu-dominio.com/health`;
+6. cadastrar build arg e env do frontend;
+7. subir o frontend;
+8. abrir `/login` e entrar com o usuario seed inicial.
