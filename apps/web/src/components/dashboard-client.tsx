@@ -29,6 +29,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -135,6 +136,8 @@ export function DashboardClient({ initialOverview }: Props) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const shouldStickToBottomRef = useRef(true);
+  const lastConversationAnchorRef = useRef<string | null>(null);
 
   const selectedSession = useMemo(
     () =>
@@ -509,12 +512,41 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [activeConversationId, activeSessionId, isAuthReady, loadMessages, loadOverview]);
 
   useEffect(() => {
+    shouldStickToBottomRef.current = true;
+  }, [activeConversationId]);
+
+  useLayoutEffect(() => {
     if (!messagesRef.current) {
       return;
     }
 
+    const conversationAnchor = `${activeSessionId ?? ''}:${activeConversationId ?? ''}`;
+    const conversationChanged =
+      lastConversationAnchorRef.current !== conversationAnchor;
+
+    if (conversationChanged) {
+      lastConversationAnchorRef.current = conversationAnchor;
+    }
+
+    if (!conversationChanged && !shouldStickToBottomRef.current) {
+      return;
+    }
+
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
-  }, [messages, typingConversationId]);
+  }, [activeConversationId, activeSessionId, messages, typingConversationId]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const container = messagesRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+
+    shouldStickToBottomRef.current = distanceFromBottom <= 96;
+  }, []);
 
   const runAction = (handler: () => Promise<void>) => {
     setErrorMessage(null);
@@ -1173,7 +1205,11 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
             </div>
 
-            <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
+            <div
+              ref={messagesRef}
+              className="min-h-0 flex-1 overflow-y-auto px-5 py-6"
+              onScroll={handleMessagesScroll}
+            >
               <div className="mx-auto flex max-w-5xl flex-col gap-6">
                 {isLoadingMessages ? <GhostPanel>Loading conversation history...</GhostPanel> : null}
 

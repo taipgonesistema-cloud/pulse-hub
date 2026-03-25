@@ -527,7 +527,12 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
 
     const session = await this.getSessionOrFail(sessionId);
     const chats = await client.getChats();
-    const candidates = chats.filter((chat) => !chat.isGroup).slice(0, 8);
+    const candidates = chats
+      .filter(
+        (chat) =>
+          !chat.isGroup && !this.shouldIgnoreChatId(chat.id._serialized),
+      )
+      .slice(0, 8);
 
     for (const [index, chat] of candidates.entries()) {
       const avatarUrl = await this.resolveChatAvatar(
@@ -627,6 +632,11 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
   private async ingestIncomingMessage(sessionId: string, message: Message) {
     const session = await this.getSessionOrFail(sessionId);
     const chat = await message.getChat();
+
+    if (this.shouldIgnoreChatId(chat.id._serialized)) {
+      return;
+    }
+
     const contact = await message.getContact();
     const conversationId = chat.id._serialized;
     const existing = await this.store.getConversation(
@@ -817,7 +827,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
 
   private async resolveChatAvatar(client: Client, chatId: string) {
     try {
-      if (chatId.includes('@newsletter')) {
+      if (this.shouldIgnoreChatId(chatId)) {
         return null;
       }
 
@@ -839,7 +849,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     }
 
     try {
-      if (contactId.includes('@newsletter')) {
+      if (this.shouldIgnoreChatId(contactId)) {
         return null;
       }
 
@@ -853,6 +863,10 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
       );
       return null;
     }
+  }
+
+  private shouldIgnoreChatId(chatId: string) {
+    return chatId.endsWith('@broadcast') || chatId.includes('@newsletter');
   }
 }
 

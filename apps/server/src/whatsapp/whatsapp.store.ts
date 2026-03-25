@@ -199,6 +199,7 @@ export class WhatsappStore implements OnModuleInit {
           last_message_at
         FROM conversations
         WHERE session_id = $1
+          AND ${this.visibleConversationSql('conversations')}
         ORDER BY last_message_at DESC
       `,
       [sessionId],
@@ -226,6 +227,7 @@ export class WhatsappStore implements OnModuleInit {
           last_message_at
         FROM conversations
         WHERE session_id = $1 AND id = $2
+          AND ${this.visibleConversationSql('conversations')}
       `,
       [sessionId, conversationId],
     );
@@ -260,6 +262,7 @@ export class WhatsappStore implements OnModuleInit {
         preview,
         last_message_at
       FROM conversations
+      WHERE ${this.visibleConversationSql('conversations')}
       ORDER BY last_message_at DESC
     `);
 
@@ -455,6 +458,7 @@ export class WhatsappStore implements OnModuleInit {
           COUNT(*)::int AS waiting_count,
           COALESCE(SUM(unread), 0)::int AS unread_count
         FROM conversations
+        WHERE ${this.visibleConversationSql('conversations')}
         GROUP BY session_id
       ) AS stats
         ON stats.session_id = sessions.id
@@ -568,6 +572,7 @@ export class WhatsappStore implements OnModuleInit {
           last_message_at
         FROM conversations
         WHERE session_id = $1 AND id = $2
+          AND ${this.visibleConversationSql('conversations')}
       `,
       [sessionId, conversationId],
     );
@@ -667,5 +672,9 @@ export class WhatsappStore implements OnModuleInit {
       0,
     );
     return palette[hash % palette.length];
+  }
+
+  private visibleConversationSql(alias: string) {
+    return `${alias}.id NOT LIKE '%@broadcast' AND ${alias}.participant_id NOT LIKE '%@broadcast' AND ${alias}.id NOT LIKE '%@newsletter' AND ${alias}.participant_id NOT LIKE '%@newsletter'`;
   }
 }
