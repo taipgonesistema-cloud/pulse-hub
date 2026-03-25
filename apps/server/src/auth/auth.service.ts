@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   OnModuleInit,
   UnauthorizedException,
@@ -29,6 +30,8 @@ type UserRow = {
 
 @Injectable()
 export class AuthService implements OnModuleInit {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(private readonly postgres: PostgresService) {}
 
   async onModuleInit() {
@@ -81,32 +84,65 @@ export class AuthService implements OnModuleInit {
     const seedName = (process.env.AUTH_SEED_NAME ?? 'Pulse Hub Admin').trim();
     const seedRole = (process.env.AUTH_SEED_ROLE ?? 'admin').trim() as UserRole;
 
-    const existingCount = await this.postgres.query<{ count: string }>(
-      'SELECT COUNT(*)::text AS count FROM users',
-    );
+    const existingUser = await this.findByEmail(seedEmail);
 
-    if (Number(existingCount.rows[0]?.count ?? '0') > 0) {
+    if (!existingUser) {
+      const passwordHash = await hashPassword(seedPassword);
+
+      await this.postgres.query(
+        `
+          INSERT INTO users (
+            id,
+            email,
+            name,
+            role,
+            password_hash,
+            is_active,
+            created_at,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), NOW())
+        `,
+        [this.createId('user'), seedEmail, seedName, seedRole, passwordHash],
+      );
+
+      this.logger.log(`Usuario seed criado para ${seedEmail}.`);
       return;
     }
 
-    const passwordHash = await hashPassword(seedPassword);
+    const usesSeedPassword = await verifyPassword(
+      seedPassword,
+      existingUser.passwordHash,
+    );
+
+    if (
+      usesSeedPassword &&
+      existingUser.name === seedName &&
+      existingUser.role === seedRole &&
+      existingUser.isActive
+    ) {
+      return;
+    }
+
+    const passwordHash = usesSeedPassword
+      ? existingUser.passwordHash
+      : await hashPassword(seedPassword);
 
     await this.postgres.query(
       `
-        INSERT INTO users (
-          id,
-          email,
-          name,
-          role,
-          password_hash,
-          is_active,
-          created_at,
-          updated_at
-        )
-        VALUES ($1, $2, $3, $4, $5, TRUE, NOW(), NOW())
+        UPDATE users
+        SET
+          name = $2,
+          role = $3,
+          password_hash = $4,
+          is_active = TRUE,
+          updated_at = NOW()
+        WHERE email = $1
       `,
-      [this.createId('user'), seedEmail, seedName, seedRole, passwordHash],
+      [seedEmail, seedName, seedRole, passwordHash],
     );
+
+    this.logger.log(`Usuario seed sincronizado para ${seedEmail}.`);
   }
 
   private async findByEmail(email: string) {
