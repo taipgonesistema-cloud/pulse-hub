@@ -777,36 +777,49 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
   }
 
   private cleanupSessionLocks(sessionId: string) {
+    const sessionPath = path.join(
+      process.cwd(),
+      '.wwebjs_auth',
+      `session-${sessionId}`,
+    );
+
     const lockPaths = [
-      path.join(
-        process.cwd(),
-        '.wwebjs_auth',
-        `session-${sessionId}`,
-        'Default',
-        'LOCK',
-      ),
-      path.join(
-        process.cwd(),
-        '.wwebjs_auth',
-        `session-${sessionId}`,
-        'Default',
-        'SingletonLock',
-      ),
-      path.join(
-        process.cwd(),
-        '.wwebjs_auth',
-        `session-${sessionId}`,
-        'Default',
-        'SingletonCookie',
-      ),
-      path.join(
-        process.cwd(),
-        '.wwebjs_auth',
-        `session-${sessionId}`,
-        'Default',
-        'SingletonSocket',
-      ),
+      path.join(sessionPath, 'LOCK'),
+      path.join(sessionPath, 'lockfile'),
+      path.join(sessionPath, 'SingletonLock'),
+      path.join(sessionPath, 'SingletonCookie'),
+      path.join(sessionPath, 'SingletonSocket'),
+      path.join(sessionPath, 'DevToolsActivePort'),
+      path.join(sessionPath, 'Default', 'LOCK'),
+      path.join(sessionPath, 'Default', 'lockfile'),
+      path.join(sessionPath, 'Default', 'SingletonLock'),
+      path.join(sessionPath, 'Default', 'SingletonCookie'),
+      path.join(sessionPath, 'Default', 'SingletonSocket'),
+      path.join(sessionPath, 'Default', 'DevToolsActivePort'),
     ];
+
+    if (fs.existsSync(sessionPath)) {
+      try {
+        const dynamicLockPaths = fs
+          .readdirSync(sessionPath)
+          .filter(
+            (entry) =>
+              entry.startsWith('Singleton') ||
+              entry === 'LOCK' ||
+              entry === 'lockfile' ||
+              entry === 'DevToolsActivePort',
+          )
+          .map((entry) => path.join(sessionPath, entry));
+
+        lockPaths.push(...dynamicLockPaths);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Falha ao listar locks.';
+        this.logger.warn(
+          `Nao foi possivel listar locks da sessao ${sessionId}: ${message}`,
+        );
+      }
+    }
 
     lockPaths.forEach((lockPath) => {
       if (!fs.existsSync(lockPath)) {
