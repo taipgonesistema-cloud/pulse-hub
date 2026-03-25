@@ -7,10 +7,12 @@ import {
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { execFile } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import QRCode from 'qrcode';
 import { Observable, Subject, filter, map } from 'rxjs';
+import { promisify } from 'node:util';
 import { Client, LocalAuth, type Message } from 'whatsapp-web.js';
 import {
   type ConversationRecord,
@@ -27,6 +29,7 @@ import { WhatsappStore } from './whatsapp.store';
 
 const DASHBOARD_OVERVIEW_CACHE_KEY = 'pulse-hub:dashboard:overview';
 const WHATSAPP_EVENTS_CHANNEL = 'pulse-hub:whatsapp:events';
+const execFileAsync = promisify(execFile);
 
 @Injectable()
 export class WhatsappService implements OnModuleInit, OnModuleDestroy {
@@ -269,6 +272,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
       return this.getSessionOrFail(sessionId);
     }
 
+    await this.terminateSessionBrowserProcesses(sessionId);
     this.cleanupSessionLocks(sessionId);
 
     const client = new Client({
@@ -317,6 +321,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
         error instanceof Error ? error.message : 'Falha ao inicializar sessao.';
 
       this.logger.error(`Falha ao conectar sessao ${sessionId}: ${message}`);
+      await Promise.allSettled([client.destroy()]);
       this.clients.delete(sessionId);
       await this.store.saveSession({
         ...(await this.getSessionOrFail(sessionId)),
@@ -782,6 +787,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
       '.wwebjs_auth',
       `session-${sessionId}`,
     );
+    const defaultPath = path.join(sessionPath, 'Default');
 
     const lockPaths = [
       path.join(sessionPath, 'LOCK'),
@@ -798,10 +804,14 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
       path.join(sessionPath, 'Default', 'DevToolsActivePort'),
     ];
 
-    if (fs.existsSync(sessionPath)) {
+    [sessionPath, defaultPath].forEach((directoryPath) => {
+      if (!fs.existsSync(directoryPath)) {
+        return;
+      }
+
       try {
         const dynamicLockPaths = fs
-          .readdirSync(sessionPath)
+          .readdirSync(directoryPath)
           .filter(
             (entry) =>
               entry.startsWith('Singleton') ||
@@ -809,7 +819,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
               entry === 'lockfile' ||
               entry === 'DevToolsActivePort',
           )
-          .map((entry) => path.join(sessionPath, entry));
+          .map((entry) => path.join(directoryPath, entry));
 
         lockPaths.push(...dynamicLockPaths);
       } catch (error) {
@@ -819,7 +829,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
           `Nao foi possivel listar locks da sessao ${sessionId}: ${message}`,
         );
       }
-    }
+    });
 
     lockPaths.forEach((lockPath) => {
       if (!fs.existsSync(lockPath)) {
@@ -836,6 +846,42 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
         );
       }
     });
+  }
+
+  private async terminateSessionBrowserProcesses(sessionId: string) {
+    if (process.platform === 'win32') {
+      return;
+    }
+
+    const sessionPath = path.join(
+      process.cwd(),
+      '.wwebjs_auth',
+      `session-${sessionId}`,
+    );
+
+    try {
+      await execFileAsync('pkill', ['-f', sessionPath]);
+      this.logger.warn(
+        `Processos Chromium antigos da sessao ${sessionId} foram encerrados.`,
+      );
+    } catch (error) {
+      const exitCode =
+        typeof error === 'object' && error && 'code' in error
+          ? (error as { code?: number | string }).code
+          : undefined;
+
+      if (exitCode === 1 || exitCode === '1') {
+        return;
+      }
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Falha ao encerrar processo Chromium antigo.';
+      this.logger.warn(
+        `Nao foi possivel encerrar processo antigo da sessao ${sessionId}: ${message}`,
+      );
+    }
   }
 
   private async resolveChatAvatar(client: Client, chatId: string) {
