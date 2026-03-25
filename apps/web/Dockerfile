@@ -6,7 +6,7 @@ COPY package*.json ./
 COPY apps/web/package*.json ./apps/web/
 COPY apps/server/package*.json ./apps/server/
 
-RUN npm ci
+RUN npm ci && npm install --no-save --workspace web lightningcss-linux-x64-gnu@1.32.0
 
 FROM node:20-bookworm-slim AS builder
 
