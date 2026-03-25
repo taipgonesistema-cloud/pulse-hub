@@ -14,13 +14,15 @@
   --primary-strong: #64a1ff;
   --secondary: #5dfd8a;
   --tertiary: #ff6e82;
+  --font-sans-stack: "Segoe UI", "Avenir Next", "Helvetica Neue", sans-serif;
+  --font-display-stack: "Bahnschrift", "Arial Narrow", "Trebuchet MS", sans-serif;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter);
-  --font-mono: var(--font-plus-jakarta);
+  --font-sans: var(--font-sans-stack);
+  --font-mono: var(--font-display-stack);
 }
 
 * {
@@ -38,7 +40,7 @@ body {
     radial-gradient(circle at top right, rgba(255, 110, 130, 0.08), transparent 24%),
     linear-gradient(180deg, #070707 0%, #0b0b0b 35%, #0e0e0e 100%);
   color: var(--foreground);
-  font-family: var(--font-inter), sans-serif;
+  font-family: var(--font-sans-stack);
 }
 
 button,
@@ -57,7 +59,7 @@ a {
 }
 
 .font-headline {
-  font-family: var(--font-plus-jakarta), sans-serif;
+  font-family: var(--font-display-stack);
 }
 
 .glass-panel {
