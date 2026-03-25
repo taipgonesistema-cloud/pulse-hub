@@ -72,13 +72,24 @@ const quickReplies = [
   'Confirm appointment',
 ];
 
-const navigationItems = [
-  { label: 'Dashboard', icon: Home },
-  { label: 'Conversations', icon: MessageCircle },
-  { label: 'Contacts', icon: ContactRound },
-  { label: 'Analytics', icon: BarChart3 },
-  { label: 'Settings', icon: Settings },
+const navigationItems: Array<{
+  id: WorkspaceView;
+  label: string;
+  icon: typeof Home;
+}> = [
+  { id: 'dashboard', label: 'Dashboard', icon: Home },
+  { id: 'conversations', label: 'Conversations', icon: MessageCircle },
+  { id: 'contacts', label: 'Contacts', icon: ContactRound },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
+
+type WorkspaceView =
+  | 'dashboard'
+  | 'conversations'
+  | 'contacts'
+  | 'analytics'
+  | 'settings';
 
 type Props = {
   initialOverview: DashboardOverview;
@@ -101,6 +112,9 @@ export function DashboardClient({ initialOverview }: Props) {
   const [overview, setOverview] = useState(initialOverview);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [activeView, setActiveView] = useState<WorkspaceView>(
+    initialOverview.sessions.length > 0 ? 'conversations' : 'settings',
+  );
   const [selectedSessionId, setSelectedSessionId] = useState(
     initialOverview.sessions[0]?.id ?? '',
   );
@@ -144,6 +158,21 @@ export function DashboardClient({ initialOverview }: Props) {
       ) ?? sessionConversations[0],
     [selectedConversationId, sessionConversations],
   );
+
+  const contacts = useMemo(() => {
+    const seen = new Set<string>();
+
+    return overview.conversations.filter((conversation) => {
+      const key = `${conversation.participantId}:${conversation.contact}`;
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+  }, [overview.conversations]);
 
   const activeSessionId = selectedSession?.id ?? null;
   const activeSessionStatus = selectedSession?.status ?? null;
@@ -509,8 +538,12 @@ export function DashboardClient({ initialOverview }: Props) {
         throw new Error('Nao foi possivel criar a sessao.');
       }
 
+      const createdSession = (await response.json()) as SessionRecord;
+
       setSessionForm({ name: '', phoneNumber: '', channelName: '' });
       await loadOverview();
+      setSelectedSessionId(createdSession.id);
+      setActiveView('settings');
     });
   };
 
@@ -583,6 +616,766 @@ export function DashboardClient({ initialOverview }: Props) {
     setComposer(reply);
   };
 
+  const activeViewLabel =
+    navigationItems.find((item) => item.id === activeView)?.label ?? 'Conversations';
+
+  const renderDashboardView = () => (
+    <section className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-8">
+      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            label="Connected numbers"
+            value={overview.metrics.connectedNumbers}
+            detail="Numeros com operacao disponivel"
+            tone="primary"
+          />
+          <MetricCard
+            label="Active sessions"
+            value={overview.metrics.activeSessions}
+            detail="Sessoes prontas para trafego"
+            tone="secondary"
+          />
+          <MetricCard
+            label="Waiting conversations"
+            value={overview.metrics.waitingConversations}
+            detail="Fila atual em aberto"
+            tone="tertiary"
+          />
+          <MetricCard
+            label="Online users"
+            value={overview.metrics.onlineUsers}
+            detail="Operadores online no painel"
+            tone="neutral"
+          />
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="glass-panel rounded-[30px] p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                  Session pulse
+                </p>
+                <h2 className="font-headline mt-3 text-3xl font-semibold text-white">
+                  Operacao em tempo real
+                </h2>
+              </div>
+              <button
+                className="rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white"
+                onClick={() => runAction(loadOverview)}
+                type="button"
+              >
+                Refresh
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {overview.sessions.length > 0 ? (
+                overview.sessions.map((session) => (
+                  <button
+                    key={session.id}
+                    className="flex w-full items-center justify-between rounded-[24px] border border-white/6 bg-white/4 px-4 py-4 text-left transition hover:bg-white/6"
+                    onClick={() => {
+                      setSelectedSessionId(session.id);
+                      setActiveView('settings');
+                    }}
+                    type="button"
+                  >
+                    <div>
+                      <p className="text-base font-semibold text-white">{session.name}</p>
+                      <p className="mt-1 text-sm text-[var(--muted)]">
+                        {session.phoneNumber} · {session.channelName}
+                      </p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs ${statusTone[session.status]}`}>
+                      {statusLabel[session.status]}
+                    </span>
+                  </button>
+                ))
+              ) : (
+                <GhostPanel>
+                  Nenhuma sessao provisionada ainda. Abra `Settings` para conectar seu
+                  primeiro WhatsApp.
+                </GhostPanel>
+              )}
+            </div>
+          </div>
+
+          <div className="glass-panel rounded-[30px] p-6">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+              Channels
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {overview.channels.length > 0 ? (
+                overview.channels.map((channel) => (
+                  <ChannelPill key={channel.id} channel={channel} />
+                ))
+              ) : (
+                <GhostPanel>No channel tags yet.</GhostPanel>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderContactsView = () => (
+    <section className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-8">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+            Contact index
+          </p>
+          <h2 className="font-headline mt-3 text-3xl font-semibold text-white">
+            Base viva de contatos
+          </h2>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          {contacts.length > 0 ? (
+            contacts.map((contact) => (
+              <button
+                key={`${contact.sessionId}:${contact.id}`}
+                className="glass-panel flex items-center gap-4 rounded-[28px] p-5 text-left transition hover:bg-white/6"
+                onClick={() => {
+                  setSelectedSessionId(contact.sessionId);
+                  setSelectedConversationId(contact.id);
+                  setActiveView('conversations');
+                }}
+                type="button"
+              >
+                <AvatarBadge label={contact.contact} src={contact.avatarUrl} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-lg font-semibold text-white">
+                    {contact.contact}
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--muted)]">
+                    {contact.participantId}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Tag tone="primary">{contact.channelName}</Tag>
+                    <Tag tone="neutral">{contact.owner}</Tag>
+                  </div>
+                </div>
+              </button>
+            ))
+          ) : (
+            <GhostPanel>
+              Seus contatos vao aparecer aqui assim que a primeira sessao do WhatsApp
+              sincronizar conversas reais.
+            </GhostPanel>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderAnalyticsView = () => (
+    <section className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-8">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+            Operational signal
+          </p>
+          <h2 className="font-headline mt-3 text-3xl font-semibold text-white">
+            Indicadores da operacao
+          </h2>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <MetricCard
+            label="Unread volume"
+            value={overview.sessions.reduce((sum, session) => sum + session.unread, 0)}
+            detail="Mensagens aguardando leitura"
+            tone="primary"
+          />
+          <MetricCard
+            label="Waiting queue"
+            value={overview.sessions.reduce((sum, session) => sum + session.waiting, 0)}
+            detail="Conversas em espera"
+            tone="tertiary"
+          />
+          <MetricCard
+            label="Connected channels"
+            value={overview.channels.filter((channel) => channel.connectedNumbers > 0).length}
+            detail="Filas com numeros ativos"
+            tone="secondary"
+          />
+        </div>
+
+        <GhostPanel>
+          Esta aba ja mostra os sinais principais do workspace. Se quiser, no proximo
+          passo eu posso transformar isso em analytics completos com SLA, tempo medio,
+          throughput e performance por atendente.
+        </GhostPanel>
+      </div>
+    </section>
+  );
+
+  const renderSettingsView = () => (
+    <section className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+              WhatsApp configuration
+            </p>
+            <h2 className="font-headline mt-3 text-3xl font-semibold text-white">
+              Conectar e gerenciar sessoes
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+              Crie uma sessao operacional, gere QR code, reconecte numeros e acompanhe o
+              estado da autenticacao sem sair do painel.
+            </p>
+          </div>
+          <button
+            className="rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white"
+            onClick={() => runAction(loadOverview)}
+            type="button"
+          >
+            Refresh settings
+          </button>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <div className="space-y-6">
+            <div className="glass-panel rounded-[30px] p-6">
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                Provision new session
+              </p>
+              <div className="mt-5 space-y-3">
+                <Field
+                  onChange={(value) =>
+                    setSessionForm((current) => ({ ...current, name: value }))
+                  }
+                  placeholder="Nome operacional"
+                  value={sessionForm.name}
+                />
+                <Field
+                  onChange={(value) =>
+                    setSessionForm((current) => ({ ...current, phoneNumber: value }))
+                  }
+                  placeholder="Numero do WhatsApp"
+                  value={sessionForm.phoneNumber}
+                />
+                <Field
+                  onChange={(value) =>
+                    setSessionForm((current) => ({ ...current, channelName: value }))
+                  }
+                  placeholder="Fila / canal"
+                  value={sessionForm.channelName}
+                />
+                <button
+                  className="w-full rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
+                  onClick={createSession}
+                  type="button"
+                >
+                  Criar sessao
+                </button>
+              </div>
+            </div>
+
+            <div className="glass-panel rounded-[30px] p-6">
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                Session stack
+              </p>
+              <div className="mt-5 space-y-3">
+                {overview.sessions.length > 0 ? (
+                  overview.sessions.map((session) => {
+                    const active = session.id === selectedSession?.id;
+
+                    return (
+                      <button
+                        key={session.id}
+                        className={`flex w-full items-center justify-between rounded-[24px] border px-4 py-4 text-left transition ${
+                          active
+                            ? 'border-[var(--primary)]/30 bg-[var(--primary)]/10'
+                            : 'border-white/6 bg-white/4 hover:bg-white/6'
+                        }`}
+                        onClick={() => setSelectedSessionId(session.id)}
+                        type="button"
+                      >
+                        <div>
+                          <p className="text-base font-semibold text-white">{session.name}</p>
+                          <p className="mt-1 text-sm text-[var(--muted)]">
+                            {session.phoneNumber} · {session.channelName}
+                          </p>
+                        </div>
+                        <span className={`rounded-full px-3 py-1 text-xs ${statusTone[session.status]}`}>
+                          {statusLabel[session.status]}
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <GhostPanel>
+                    Nenhuma sessao criada ainda. Preencha os campos acima para conectar o
+                    primeiro numero.
+                  </GhostPanel>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {selectedSession ? (
+              <>
+                <div className="glass-panel rounded-[30px] p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                        Session control
+                      </p>
+                      <h3 className="font-headline mt-3 text-3xl font-semibold text-white">
+                        {selectedSession.name}
+                      </h3>
+                      <p className="mt-2 text-sm text-[var(--muted)]">
+                        {selectedSession.phoneNumber} · {selectedSession.channelName}
+                      </p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs ${statusTone[selectedSession.status]}`}>
+                      {statusLabel[selectedSession.status]}
+                    </span>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 md:grid-cols-3">
+                    <MetricCard
+                      label="Unread"
+                      value={selectedSession.unread}
+                      detail="Mensagens pendentes"
+                      tone="primary"
+                      compact
+                    />
+                    <MetricCard
+                      label="Waiting"
+                      value={selectedSession.waiting}
+                      detail="Conversas na fila"
+                      tone="tertiary"
+                      compact
+                    />
+                    <MetricCard
+                      label="Attendants"
+                      value={selectedSession.attendants}
+                      detail="Atendentes vinculados"
+                      tone="secondary"
+                      compact
+                    />
+                  </div>
+
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <button
+                      className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
+                      onClick={() => connectSession(selectedSession.id)}
+                      type="button"
+                    >
+                      <QrCode className="h-4 w-4" strokeWidth={2.1} />
+                      Gerar QR / conectar
+                    </button>
+                    <button
+                      className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
+                      onClick={() => disconnectSession(selectedSession.id)}
+                      type="button"
+                    >
+                      <Wifi className="h-4 w-4" strokeWidth={2.1} />
+                      Desconectar
+                    </button>
+                  </div>
+
+                  {selectedSession.lastError ? (
+                    <div className="mt-6 rounded-[24px] border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                      {selectedSession.lastError}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="glass-panel rounded-[30px] p-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                    QR authentication
+                  </p>
+                  <div className="mt-5 flex min-h-[320px] items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-black/20 p-6">
+                    {selectedSession.qrCodeDataUrl ? (
+                      <div className="rounded-[28px] bg-white p-4">
+                        <Image
+                          alt={`QR code da sessao ${selectedSession.name}`}
+                          className="mx-auto rounded-[20px]"
+                          height={260}
+                          src={selectedSession.qrCodeDataUrl}
+                          unoptimized
+                          width={260}
+                        />
+                      </div>
+                    ) : (
+                      <GhostPanel>
+                        Gere ou reconecte a sessao para exibir o QR code aqui. Se existir
+                        autenticacao persistida, a sessao pode voltar sem novo QR.
+                      </GhostPanel>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <GhostPanel>
+                Selecione uma sessao para abrir as configuracoes, gerar QR code e conectar
+                seu WhatsApp.
+              </GhostPanel>
+            )}
+
+            {errorMessage ? <GhostPanel>{errorMessage}</GhostPanel> : null}
+            {isPending ? <GhostPanel>Syncing operation...</GhostPanel> : null}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderConversationsView = () => (
+    <div className="grid min-h-0 flex-1 overflow-hidden grid-cols-1 xl:grid-cols-[21rem_minmax(0,1fr)_21rem]">
+      <section className="min-h-0 overflow-hidden border-r border-white/5 bg-[var(--surface-low)]/35 px-4 py-5 xl:px-3">
+        <div className="mb-5 flex items-center justify-between px-2">
+          <div>
+            <h2 className="font-headline text-3xl font-bold text-white">Active Queues</h2>
+            <p className="mt-1 text-xs uppercase tracking-[0.22em] text-[var(--muted)]">
+              {queueLabel}
+            </p>
+          </div>
+          <button
+            className="rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white"
+            onClick={() => runAction(loadOverview)}
+            type="button"
+          >
+            Refresh
+          </button>
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-2 px-2">
+          {overview.channels.length > 0 ? (
+            overview.channels.map((channel) => <ChannelPill key={channel.id} channel={channel} />)
+          ) : (
+            <span className="rounded-full bg-white/5 px-3 py-1.5 text-[11px] text-[var(--muted)]">
+              No channel tags yet
+            </span>
+          )}
+        </div>
+
+        <div className="h-[calc(100vh-13.5rem)] space-y-2 overflow-y-auto pr-1 xl:h-[calc(100vh-10.5rem)]">
+          {sessionConversations.map((conversation) => {
+            const active = selectedConversation?.id === conversation.id;
+
+            return (
+              <button
+                key={conversation.id}
+                className={`w-full rounded-[24px] p-3 text-left transition-all ${
+                  active
+                    ? 'bg-[var(--surface-highest)] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]'
+                    : 'hover:bg-white/5'
+                }`}
+                onClick={() => setSelectedConversationId(conversation.id)}
+                type="button"
+              >
+                <div className="flex gap-3">
+                  <AvatarBadge label={conversation.contact} src={conversation.avatarUrl} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="truncate text-lg font-semibold text-white">
+                          {conversation.contact}
+                        </p>
+                        <p className="mt-0.5 text-xs text-[var(--muted)]">
+                          {formatClock(conversation.lastMessageAt)}
+                        </p>
+                      </div>
+                      {conversation.unread > 0 ? (
+                        <span className="rounded-full bg-[var(--secondary)] px-2 py-1 text-[10px] font-bold text-black shadow-[0_0_12px_rgba(93,253,138,0.35)]">
+                          {conversation.unread}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 truncate text-sm text-[var(--primary)]">
+                      {conversation.preview || 'No preview yet'}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--secondary)]/14 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--secondary)]">
+                        <MessageCircle className="h-3 w-3" strokeWidth={2.1} />
+                        WhatsApp
+                      </span>
+                      <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
+                        {conversation.status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+
+          {selectedSession && sessionConversations.length === 0 ? (
+            <GhostPanel>
+              Session connected. Wait a few seconds or hit refresh to hydrate the queue.
+            </GhostPanel>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="flex min-h-0 flex-col overflow-hidden bg-[var(--surface)]">
+        {selectedSession ? (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-black/10 px-5 py-4 backdrop-blur-md">
+              <div className="flex items-center gap-3">
+                {selectedConversation ? (
+                  <AvatarBadge
+                    label={selectedConversation.contact}
+                    src={selectedConversation.avatarUrl}
+                  />
+                ) : (
+                  <span className="h-3 w-3 rounded-full bg-[var(--secondary)] shadow-[0_0_16px_rgba(93,253,138,0.8)]" />
+                )}
+                <div>
+                  <p className="font-headline text-3xl font-semibold text-white">
+                    {selectedConversation?.contact ?? selectedSession.name}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+                    <span className="rounded-full bg-[var(--surface-high)] px-3 py-1">
+                      {selectedSession.phoneNumber}
+                    </span>
+                    <span className={`rounded-full px-3 py-1 ${statusTone[selectedSession.status]}`}>
+                      {statusLabel[selectedSession.status]}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white">
+                  <Video className="h-4 w-4" strokeWidth={2.1} />
+                  Video
+                </button>
+                <button className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white">
+                  <Phone className="h-4 w-4" strokeWidth={2.1} />
+                  Call
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
+                  onClick={() => connectSession(selectedSession.id)}
+                  type="button"
+                >
+                  <QrCode className="h-4 w-4" strokeWidth={2.1} />
+                  Connect
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
+                  onClick={() => disconnectSession(selectedSession.id)}
+                  type="button"
+                >
+                  <Wifi className="h-4 w-4" strokeWidth={2.1} />
+                  Disconnect
+                </button>
+              </div>
+            </div>
+
+            <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
+              <div className="mx-auto flex max-w-5xl flex-col gap-6">
+                {isLoadingMessages ? <GhostPanel>Loading conversation history...</GhostPanel> : null}
+
+                {messages.map((message) => (
+                  <MessageBubble
+                    key={message.id}
+                    avatarUrl={selectedConversation?.avatarUrl}
+                    message={message}
+                  />
+                ))}
+
+                {typingConversationId === selectedConversation?.id ? (
+                  <div className="flex max-w-[80%] gap-4">
+                    <AvatarBadge
+                      label={selectedConversation.contact}
+                      small
+                      src={selectedConversation.avatarUrl}
+                    />
+                    <div className="glass-panel rounded-[26px] rounded-tl-none px-5 py-4 text-sm text-[var(--muted)]">
+                      <div className="flex items-center gap-3">
+                        <span>digitando</span>
+                        <span className="flex gap-1">
+                          <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)] [animation-delay:-0.2s]" />
+                          <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)] [animation-delay:-0.1s]" />
+                          <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)]" />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                {!isLoadingMessages && messages.length === 0 ? (
+                  <GhostPanel>Open a real chat thread to load the message timeline here.</GhostPanel>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="border-t border-white/5 bg-[var(--surface-low)]/45 px-4 py-4 backdrop-blur-xl md:px-6">
+              <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+                {quickReplies.map((reply) => (
+                  <button
+                    key={reply}
+                    className="shrink-0 rounded-full bg-[var(--surface-highest)] px-4 py-2 text-[11px] font-medium text-zinc-300 transition hover:text-white"
+                    onClick={() => applyQuickReply(reply)}
+                    type="button"
+                  >
+                    {reply}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3 rounded-[30px] bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-18px_rgba(0,0,0,0.9)]">
+                <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
+                  <Plus className="h-5 w-5" strokeWidth={2.1} />
+                </button>
+                <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
+                  <Smile className="h-5 w-5" strokeWidth={2.1} />
+                </button>
+                <input
+                  className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                  onChange={(event) => setComposer(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    sendMessage();
+                  }}
+                  placeholder="Type a message..."
+                  value={composer}
+                />
+                <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
+                  <Mic className="h-5 w-5" strokeWidth={2.1} />
+                </button>
+                <button
+                  className="grid h-12 w-12 place-items-center rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] text-black shadow-[0_0_22px_rgba(127,175,255,0.32)] transition hover:scale-105"
+                  onClick={sendMessage}
+                  type="button"
+                >
+                  <Send className="h-5 w-5" strokeWidth={2.2} />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="grid flex-1 place-items-center p-6">
+            <div className="space-y-4 text-center">
+              <GhostPanel>Create or restore a WhatsApp session to begin.</GhostPanel>
+              <button
+                className="rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-5 py-3 text-sm font-semibold text-black"
+                onClick={() => setActiveView('settings')}
+                type="button"
+              >
+                Abrir configuracoes
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <aside className="hidden min-h-0 overflow-y-auto bg-[var(--surface-low)]/20 px-6 py-6 xl:block">
+        {selectedConversation && selectedSession ? (
+          <div className="space-y-7">
+            <div className="flex flex-col items-center text-center">
+              <div className="relative">
+                <AvatarBadge
+                  className="h-28 w-28 rounded-[28px] text-4xl"
+                  label={selectedConversation.contact}
+                  src={selectedConversation.avatarUrl}
+                />
+                <div className="absolute -bottom-2 -right-2 grid h-12 w-12 place-items-center rounded-full bg-[var(--secondary)] text-black shadow-[0_0_22px_rgba(93,253,138,0.5)]">
+                  <MessageCircle className="h-5 w-5" strokeWidth={2.4} />
+                </div>
+              </div>
+
+              <h3 className="mt-6 font-headline text-5xl font-bold tracking-tight text-white">
+                {selectedConversation.contact}
+              </h3>
+              <p className="mt-2 text-sm text-[var(--muted)]">
+                {selectedConversation.owner} · {selectedConversation.channelName}
+              </p>
+            </div>
+
+            <ProfileSection title="Contact Info">
+              <ProfileRow label="Email" value={contactInfo.email} />
+              <ProfileRow label="Phone" value={contactInfo.phone} />
+              <ProfileRow label="Session" value={selectedSession.name} />
+            </ProfileSection>
+
+            <ProfileSection title="Customer Tags">
+              <div className="flex flex-wrap gap-2">
+                <Tag tone="primary">{selectedConversation.channelName}</Tag>
+                <Tag tone="tertiary">{selectedConversation.status}</Tag>
+                <Tag tone="neutral">{selectedConversation.owner}</Tag>
+              </div>
+            </ProfileSection>
+
+            <ProfileSection title="Conversation History">
+              <div className="space-y-4">
+                <MiniTimelineItem
+                  label="Current WhatsApp thread"
+                  meta={formatDateLabel(selectedConversation.lastMessageAt)}
+                  tone="primary"
+                />
+                <MiniTimelineItem
+                  label="Realtime session online"
+                  meta={statusLabel[selectedSession.status]}
+                  tone="secondary"
+                />
+              </div>
+            </ProfileSection>
+
+            <ProfileSection title="Session Control">
+              <div className="space-y-3">
+                <button
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
+                  onClick={() => {
+                    setActiveView('settings');
+                    connectSession(selectedSession.id);
+                  }}
+                  type="button"
+                >
+                  <QrCode className="h-4 w-4" strokeWidth={2.1} />
+                  Generate QR / reconnect
+                </button>
+                <button
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--surface-highest)] px-4 py-3 text-sm font-semibold text-white"
+                  onClick={() => disconnectSession(selectedSession.id)}
+                  type="button"
+                >
+                  <Wifi className="h-4 w-4" strokeWidth={2.1} />
+                  Disconnect session
+                </button>
+              </div>
+            </ProfileSection>
+
+            {selectedSession.qrCodeDataUrl ? (
+              <ProfileSection title="QR Code">
+                <div className="rounded-[28px] bg-white p-4">
+                  <Image
+                    alt={`QR code da sessao ${selectedSession.name}`}
+                    className="mx-auto rounded-[20px]"
+                    height={220}
+                    src={selectedSession.qrCodeDataUrl}
+                    unoptimized
+                    width={220}
+                  />
+                </div>
+              </ProfileSection>
+            ) : null}
+
+            {errorMessage ? <GhostPanel>{errorMessage}</GhostPanel> : null}
+            {isPending ? <GhostPanel>Syncing operation...</GhostPanel> : null}
+          </div>
+        ) : (
+          <GhostPanel>Select a contact to reveal the profile rail.</GhostPanel>
+        )}
+      </aside>
+    </div>
+  );
+
   return (
     <main className="h-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
       <div className="flex h-full overflow-hidden">
@@ -602,31 +1395,40 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
 
           <nav className="space-y-1 text-sm">
-            {navigationItems.map(({ label, icon: Icon }) => (
-                <button
-                  key={label}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all ${
-                    label === 'Conversations'
-                      ? 'bg-[linear-gradient(90deg,rgba(127,175,255,0.16),rgba(127,175,255,0.04))] text-[var(--primary)] shadow-[0_0_32px_rgba(127,175,255,0.18)]'
-                      : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-200'
-                  }`}
-                  type="button"
-                >
-                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/5">
-                    <Icon className="h-4 w-4" strokeWidth={2.1} />
-                  </span>
-                  <span>{label}</span>
-                </button>
-              ))}
+            {navigationItems.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all ${
+                  activeView === id
+                    ? 'bg-[linear-gradient(90deg,rgba(127,175,255,0.16),rgba(127,175,255,0.04))] text-[var(--primary)] shadow-[0_0_32px_rgba(127,175,255,0.18)]'
+                    : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-200'
+                }`}
+                onClick={() => setActiveView(id)}
+                type="button"
+              >
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/5">
+                  <Icon className="h-4 w-4" strokeWidth={2.1} />
+                </span>
+                <span>{label}</span>
+              </button>
+            ))}
           </nav>
 
           <div className="mt-auto space-y-4">
-            <button className="flex w-full items-center justify-center gap-3 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-5 py-4 text-sm font-semibold text-black shadow-[0_0_28px_rgba(127,175,255,0.22)] transition-transform hover:scale-[1.01]">
+            <button
+              className="flex w-full items-center justify-center gap-3 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-5 py-4 text-sm font-semibold text-black shadow-[0_0_28px_rgba(127,175,255,0.22)] transition-transform hover:scale-[1.01]"
+              onClick={() => setActiveView(selectedSession ? 'conversations' : 'settings')}
+              type="button"
+            >
               <MessageSquarePlus className="h-4 w-4" strokeWidth={2.2} />
               New Message
             </button>
             <div className="border-t border-white/5 pt-4 text-sm">
-              <button className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-zinc-500 hover:bg-white/5 hover:text-zinc-200">
+              <button
+                className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
+                onClick={() => setActiveView('settings')}
+                type="button"
+              >
                 <CircleHelp className="h-4 w-4" strokeWidth={2.1} />
                 Support
               </button>
@@ -645,9 +1447,14 @@ export function DashboardClient({ initialOverview }: Props) {
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-4 backdrop-blur-2xl md:px-8">
             <div className="flex items-center gap-4">
-              <p className="font-headline text-3xl font-bold tracking-tight text-[var(--primary)]">
-                EtherCommand
-              </p>
+              <div>
+                <p className="font-headline text-3xl font-bold tracking-tight text-[var(--primary)]">
+                  EtherCommand
+                </p>
+                <p className="mt-1 text-[11px] uppercase tracking-[0.24em] text-[var(--muted)]">
+                  {activeViewLabel}
+                </p>
+              </div>
               <div className="hidden items-center gap-3 rounded-full bg-[var(--surface-low)] px-5 py-3 text-sm text-[var(--muted)] lg:flex lg:min-w-80">
                 <Search className="h-4 w-4" strokeWidth={2.2} />
                 Global search...
@@ -700,393 +1507,15 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
           </header>
 
-          <div className="grid min-h-0 flex-1 overflow-hidden grid-cols-1 xl:grid-cols-[21rem_minmax(0,1fr)_21rem]">
-            <section className="min-h-0 overflow-hidden border-r border-white/5 bg-[var(--surface-low)]/35 px-4 py-5 xl:px-3">
-              <div className="mb-5 flex items-center justify-between px-2">
-                <div>
-                  <h2 className="font-headline text-3xl font-bold text-white">
-                    Active Queues
-                  </h2>
-                  <p className="mt-1 text-xs uppercase tracking-[0.22em] text-[var(--muted)]">
-                    {queueLabel}
-                  </p>
-                </div>
-                <button
-                  className="rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white"
-                  onClick={() => runAction(loadOverview)}
-                  type="button"
-                >
-                  Refresh
-                </button>
-              </div>
-
-              <div className="mb-4 flex flex-wrap gap-2 px-2">
-                {overview.channels.length > 0 ? (
-                  overview.channels.map((channel) => (
-                    <ChannelPill key={channel.id} channel={channel} />
-                  ))
-                ) : (
-                  <span className="rounded-full bg-white/5 px-3 py-1.5 text-[11px] text-[var(--muted)]">
-                    No channel tags yet
-                  </span>
-                )}
-              </div>
-
-              <div className="h-[calc(100vh-13.5rem)] space-y-2 overflow-y-auto pr-1 xl:h-[calc(100vh-10.5rem)]">
-                {sessionConversations.map((conversation) => {
-                  const active = selectedConversation?.id === conversation.id;
-
-                  return (
-                    <button
-                      key={conversation.id}
-                      className={`w-full rounded-[24px] p-3 text-left transition-all ${
-                        active
-                          ? 'bg-[var(--surface-highest)] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]'
-                          : 'hover:bg-white/5'
-                      }`}
-                        onClick={() => setSelectedConversationId(conversation.id)}
-                        type="button"
-                      >
-                      <div className="flex gap-3">
-                        <AvatarBadge
-                          label={conversation.contact}
-                          src={conversation.avatarUrl}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="truncate text-lg font-semibold text-white">
-                                {conversation.contact}
-                              </p>
-                              <p className="mt-0.5 text-xs text-[var(--muted)]">
-                                {formatClock(conversation.lastMessageAt)}
-                              </p>
-                            </div>
-                            {conversation.unread > 0 ? (
-                              <span className="rounded-full bg-[var(--secondary)] px-2 py-1 text-[10px] font-bold text-black shadow-[0_0_12px_rgba(93,253,138,0.35)]">
-                                {conversation.unread}
-                              </span>
-                            ) : null}
-                          </div>
-                          <p className="mt-1 truncate text-sm text-[var(--primary)]">
-                            {conversation.preview || 'No preview yet'}
-                          </p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <span className="inline-flex items-center gap-1 rounded-full bg-[var(--secondary)]/14 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--secondary)]">
-                              <MessageCircle className="h-3 w-3" strokeWidth={2.1} />
-                              WhatsApp
-                            </span>
-                            <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
-                              {conversation.status}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-
-                {selectedSession && sessionConversations.length === 0 ? (
-                  <GhostPanel>
-                    Session connected. Wait a few seconds or hit refresh to hydrate the queue.
-                  </GhostPanel>
-                ) : null}
-              </div>
-            </section>
-
-            <section className="flex min-h-0 flex-col overflow-hidden bg-[var(--surface)]">
-              {selectedSession ? (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-black/10 px-5 py-4 backdrop-blur-md">
-                    <div className="flex items-center gap-3">
-                      {selectedConversation ? (
-                        <AvatarBadge
-                          label={selectedConversation.contact}
-                          src={selectedConversation.avatarUrl}
-                        />
-                      ) : (
-                        <span className="h-3 w-3 rounded-full bg-[var(--secondary)] shadow-[0_0_16px_rgba(93,253,138,0.8)]" />
-                      )}
-                      <div>
-                        <p className="font-headline text-3xl font-semibold text-white">
-                          {selectedConversation?.contact ?? selectedSession.name}
-                        </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-                          <span className="rounded-full bg-[var(--surface-high)] px-3 py-1">
-                            {selectedSession.phoneNumber}
-                          </span>
-                          <span className={`rounded-full px-3 py-1 ${statusTone[selectedSession.status]}`}>
-                            {statusLabel[selectedSession.status]}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <button className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white">
-                        <Video className="h-4 w-4" strokeWidth={2.1} />
-                        Video
-                      </button>
-                      <button className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white">
-                        <Phone className="h-4 w-4" strokeWidth={2.1} />
-                        Call
-                      </button>
-                      <button
-                        className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
-                        onClick={() => connectSession(selectedSession.id)}
-                        type="button"
-                      >
-                        <QrCode className="h-4 w-4" strokeWidth={2.1} />
-                        Connect
-                      </button>
-                      <button
-                        className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
-                        onClick={() => disconnectSession(selectedSession.id)}
-                        type="button"
-                      >
-                        <Wifi className="h-4 w-4" strokeWidth={2.1} />
-                        Disconnect
-                      </button>
-                    </div>
-                  </div>
-
-                  <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
-                    <div className="mx-auto flex max-w-5xl flex-col gap-6">
-                      {isLoadingMessages ? (
-                        <GhostPanel>Loading conversation history...</GhostPanel>
-                      ) : null}
-
-                      {messages.map((message) => (
-                        <MessageBubble
-                          key={message.id}
-                          avatarUrl={selectedConversation?.avatarUrl}
-                          message={message}
-                        />
-                      ))}
-
-                      {typingConversationId === selectedConversation?.id ? (
-                        <div className="flex max-w-[80%] gap-4">
-                          <AvatarBadge
-                            label={selectedConversation.contact}
-                            small
-                            src={selectedConversation.avatarUrl}
-                          />
-                          <div className="glass-panel rounded-[26px] rounded-tl-none px-5 py-4 text-sm text-[var(--muted)]">
-                            <div className="flex items-center gap-3">
-                              <span>digitando</span>
-                              <span className="flex gap-1">
-                                <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)] [animation-delay:-0.2s]" />
-                                <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)] [animation-delay:-0.1s]" />
-                                <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)]" />
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {!isLoadingMessages && messages.length === 0 ? (
-                        <GhostPanel>
-                          Open a real chat thread to load the message timeline here.
-                        </GhostPanel>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="border-t border-white/5 bg-[var(--surface-low)]/45 px-4 py-4 backdrop-blur-xl md:px-6">
-                    <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-                      {quickReplies.map((reply) => (
-                        <button
-                          key={reply}
-                          className="shrink-0 rounded-full bg-[var(--surface-highest)] px-4 py-2 text-[11px] font-medium text-zinc-300 transition hover:text-white"
-                          onClick={() => applyQuickReply(reply)}
-                          type="button"
-                        >
-                          {reply}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center gap-3 rounded-[30px] bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-18px_rgba(0,0,0,0.9)]">
-                      <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
-                        <Plus className="h-5 w-5" strokeWidth={2.1} />
-                      </button>
-                      <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
-                        <Smile className="h-5 w-5" strokeWidth={2.1} />
-                      </button>
-                      <input
-                        className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
-                        onChange={(event) => setComposer(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (
-                            event.key !== 'Enter' ||
-                            event.nativeEvent.isComposing
-                          ) {
-                            return;
-                          }
-
-                          event.preventDefault();
-                          sendMessage();
-                        }}
-                        placeholder="Type a message..."
-                        value={composer}
-                      />
-                      <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
-                        <Mic className="h-5 w-5" strokeWidth={2.1} />
-                      </button>
-                      <button
-                        className="grid h-12 w-12 place-items-center rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] text-black shadow-[0_0_22px_rgba(127,175,255,0.32)] transition hover:scale-105"
-                        onClick={sendMessage}
-                        type="button"
-                      >
-                        <Send className="h-5 w-5" strokeWidth={2.2} />
-                      </button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="grid flex-1 place-items-center p-6">
-                  <GhostPanel>Create or restore a WhatsApp session to begin.</GhostPanel>
-                </div>
-              )}
-            </section>
-
-            <aside className="hidden min-h-0 overflow-y-auto bg-[var(--surface-low)]/20 px-6 py-6 xl:block">
-              {selectedConversation && selectedSession ? (
-                <div className="space-y-7">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="relative">
-                      <AvatarBadge
-                        className="h-28 w-28 rounded-[28px] text-4xl"
-                        label={selectedConversation.contact}
-                        src={selectedConversation.avatarUrl}
-                      />
-                      <div className="absolute -bottom-2 -right-2 grid h-12 w-12 place-items-center rounded-full bg-[var(--secondary)] text-black shadow-[0_0_22px_rgba(93,253,138,0.5)]">
-                        <MessageCircle className="h-5 w-5" strokeWidth={2.4} />
-                      </div>
-                    </div>
-
-                    <h3 className="mt-6 font-headline text-5xl font-bold tracking-tight text-white">
-                      {selectedConversation.contact}
-                    </h3>
-                    <p className="mt-2 text-sm text-[var(--muted)]">
-                      {selectedConversation.owner} · {selectedConversation.channelName}
-                    </p>
-                  </div>
-
-                  <ProfileSection title="Contact Info">
-                    <ProfileRow label="Email" value={contactInfo.email} />
-                    <ProfileRow label="Phone" value={contactInfo.phone} />
-                    <ProfileRow label="Session" value={selectedSession.name} />
-                  </ProfileSection>
-
-                  <ProfileSection title="Customer Tags">
-                    <div className="flex flex-wrap gap-2">
-                      <Tag tone="primary">{selectedConversation.channelName}</Tag>
-                      <Tag tone="tertiary">{selectedConversation.status}</Tag>
-                      <Tag tone="neutral">{selectedConversation.owner}</Tag>
-                    </div>
-                  </ProfileSection>
-
-                  <ProfileSection title="Conversation History">
-                    <div className="space-y-4">
-                      <MiniTimelineItem
-                        label="Current WhatsApp thread"
-                        meta={formatDateLabel(selectedConversation.lastMessageAt)}
-                        tone="primary"
-                      />
-                      <MiniTimelineItem
-                        label="Realtime session online"
-                        meta={statusLabel[selectedSession.status]}
-                        tone="secondary"
-                      />
-                    </div>
-                  </ProfileSection>
-
-                  <ProfileSection title="Session Control">
-                    <div className="space-y-3">
-                      <button
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
-                        onClick={() => connectSession(selectedSession.id)}
-                        type="button"
-                      >
-                        <QrCode className="h-4 w-4" strokeWidth={2.1} />
-                        Generate QR / reconnect
-                      </button>
-                      <button
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--surface-highest)] px-4 py-3 text-sm font-semibold text-white"
-                        onClick={() => disconnectSession(selectedSession.id)}
-                        type="button"
-                      >
-                        <Wifi className="h-4 w-4" strokeWidth={2.1} />
-                        Disconnect session
-                      </button>
-                    </div>
-                  </ProfileSection>
-
-                  <ProfileSection title="Provision New Session">
-                    <div className="space-y-3">
-                      <Field
-                        onChange={(value) =>
-                          setSessionForm((current) => ({ ...current, name: value }))
-                        }
-                        placeholder="Operational name"
-                        value={sessionForm.name}
-                      />
-                      <Field
-                        onChange={(value) =>
-                          setSessionForm((current) => ({
-                            ...current,
-                            phoneNumber: value,
-                          }))
-                        }
-                        placeholder="WhatsApp number"
-                        value={sessionForm.phoneNumber}
-                      />
-                      <Field
-                        onChange={(value) =>
-                          setSessionForm((current) => ({
-                            ...current,
-                            channelName: value,
-                          }))
-                        }
-                        placeholder="Queue / channel"
-                        value={sessionForm.channelName}
-                      />
-                      <button
-                        className="w-full rounded-2xl bg-white/5 px-4 py-3 text-sm font-semibold text-white"
-                        onClick={createSession}
-                        type="button"
-                      >
-                        Create session
-                      </button>
-                    </div>
-                  </ProfileSection>
-
-                  {selectedSession.qrCodeDataUrl ? (
-                    <ProfileSection title="QR Code">
-                      <div className="rounded-[28px] bg-white p-4">
-                        <Image
-                          alt={`QR code da sessao ${selectedSession.name}`}
-                          className="mx-auto rounded-[20px]"
-                          height={220}
-                          src={selectedSession.qrCodeDataUrl}
-                          unoptimized
-                          width={220}
-                        />
-                      </div>
-                    </ProfileSection>
-                  ) : null}
-
-                  {errorMessage ? (
-                    <GhostPanel>{errorMessage}</GhostPanel>
-                  ) : null}
-                  {isPending ? <GhostPanel>Syncing operation...</GhostPanel> : null}
-                </div>
-              ) : (
-                <GhostPanel>Select a contact to reveal the profile rail.</GhostPanel>
-              )}
-            </aside>
-          </div>
+          {activeView === 'dashboard'
+            ? renderDashboardView()
+            : activeView === 'contacts'
+              ? renderContactsView()
+              : activeView === 'analytics'
+                ? renderAnalyticsView()
+                : activeView === 'settings'
+                  ? renderSettingsView()
+                  : renderConversationsView()}
         </div>
       </div>
     </main>
@@ -1098,6 +1527,43 @@ function ChannelPill({ channel }: { channel: ChannelRecord }) {
     <span className="rounded-full bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
       {channel.name} · {channel.connectedNumbers}
     </span>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  detail,
+  tone,
+  compact = false,
+}: {
+  label: string;
+  value: number;
+  detail: string;
+  tone: 'primary' | 'secondary' | 'tertiary' | 'neutral';
+  compact?: boolean;
+}) {
+  const tones = {
+    primary: 'border-[var(--primary)]/18 bg-[var(--primary)]/10 text-[var(--primary)]',
+    secondary:
+      'border-[var(--secondary)]/18 bg-[var(--secondary)]/10 text-[var(--secondary)]',
+    tertiary:
+      'border-[var(--tertiary)]/18 bg-[var(--tertiary)]/10 text-[var(--tertiary)]',
+    neutral: 'border-white/10 bg-white/5 text-white',
+  };
+
+  return (
+    <div
+      className={`rounded-[28px] border px-5 py-5 ${tones[tone]} ${compact ? '' : 'shadow-[0_20px_40px_-28px_rgba(0,0,0,0.9)]'}`}
+    >
+      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/55">
+        {label}
+      </p>
+      <p className={`font-headline mt-4 font-semibold text-white ${compact ? 'text-3xl' : 'text-4xl'}`}>
+        {value}
+      </p>
+      <p className="mt-2 text-sm leading-6 text-white/60">{detail}</p>
+    </div>
   );
 }
 
