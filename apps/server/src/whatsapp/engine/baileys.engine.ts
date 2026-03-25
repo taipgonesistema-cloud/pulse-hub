@@ -40,6 +40,7 @@ export class BaileysEngine implements WhatsappEngine {
   private readonly chats = new Map<string, Map<string, StoredChat>>();
   private readonly messages = new Map<string, Map<string, StoredMessage[]>>();
   private readonly contacts = new Map<string, Map<string, StoredContact>>();
+  private readonly reconnectingSessions = new Set<string>();
 
   hasSessionClient(sessionId: string) {
     return this.sockets.has(sessionId);
@@ -218,6 +219,11 @@ export class BaileysEngine implements WhatsappEngine {
 
     if (statusCode === DisconnectReason.loggedOut) {
       await callbacks.onAuthFailure(reasonMessage);
+      return;
+    }
+
+    if (this.shouldReconnect(statusCode)) {
+      await this.reconnectSession(sessionId, callbacks);
       return;
     }
 
@@ -508,6 +514,38 @@ export class BaileysEngine implements WhatsappEngine {
     }
 
     return undefined;
+  }
+
+  private shouldReconnect(statusCode: number | undefined) {
+    return [
+      DisconnectReason.restartRequired,
+      DisconnectReason.connectionClosed,
+      DisconnectReason.connectionLost,
+      DisconnectReason.timedOut,
+      DisconnectReason.unavailableService,
+    ].includes(statusCode as DisconnectReason);
+  }
+
+  private async reconnectSession(
+    sessionId: string,
+    callbacks: WhatsappSessionCallbacks,
+  ) {
+    if (this.reconnectingSessions.has(sessionId)) {
+      return;
+    }
+
+    this.reconnectingSessions.add(sessionId);
+
+    try {
+      this.logger.warn(
+        `[SESSION ${sessionId}] Baileys solicitou reinicio da conexao. Tentando novamente...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      await callbacks.onDisconnected('Reiniciando conexao Baileys...');
+      await this.connectSession(sessionId, callbacks);
+    } finally {
+      this.reconnectingSessions.delete(sessionId);
+    }
   }
 
   private readString(value: unknown) {
