@@ -56,7 +56,10 @@ type MessageRow = {
 
 @Injectable()
 export class WhatsappStore implements OnModuleInit {
-  private readonly authDirectoryPath = path.join(process.cwd(), '.wwebjs_auth');
+  private readonly authDirectoryPath = path.join(
+    process.cwd(),
+    '.baileys_auth',
+  );
 
   constructor(private readonly postgres: PostgresService) {}
 

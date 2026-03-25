@@ -2,6 +2,7 @@ node_modules
 apps/*/node_modules
 apps/server/.wwebjs_auth
 apps/server/.wwebjs_cache
+apps/server/.baileys_auth
 apps/server/.pulse-hub-store.json
 apps/server/dist
 apps/web/.next

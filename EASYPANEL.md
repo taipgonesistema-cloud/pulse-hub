@@ -10,7 +10,7 @@ Este projeto esta pronto para subir no EasyPanel a partir do GitHub com 4 servic
 ## 1. Preparar o repositorio no GitHub
 
 - suba a raiz do monorepo, incluindo `package.json`, `package-lock.json`, `apps/server`, `apps/web`, `.dockerignore` e os dois `Dockerfile`;
-- nao suba `.env`, `node_modules`, `.next`, `dist` nem `apps/server/.wwebjs_auth`.
+- nao suba `.env`, `node_modules`, `.next`, `dist` nem `apps/server/.baileys_auth`.
 
 ## 2. Criar os servicos de infraestrutura
 
@@ -42,13 +42,10 @@ Use no minimo:
 PORT=3333
 DATABASE_URL=postgres://USER:PASSWORD@pulse-hub-postgres:5432/pulse_hub
 REDIS_URL=redis://default:SUA_SENHA@pulse-hub-redis:6379
-WHATSAPP_ENGINE=webjs
 AUTH_SEED_EMAIL=admin@pulsehub.local
 AUTH_SEED_PASSWORD=PulseHub123!
 AUTH_SEED_NAME=Pulse Hub Admin
 AUTH_SEED_ROLE=admin
-PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-PUPPETEER_HEADLESS=true
 ```
 
 Se o EasyPanel te entregar uma internal connection URL completa do Redis, use ela diretamente no `REDIS_URL`. Exemplo de formato:
@@ -59,9 +56,8 @@ REDIS_URL=redis://default:SUA_SENHA@nome-interno-do-redis:6379
 
 ### Persistencia do WhatsApp
 
-- monte um volume persistente em `/app/apps/server/.wwebjs_auth`;
+- monte um volume persistente em `/app/apps/server/.baileys_auth`;
 - sem esse volume, a autenticacao do WhatsApp pode ser perdida a cada redeploy.
-- se usar `WHATSAPP_ENGINE=baileys`, monte tambem `/app/apps/server/.baileys_auth` para persistir as credenciais da nova engine.
 
 ### Primeiro acesso
 
@@ -106,7 +102,7 @@ No EasyPanel, use esse mesmo valor como:
 - backend respondendo em `/health`;
 - frontend carregando sem erro de fetch;
 - `DATABASE_URL` e `REDIS_URL` resolvendo pelos nomes internos do EasyPanel;
-- volume de `apps/server/.wwebjs_auth` persistente;
+- volume de `apps/server/.baileys_auth` persistente;
 - `NEXT_PUBLIC_API_URL` apontando para o dominio publico do backend.
 
 ## 8. Checklist pronto para colar no EasyPanel
@@ -121,8 +117,6 @@ AUTH_SEED_EMAIL=admin@seudominio.com
 AUTH_SEED_PASSWORD=UMA_SENHA_FORTE
 AUTH_SEED_NAME=Administrador Pulse Hub
 AUTH_SEED_ROLE=admin
-PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-PUPPETEER_HEADLESS=true
 ```
 
 ### Frontend build arg
@@ -140,7 +134,7 @@ NEXT_PUBLIC_API_URL=https://api.seu-dominio.com
 ### Volume persistente do backend
 
 ```text
-/app/apps/server/.wwebjs_auth
+/app/apps/server/.baileys_auth
 ```
 
 ## 9. Sequencia de deploy recomendada
