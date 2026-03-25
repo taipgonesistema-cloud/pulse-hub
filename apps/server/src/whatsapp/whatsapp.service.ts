@@ -1,47 +1,43 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   MessageEvent,
   NotFoundException,
-  OnModuleInit,
   OnModuleDestroy,
+  OnModuleInit,
 } from '@nestjs/common';
-import { execFile } from 'node:child_process';
-import path from 'node:path';
-import fs from 'node:fs';
 import QRCode from 'qrcode';
 import { Observable, Subject, filter, map } from 'rxjs';
-import { promisify } from 'node:util';
-import { Client, LocalAuth, type Message } from 'whatsapp-web.js';
 import {
   type ConversationRecord,
   type MessageRecord,
   type SessionRecord,
 } from '../data/mock-data';
+import { RedisService } from '../persistence/redis.service';
+import { WHATSAPP_ENGINE } from './engine/whatsapp-engine.token';
+import type { WhatsappEngine } from './engine/whatsapp-engine.interface';
+import type { WhatsappEngineMessage } from './engine/whatsapp-engine.types';
 import type {
   CreateWhatsappSessionDto,
   SendConversationMessageDto,
 } from './dto/create-session.dto';
-import { RedisService } from '../persistence/redis.service';
 import type { DashboardOverview, SessionQrPayload } from './whatsapp.types';
 import { WhatsappStore } from './whatsapp.store';
 
 const DASHBOARD_OVERVIEW_CACHE_KEY = 'pulse-hub:dashboard:overview';
 const WHATSAPP_EVENTS_CHANNEL = 'pulse-hub:whatsapp:events';
-const execFileAsync = promisify(execFile);
 
 @Injectable()
 export class WhatsappService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WhatsappService.name);
-  private readonly clients = new Map<string, Client>();
-  private readonly browserExecutablePath = this.resolveBrowserExecutablePath();
-  private readonly isHeadless = process.env.PUPPETEER_HEADLESS !== 'false';
   private readonly events$ = new Subject<WhatsappStreamEvent>();
 
   constructor(
     private readonly store: WhatsappStore,
     private readonly redis: RedisService,
+    @Inject(WHATSAPP_ENGINE) private readonly engine: WhatsappEngine,
   ) {}
 
   async onModuleInit() {
@@ -154,21 +150,22 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
       throw new NotFoundException('Conversa nao encontrada.');
     }
 
-    if (!session.isDemo && session.status === 'active') {
-      const client = this.clients.get(sessionId);
-
-      if (client) {
-        try {
-          await client.sendSeen(conversation.participantId);
-        } catch (error) {
-          const message =
-            error instanceof Error
-              ? error.message
-              : 'Falha ao marcar como lida.';
-          this.logger.warn(
-            `Nao foi possivel marcar como lida ${conversationId}: ${message}`,
-          );
-        }
+    if (
+      !session.isDemo &&
+      session.status === 'active' &&
+      this.engine.hasSessionClient(sessionId)
+    ) {
+      try {
+        await this.engine.markConversationAsRead(
+          sessionId,
+          conversation.participantId,
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Falha ao marcar como lida.';
+        this.logger.warn(
+          `Nao foi possivel marcar como lida ${conversationId}: ${message}`,
+        );
       }
     }
 
@@ -268,43 +265,10 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
       return updated;
     }
 
-    if (this.clients.has(sessionId)) {
+    if (this.engine.hasSessionClient(sessionId)) {
       return this.getSessionOrFail(sessionId);
     }
 
-    await this.terminateSessionBrowserProcesses(sessionId);
-    this.cleanupSessionLocks(sessionId);
-
-    const client = new Client({
-      authStrategy: new LocalAuth({
-        clientId: sessionId,
-        dataPath: path.join(process.cwd(), '.wwebjs_auth'),
-      }),
-      takeoverOnConflict: true,
-      takeoverTimeoutMs: 0,
-      qrMaxRetries: 10,
-      userAgent:
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
-      deviceName: 'Pulse Hub',
-      browserName: 'Chrome',
-      puppeteer: {
-        executablePath: this.browserExecutablePath,
-        headless: this.isHeadless,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-blink-features=AutomationControlled',
-          '--disable-features=IsolateOrigins,site-per-process',
-        ],
-      },
-    });
-
-    this.logger.log(
-      `Iniciando sessao ${sessionId} com browser ${this.browserExecutablePath ?? 'padrao do Puppeteer'} e headless=${String(this.isHeadless)}`,
-    );
-
-    this.clients.set(sessionId, client);
     await this.store.saveSession({
       ...session,
       status: 'initializing',
@@ -314,23 +278,16 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     await this.invalidateOverviewCache();
     void this.emitEvent({ sessionId, type: 'session.updated' });
 
-    this.bindClientEvents(sessionId, client);
-
-    void client.initialize().catch(async (error: unknown) => {
-      const message =
-        error instanceof Error ? error.message : 'Falha ao inicializar sessao.';
-
-      this.logger.error(`Falha ao conectar sessao ${sessionId}: ${message}`);
-      await Promise.allSettled([client.destroy()]);
-      this.clients.delete(sessionId);
-      await this.store.saveSession({
-        ...(await this.getSessionOrFail(sessionId)),
-        status: 'error',
-        lastError: message,
-        lastHeartbeat: new Date().toISOString(),
-      });
-      await this.invalidateOverviewCache();
-      void this.emitEvent({ sessionId, type: 'session.updated' });
+    await this.engine.connectSession(sessionId, {
+      onQr: (qr) => this.updateQrPayload(sessionId, qr),
+      onAuthenticated: () => this.handleSessionAuthenticated(sessionId),
+      onReady: () => this.handleSessionReady(sessionId),
+      onAuthFailure: (message) =>
+        this.handleSessionAuthFailure(sessionId, message),
+      onDisconnected: (reason) =>
+        this.handleSessionDisconnected(sessionId, reason),
+      onMessage: (message) => this.ingestIncomingMessage(sessionId, message),
+      onInitError: (message) => this.handleSessionInitError(sessionId, message),
     });
 
     return this.getSessionOrFail(sessionId);
@@ -338,12 +295,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
 
   async disconnectSession(sessionId: string) {
     const session = await this.getSessionOrFail(sessionId);
-    const client = this.clients.get(sessionId);
-
-    if (client) {
-      await client.destroy();
-      this.clients.delete(sessionId);
-    }
+    await this.engine.disconnectSession(sessionId);
 
     const updatedSession = await this.store.saveSession({
       ...session,
@@ -381,13 +333,18 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     const session = await this.getSessionOrFail(sessionId);
 
     if (!session.isDemo) {
-      const client = this.clients.get(sessionId);
-
-      if (!client || session.status !== 'active') {
+      if (
+        !this.engine.hasSessionClient(sessionId) ||
+        session.status !== 'active'
+      ) {
         throw new BadRequestException('Sessao ainda nao esta conectada.');
       }
 
-      await client.sendMessage(conversation.participantId, body);
+      await this.engine.sendMessage(
+        sessionId,
+        conversation.participantId,
+        body,
+      );
     }
 
     const message: MessageRecord = {
@@ -417,95 +374,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    const clients = [...this.clients.values()];
-    await Promise.allSettled(clients.map(async (client) => client.destroy()));
-    this.clients.clear();
-  }
-
-  private bindClientEvents(sessionId: string, client: Client) {
-    client.on('qr', (qr) => {
-      this.logger.log(
-        `[SESSION ${sessionId}] QR Code recebido. Usuário precisa escanear.`,
-      );
-      void this.updateQrPayload(sessionId, qr);
-    });
-
-    client.on('authenticated', () => {
-      void (async () => {
-        this.logger.log(`[SESSION ${sessionId}] Autenticado com sucesso.`);
-        const session = await this.getSessionOrFail(sessionId);
-        await this.store.saveSession({
-          ...session,
-          status: 'syncing',
-          lastError: null,
-          lastHeartbeat: new Date().toISOString(),
-        });
-        await this.invalidateOverviewCache();
-        await this.emitEvent({ sessionId, type: 'session.updated' });
-      })();
-    });
-
-    client.on('ready', () => {
-      void (async () => {
-        this.logger.log(`[SESSION ${sessionId}] Cliente pronto e conectado.`);
-        const session = await this.getSessionOrFail(sessionId);
-        await this.store.saveSession({
-          ...session,
-          status: 'active',
-          qrCode: null,
-          qrCodeDataUrl: null,
-          lastHeartbeat: new Date().toISOString(),
-        });
-        await this.invalidateOverviewCache();
-        await this.emitEvent({ sessionId, type: 'session.updated' });
-
-        await this.bootstrapChats(sessionId, client);
-      })();
-    });
-
-    client.on('auth_failure', (message) => {
-      void (async () => {
-        this.logger.error(
-          `[SESSION ${sessionId}] Falha na autenticação: ${message}`,
-        );
-        const session = await this.getSessionOrFail(sessionId);
-        await this.store.saveSession({
-          ...session,
-          status: 'error',
-          lastError: message,
-          lastHeartbeat: new Date().toISOString(),
-        });
-        await this.invalidateOverviewCache();
-        await this.emitEvent({ sessionId, type: 'session.updated' });
-      })();
-    });
-
-    client.on('disconnected', (reason) => {
-      void (async () => {
-        this.logger.warn(
-          `[SESSION ${sessionId}] Desconectado: ${String(reason)}`,
-        );
-        const session = await this.getSessionOrFail(sessionId);
-        await this.store.saveSession({
-          ...session,
-          status: 'disconnected',
-          qrCode: null,
-          qrCodeDataUrl: null,
-          lastError: typeof reason === 'string' ? reason : null,
-          lastHeartbeat: new Date().toISOString(),
-        });
-        await this.invalidateOverviewCache();
-        await this.emitEvent({ sessionId, type: 'session.updated' });
-        this.clients.delete(sessionId);
-      })();
-    });
-
-    client.on('message', (message) => {
-      this.logger.debug(
-        `[SESSION ${sessionId}] Nova mensagem recebida de ${message.from}`,
-      );
-      void this.ingestIncomingMessage(sessionId, message);
-    });
+    await this.engine.destroyAll();
   }
 
   private async updateQrPayload(sessionId: string, qr: string) {
@@ -523,7 +392,74 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     void this.emitEvent({ sessionId, type: 'session.updated' });
   }
 
-  private async bootstrapChats(sessionId: string, client: Client) {
+  private async handleSessionAuthenticated(sessionId: string) {
+    const session = await this.getSessionOrFail(sessionId);
+    await this.store.saveSession({
+      ...session,
+      status: 'syncing',
+      lastError: null,
+      lastHeartbeat: new Date().toISOString(),
+    });
+    await this.invalidateOverviewCache();
+    await this.emitEvent({ sessionId, type: 'session.updated' });
+  }
+
+  private async handleSessionReady(sessionId: string) {
+    const session = await this.getSessionOrFail(sessionId);
+    await this.store.saveSession({
+      ...session,
+      status: 'active',
+      qrCode: null,
+      qrCodeDataUrl: null,
+      lastHeartbeat: new Date().toISOString(),
+    });
+    await this.invalidateOverviewCache();
+    await this.emitEvent({ sessionId, type: 'session.updated' });
+    await this.bootstrapChats(sessionId);
+  }
+
+  private async handleSessionAuthFailure(sessionId: string, message: string) {
+    const session = await this.getSessionOrFail(sessionId);
+    await this.store.saveSession({
+      ...session,
+      status: 'error',
+      lastError: message,
+      lastHeartbeat: new Date().toISOString(),
+    });
+    await this.invalidateOverviewCache();
+    await this.emitEvent({ sessionId, type: 'session.updated' });
+  }
+
+  private async handleSessionDisconnected(
+    sessionId: string,
+    reason: string | null,
+  ) {
+    const session = await this.getSessionOrFail(sessionId);
+    await this.store.saveSession({
+      ...session,
+      status: 'disconnected',
+      qrCode: null,
+      qrCodeDataUrl: null,
+      lastError: reason,
+      lastHeartbeat: new Date().toISOString(),
+    });
+    await this.invalidateOverviewCache();
+    await this.emitEvent({ sessionId, type: 'session.updated' });
+  }
+
+  private async handleSessionInitError(sessionId: string, message: string) {
+    const session = await this.getSessionOrFail(sessionId);
+    await this.store.saveSession({
+      ...session,
+      status: 'error',
+      lastError: message,
+      lastHeartbeat: new Date().toISOString(),
+    });
+    await this.invalidateOverviewCache();
+    await this.emitEvent({ sessionId, type: 'session.updated' });
+  }
+
+  private async bootstrapChats(sessionId: string) {
     const existing = await this.store.getConversationsBySession(sessionId);
 
     if (existing.length > 0) {
@@ -531,33 +467,27 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     }
 
     const session = await this.getSessionOrFail(sessionId);
-    const chats = await client.getChats();
+    const chats = await this.engine.listChats(sessionId);
     const candidates = chats
-      .filter(
-        (chat) =>
-          !chat.isGroup && !this.shouldIgnoreChatId(chat.id._serialized),
-      )
+      .filter((chat) => !chat.isGroup && !this.shouldIgnoreChatId(chat.id))
       .slice(0, 8);
 
     for (const [index, chat] of candidates.entries()) {
-      const avatarUrl = await this.resolveChatAvatar(
-        client,
-        chat.id._serialized,
-      );
+      const avatarUrl = await this.resolveParticipantAvatar(sessionId, chat.id);
 
       const conversation: ConversationRecord = {
-        id: chat.id._serialized,
+        id: chat.id,
         sessionId,
         sessionName: session.name,
-        contact: chat.name || chat.id.user || `Contato ${index + 1}`,
+        contact: chat.name || `Contato ${index + 1}`,
         avatarUrl,
-        participantId: chat.id._serialized,
+        participantId: chat.id,
         owner: 'Livre',
         status: 'Fila geral',
         channelName: session.channelName,
         waitingTime: 'agora',
         unread: chat.unreadCount,
-        preview: chat.lastMessage?.body || 'Conversa sincronizada.',
+        preview: chat.lastMessageBody || 'Conversa sincronizada.',
         lastMessageAt: new Date().toISOString(),
         messages: [],
       };
@@ -583,23 +513,27 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
       return conversation;
     }
 
-    const client = this.clients.get(sessionId);
-
-    if (!client) {
+    if (!this.engine.hasSessionClient(sessionId)) {
       return conversation;
     }
 
     try {
-      const chat = await client.getChatById(conversation.participantId);
-      const messages = await chat.fetchMessages({ limit: 40 });
-
       const avatarUrl =
         conversation.avatarUrl ??
-        (await this.resolveChatAvatar(client, conversation.participantId));
+        (await this.resolveParticipantAvatar(
+          sessionId,
+          conversation.participantId,
+        ));
+
+      const messages = await this.engine.listMessages(
+        sessionId,
+        conversation.participantId,
+        40,
+      );
 
       const normalizedMessages: MessageRecord[] = messages
         .map((message) => ({
-          id: message.id.id,
+          id: message.id,
           conversationId,
           direction: message.fromMe
             ? ('outgoing' as const)
@@ -608,7 +542,10 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
           timestamp: new Date(message.timestamp * 1000).toISOString(),
           author: message.fromMe
             ? 'Operador'
-            : chat.name || conversation.contact,
+            : message.chatName ||
+              message.contactPushName ||
+              message.contactName ||
+              conversation.contact,
         }))
         .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
 
@@ -634,23 +571,24 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async ingestIncomingMessage(sessionId: string, message: Message) {
+  private async ingestIncomingMessage(
+    sessionId: string,
+    message: WhatsappEngineMessage,
+  ) {
     const session = await this.getSessionOrFail(sessionId);
-    const chat = await message.getChat();
 
-    if (this.shouldIgnoreChatId(chat.id._serialized)) {
+    if (this.shouldIgnoreChatId(message.chatId)) {
       return;
     }
 
-    const contact = await message.getContact();
-    const conversationId = chat.id._serialized;
+    const conversationId = message.chatId;
     const existing = await this.store.getConversation(
       sessionId,
       conversationId,
     );
-    const avatarUrl = await this.resolveContactAvatar(
-      clientSafeGet(this.clients, sessionId),
-      contact.id._serialized,
+    const avatarUrl = await this.resolveParticipantAvatar(
+      sessionId,
+      message.contactId,
     );
 
     if (!existing) {
@@ -659,9 +597,9 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
         sessionId,
         sessionName: session.name,
         contact:
-          contact.pushname ||
-          contact.name ||
-          contact.number ||
+          message.contactPushName ||
+          message.contactName ||
+          message.chatName ||
           'Contato WhatsApp',
         avatarUrl,
         participantId: conversationId,
@@ -682,14 +620,17 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     }
 
     const payload: MessageRecord = {
-      id: message.id.id,
+      id: message.id,
       conversationId,
       direction: message.fromMe ? 'outgoing' : 'incoming',
       body: message.body,
       timestamp: new Date(message.timestamp * 1000).toISOString(),
       author: message.fromMe
         ? 'Operador'
-        : contact.pushname || contact.name || 'Contato',
+        : message.contactPushName ||
+          message.contactName ||
+          message.chatName ||
+          'Contato',
     };
 
     await this.store.appendMessage(sessionId, conversationId, payload);
@@ -739,208 +680,20 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     await this.redis.delete(DASHBOARD_OVERVIEW_CACHE_KEY);
   }
 
-  private resolveBrowserExecutablePath() {
-    const configuredPath = process.env.PUPPETEER_EXECUTABLE_PATH?.trim();
-
-    if (configuredPath) {
-      if (fs.existsSync(configuredPath)) {
-        return configuredPath;
-      }
-
-      this.logger.warn(
-        `PUPPETEER_EXECUTABLE_PATH configurado mas nao encontrado: ${configuredPath}`,
-      );
-    }
-
-    const candidates = [
-      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-      '/usr/bin/chromium',
-      '/usr/bin/chromium-browser',
-      '/usr/bin/google-chrome',
-      path.join(
-        process.env.USERPROFILE ?? 'C:\\Users\\Desktop',
-        '.cache',
-        'puppeteer',
-        'chrome',
-        'win64-146.0.7680.153',
-        'chrome-win64',
-        'chrome.exe',
-      ),
-    ];
-
-    const match = candidates.find((candidate) => fs.existsSync(candidate));
-
-    if (!match) {
-      this.logger.warn(
-        'Nenhum executavel do Chrome foi encontrado; usando padrao do Puppeteer.',
-      );
-      return undefined;
-    }
-
-    return match;
-  }
-
-  private cleanupSessionLocks(sessionId: string) {
-    const sessionPath = path.join(
-      process.cwd(),
-      '.wwebjs_auth',
-      `session-${sessionId}`,
-    );
-    const defaultPath = path.join(sessionPath, 'Default');
-
-    const lockPaths = [
-      path.join(sessionPath, 'LOCK'),
-      path.join(sessionPath, 'lockfile'),
-      path.join(sessionPath, 'SingletonLock'),
-      path.join(sessionPath, 'SingletonCookie'),
-      path.join(sessionPath, 'SingletonSocket'),
-      path.join(sessionPath, 'DevToolsActivePort'),
-      path.join(sessionPath, 'Default', 'LOCK'),
-      path.join(sessionPath, 'Default', 'lockfile'),
-      path.join(sessionPath, 'Default', 'SingletonLock'),
-      path.join(sessionPath, 'Default', 'SingletonCookie'),
-      path.join(sessionPath, 'Default', 'SingletonSocket'),
-      path.join(sessionPath, 'Default', 'DevToolsActivePort'),
-    ];
-
-    [sessionPath, defaultPath].forEach((directoryPath) => {
-      if (!fs.existsSync(directoryPath)) {
-        return;
-      }
-
-      try {
-        const dynamicLockPaths = fs
-          .readdirSync(directoryPath)
-          .filter(
-            (entry) =>
-              entry.startsWith('Singleton') ||
-              entry === 'LOCK' ||
-              entry === 'lockfile' ||
-              entry === 'DevToolsActivePort',
-          )
-          .map((entry) => path.join(directoryPath, entry));
-
-        lockPaths.push(...dynamicLockPaths);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Falha ao listar locks.';
-        this.logger.warn(
-          `Nao foi possivel listar locks da sessao ${sessionId}: ${message}`,
-        );
-      }
-    });
-
-    [...new Set(lockPaths)].forEach((lockPath) => {
-      try {
-        fs.lstatSync(lockPath);
-        fs.rmSync(lockPath, {
-          force: true,
-          recursive: true,
-          maxRetries: 2,
-          retryDelay: 120,
-        });
-      } catch (error) {
-        if (
-          error instanceof Error &&
-          'code' in error &&
-          (error as NodeJS.ErrnoException).code === 'ENOENT'
-        ) {
-          return;
-        }
-
-        const message =
-          error instanceof Error ? error.message : 'Falha ao remover lock.';
-        this.logger.warn(
-          `Nao foi possivel limpar lock da sessao ${sessionId}: ${message}`,
-        );
-      }
-    });
-  }
-
-  private async terminateSessionBrowserProcesses(sessionId: string) {
-    if (process.platform === 'win32') {
-      return;
-    }
-
-    const sessionPath = path.join(
-      process.cwd(),
-      '.wwebjs_auth',
-      `session-${sessionId}`,
-    );
-
-    try {
-      await execFileAsync('pkill', ['-f', sessionPath]);
-      this.logger.warn(
-        `Processos Chromium antigos da sessao ${sessionId} foram encerrados.`,
-      );
-    } catch (error) {
-      const exitCode =
-        typeof error === 'object' && error && 'code' in error
-          ? (error as { code?: number | string }).code
-          : undefined;
-
-      if (exitCode === 1 || exitCode === '1') {
-        return;
-      }
-
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Falha ao encerrar processo Chromium antigo.';
-      this.logger.warn(
-        `Nao foi possivel encerrar processo antigo da sessao ${sessionId}: ${message}`,
-      );
-    }
-  }
-
-  private async resolveChatAvatar(client: Client, chatId: string) {
-    try {
-      if (this.shouldIgnoreChatId(chatId)) {
-        return null;
-      }
-
-      this.logger.debug(`Buscando avatar para chat: ${chatId}`);
-      const url = await client.getProfilePicUrl(chatId);
-      this.logger.debug(`URL do avatar encontrada: ${url}`);
-      return url;
-    } catch (error) {
-      this.logger.debug(
-        `Falha ao buscar avatar para ${chatId}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
-      );
-      return null;
-    }
-  }
-
-  private async resolveContactAvatar(client: Client | null, contactId: string) {
-    if (!client) {
+  private async resolveParticipantAvatar(
+    sessionId: string,
+    participantId: string,
+  ) {
+    if (this.shouldIgnoreChatId(participantId)) {
       return null;
     }
 
-    try {
-      if (this.shouldIgnoreChatId(contactId)) {
-        return null;
-      }
-
-      this.logger.debug(`Buscando avatar para contato: ${contactId}`);
-      const url = await client.getProfilePicUrl(contactId);
-      this.logger.debug(`URL do avatar encontrada: ${url}`);
-      return url;
-    } catch (error) {
-      this.logger.debug(
-        `Falha ao buscar avatar para ${contactId}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
-      );
-      return null;
-    }
+    return this.engine.getAvatarUrl(sessionId, participantId);
   }
 
   private shouldIgnoreChatId(chatId: string) {
     return chatId.endsWith('@broadcast') || chatId.includes('@newsletter');
   }
-}
-
-function clientSafeGet(clients: Map<string, Client>, sessionId: string) {
-  return clients.get(sessionId) ?? null;
 }
 
 type WhatsappStreamEvent = {

@@ -154,6 +154,7 @@ Guia completo em `EASYPANEL.md`.
 PORT=3333
 DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/pulse_hub
 REDIS_URL=redis://HOST:6379
+WHATSAPP_ENGINE=webjs
 AUTH_SEED_EMAIL=admin@pulsehub.local
 AUTH_SEED_PASSWORD=PulseHub123!
 AUTH_SEED_NAME=Pulse Hub Admin
@@ -163,6 +164,8 @@ PUPPETEER_HEADLESS=true
 ```
 
 Quando a tabela `users` estiver vazia, o backend cria automaticamente o usuario inicial com essas variaveis para liberar o primeiro acesso.
+
+`WHATSAPP_ENGINE=webjs` usa a engine atual com `whatsapp-web.js`. Se quiser preparar a troca para Baileys, use `WHATSAPP_ENGINE=baileys`.
 
 ### Frontend
 

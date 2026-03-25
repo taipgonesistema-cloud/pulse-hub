@@ -42,6 +42,7 @@ Use no minimo:
 PORT=3333
 DATABASE_URL=postgres://USER:PASSWORD@pulse-hub-postgres:5432/pulse_hub
 REDIS_URL=redis://default:SUA_SENHA@pulse-hub-redis:6379
+WHATSAPP_ENGINE=webjs
 AUTH_SEED_EMAIL=admin@pulsehub.local
 AUTH_SEED_PASSWORD=PulseHub123!
 AUTH_SEED_NAME=Pulse Hub Admin
@@ -60,6 +61,7 @@ REDIS_URL=redis://default:SUA_SENHA@nome-interno-do-redis:6379
 
 - monte um volume persistente em `/app/apps/server/.wwebjs_auth`;
 - sem esse volume, a autenticacao do WhatsApp pode ser perdida a cada redeploy.
+- se usar `WHATSAPP_ENGINE=baileys`, monte tambem `/app/apps/server/.baileys_auth` para persistir as credenciais da nova engine.
 
 ### Primeiro acesso
 
