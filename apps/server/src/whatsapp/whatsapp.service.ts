@@ -831,14 +831,24 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
       }
     });
 
-    lockPaths.forEach((lockPath) => {
-      if (!fs.existsSync(lockPath)) {
-        return;
-      }
-
+    [...new Set(lockPaths)].forEach((lockPath) => {
       try {
-        fs.rmSync(lockPath, { force: true });
+        fs.lstatSync(lockPath);
+        fs.rmSync(lockPath, {
+          force: true,
+          recursive: true,
+          maxRetries: 2,
+          retryDelay: 120,
+        });
       } catch (error) {
+        if (
+          error instanceof Error &&
+          'code' in error &&
+          (error as NodeJS.ErrnoException).code === 'ENOENT'
+        ) {
+          return;
+        }
+
         const message =
           error instanceof Error ? error.message : 'Falha ao remover lock.';
         this.logger.warn(
