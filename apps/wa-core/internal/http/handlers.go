@@ -390,7 +390,8 @@ func (a *API) handleConversationSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request struct {
-		Body string `json:"body"`
+		Body   string `json:"body"`
+		Author string `json:"author"`
 	}
 	if err := decodeJSON(r, &request); err != nil {
 		respondError(w, http.StatusBadRequest, err)
