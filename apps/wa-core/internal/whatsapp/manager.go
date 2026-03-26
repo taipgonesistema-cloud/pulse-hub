@@ -386,7 +386,11 @@ func (m *Manager) ListMessages(ctx context.Context, chatJID string) ([]models.Me
 		return nil, err
 	}
 	if resolved == chatJID {
-		return m.store.ListMessagesByChat(ctx, chatJID)
+		messages, err := m.store.ListMessagesByChat(ctx, chatJID)
+		if err != nil {
+			return nil, err
+		}
+		return filterRenderableMessages(messages), nil
 	}
 
 	primary, err := m.store.ListMessagesByChat(ctx, resolved)
@@ -397,7 +401,7 @@ func (m *Manager) ListMessages(ctx context.Context, chatJID string) ([]models.Me
 	if err != nil {
 		return nil, err
 	}
-	return mergeMessages(primary, secondary), nil
+	return filterRenderableMessages(mergeMessages(primary, secondary)), nil
 }
 
 func (m *Manager) ResolveConversationJID(ctx context.Context, chatJID string) (string, error) {
@@ -802,9 +806,9 @@ func (m *Manager) handleRealtimeMessage(evt *appstateevents.Message) {
 		return
 	}
 
-	body := extractMessageText(evt.Message)
-	if body == "" {
-		body = "[midia]"
+	body, ok := extractDisplayText(evt.Message)
+	if !ok {
+		return
 	}
 	raw := marshalProto(evt.Message)
 
@@ -855,9 +859,9 @@ func (m *Manager) handleHistorySync(evt *appstateevents.HistorySync) {
 				continue
 			}
 
-			body := extractMessageText(parsed.Message)
-			if body == "" {
-				body = "[midia]"
+			body, ok := extractDisplayText(parsed.Message)
+			if !ok {
+				continue
 			}
 
 			if err := m.ingestMessage(
@@ -1133,23 +1137,38 @@ func qrDataURL(code string) (string, error) {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(png), nil
 }
 
-func extractMessageText(message *waE2E.Message) string {
+func extractDisplayText(message *waE2E.Message) (string, bool) {
 	if message == nil {
-		return ""
+		return "", false
 	}
 	switch {
 	case message.GetConversation() != "":
-		return strings.TrimSpace(message.GetConversation())
+		return strings.TrimSpace(message.GetConversation()), true
 	case message.GetExtendedTextMessage().GetText() != "":
-		return strings.TrimSpace(message.GetExtendedTextMessage().GetText())
+		return strings.TrimSpace(message.GetExtendedTextMessage().GetText()), true
 	case message.GetImageMessage().GetCaption() != "":
-		return strings.TrimSpace(message.GetImageMessage().GetCaption())
+		return strings.TrimSpace(message.GetImageMessage().GetCaption()), true
 	case message.GetVideoMessage().GetCaption() != "":
-		return strings.TrimSpace(message.GetVideoMessage().GetCaption())
+		return strings.TrimSpace(message.GetVideoMessage().GetCaption()), true
 	case message.GetDocumentMessage().GetCaption() != "":
-		return strings.TrimSpace(message.GetDocumentMessage().GetCaption())
+		return strings.TrimSpace(message.GetDocumentMessage().GetCaption()), true
+	case message.GetImageMessage() != nil,
+		message.GetVideoMessage() != nil,
+		message.GetDocumentMessage() != nil,
+		message.GetAudioMessage() != nil,
+		message.GetStickerMessage() != nil,
+		message.GetContactMessage() != nil,
+		message.GetContactsArrayMessage() != nil,
+		message.GetLocationMessage() != nil,
+		message.GetLiveLocationMessage() != nil:
+		return "[midia]", true
+	case message.GetProtocolMessage() != nil,
+		message.GetSenderKeyDistributionMessage() != nil,
+		message.GetReactionMessage() != nil,
+		message.GetPlaceholderMessage() != nil:
+		return "", false
 	default:
-		return ""
+		return "", false
 	}
 }
 
@@ -1293,6 +1312,17 @@ func mergeMessages(primary, secondary []models.Message) []models.Message {
 		return merged[i].Timestamp < merged[j].Timestamp
 	})
 	return merged
+}
+
+func filterRenderableMessages(messages []models.Message) []models.Message {
+	filtered := make([]models.Message, 0, len(messages))
+	for _, message := range messages {
+		if !message.FromMe && message.Text == "[midia]" && (message.Author == "." || message.SenderJID == ".") {
+			continue
+		}
+		filtered = append(filtered, message)
+	}
+	return filtered
 }
 
 func normalizeSendJID(ctx context.Context, client *whatsmeow.Client, jid types.JID) (types.JID, error) {
