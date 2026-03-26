@@ -1,161 +1,220 @@
-# Deploy no EasyPanel
+# EasyPanel Deployment Guide
 
-Este projeto esta pronto para subir no EasyPanel a partir do GitHub com 5 servicos separados:
+Este projeto esta preparado para deploy pelo GitHub no EasyPanel com a seguinte stack:
 
-- `pulse-hub-postgres` - banco PostgreSQL gerenciado pelo EasyPanel;
-- `pulse-hub-redis` - Redis gerenciado pelo EasyPanel;
-- `pulse-hub-wppconnect` - servico dedicado ao WhatsApp;
-- `pulse-hub-server` - app NestJS usando `apps/server/Dockerfile`;
-- `pulse-hub-web` - app Next.js usando `apps/web/Dockerfile`.
+- `pulse-hub-postgres` - banco principal
+- `pulse-hub-redis` - pub/sub em tempo real
+- `pulse-hub-wa-core` - backend Go + `whatsmeow`
+- `pulse-hub-web` - frontend Next.js
 
-## 1. Preparar o repositorio no GitHub
+Sem WAHA, Evolution, GOWA, WuzAPI, WPPConnect ou gateways prontos.
 
-- suba a raiz do monorepo, incluindo `package.json`, `package-lock.json`, `apps/server`, `apps/web`, `.dockerignore` e os dois `Dockerfile`;
-- nao suba `.env`, `node_modules`, `.next`, `dist` nem `apps/server/.baileys_auth`.
+## Arquitetura
 
-## 2. Criar os servicos de infraestrutura
+- `apps/wa-core`
+  - API REST
+  - WebSocket
+  - compatibilidade com a UI atual
+  - `whatsmeow` direto
+  - persistencia de negocio no PostgreSQL
+  - store oficial do `whatsmeow` no PostgreSQL
+  - broadcast distribuido via Redis
+- `apps/web`
+  - dashboard web atual
+  - continua consumindo os contratos de compatibilidade do backend Go
 
-### PostgreSQL
+## Servicos no EasyPanel
 
-- crie um servico `PostgreSQL` no EasyPanel;
-- nome sugerido: `pulse-hub-postgres`;
-- banco sugerido: `pulse_hub`.
+### 1. PostgreSQL
 
-### Redis
+Crie um servico `PostgreSQL`.
 
-- crie um servico `Redis` no EasyPanel;
-- nome sugerido: `pulse-hub-redis`.
+- nome sugerido: `pulse-hub-postgres`
+- database sugerido: `pulse_hub`
 
-### WPPConnect Server
+### 2. Redis
 
-- crie um servico dedicado para `WPPConnect Server` no EasyPanel;
-- publique uma URL interna ou publica para ele, por exemplo `https://wpp.seu-dominio.com`;
-- esse servico fica responsavel por QR, sessao e reconexao do WhatsApp.
+Crie um servico `Redis`.
 
-## 3. Criar o backend pelo GitHub
+- nome sugerido: `pulse-hub-redis`
 
-- tipo: `App`;
-- fonte: GitHub;
-- Dockerfile path: `apps/server/Dockerfile`;
-- branch: `main`;
-- porta interna: `3333`;
-- health check: `/health`.
+### 3. Backend
 
-### Variaveis do backend
+Crie um servico `App` com fonte GitHub.
 
-Use no minimo:
+- nome: `pulse-hub-wa-core`
+- branch: `main`
+- Dockerfile path: `apps/wa-core/Dockerfile`
+- porta interna: `3333`
+- health check: `/health`
+- replicas: `1`
 
-```env
-PORT=3333
-DATABASE_URL=postgres://USER:PASSWORD@pulse-hub-postgres:5432/pulse_hub
-REDIS_URL=redis://default:SUA_SENHA@pulse-hub-redis:6379
-WPPCONNECT_API_URL=https://wpp.seu-dominio.com
-WPPCONNECT_SECRET_KEY=THISISMYSECURETOKEN
-AUTH_SEED_EMAIL=admin@pulsehub.local
-AUTH_SEED_PASSWORD=PulseHub123!
-AUTH_SEED_NAME=Pulse Hub Admin
-AUTH_SEED_ROLE=admin
-```
+### 4. Frontend
 
-Se o EasyPanel te entregar uma internal connection URL completa do Redis, use ela diretamente no `REDIS_URL`. Exemplo de formato:
+Crie outro servico `App` com fonte GitHub.
 
-```env
-REDIS_URL=redis://default:SUA_SENHA@nome-interno-do-redis:6379
-```
+- nome: `pulse-hub-web`
+- branch: `main`
+- Dockerfile path: `apps/web/Dockerfile`
+- porta interna: `3000`
 
-### Persistencia do WhatsApp
+## Variaveis do backend
 
-- a persistencia de sessao sai do backend principal e fica no servico do `WPPConnect Server`.
-- siga a documentacao do `WPPConnect Server` para o storage/token store do servico dedicado.
-
-### Primeiro acesso
-
-- se a tabela `users` estiver vazia, o backend cria automaticamente o primeiro usuario usando `AUTH_SEED_*`;
-- defina esses valores no EasyPanel antes do primeiro boot para nao depender dos defaults locais.
-
-## 4. Criar o frontend pelo GitHub
-
-- tipo: `App`;
-- fonte: GitHub;
-- Dockerfile path: `apps/web/Dockerfile`;
-- branch: `main`;
-- porta interna: `3000`.
-
-### Build args e variaveis do frontend
-
-Defina o endpoint publico do backend no build e no runtime:
-
-```env
-NEXT_PUBLIC_API_URL=https://api.seu-dominio.com
-```
-
-No EasyPanel, use esse mesmo valor como:
-
-- build arg `NEXT_PUBLIC_API_URL`;
-- env var `NEXT_PUBLIC_API_URL`.
-
-## 5. Dominios sugeridos
-
-- frontend: `app.seu-dominio.com`;
-- backend: `api.seu-dominio.com`.
-
-## 6. Ordem recomendada de deploy
-
-1. subir `pulse-hub-postgres`;
-2. subir `pulse-hub-redis`;
-3. subir `pulse-hub-wppconnect`;
-4. subir `pulse-hub-server` e validar `/health`;
-5. subir `pulse-hub-web` apontando para a URL publica do backend.
-
-## 7. Checklist final
-
-- backend respondendo em `/health`;
-- frontend carregando sem erro de fetch;
-- `DATABASE_URL` e `REDIS_URL` resolvendo pelos nomes internos do EasyPanel;
-- `WPPCONNECT_API_URL` apontando para o servico WPPConnect;
-- `NEXT_PUBLIC_API_URL` apontando para o dominio publico do backend.
-
-## 8. Checklist pronto para colar no EasyPanel
-
-### Backend envs
+Use estas variaveis no servico `pulse-hub-wa-core`:
 
 ```env
 PORT=3333
-DATABASE_URL=postgres://postgres:SUA_SENHA@SEU_HOST_POSTGRES:5432/SEU_BANCO?sslmode=disable
-REDIS_URL=redis://default:SUA_SENHA@SEU_HOST_REDIS:6379
-WPPCONNECT_API_URL=https://wpp.seu-dominio.com
-WPPCONNECT_SECRET_KEY=THISISMYSECURETOKEN
+DATABASE_URL=postgres://USER:PASSWORD@POSTGRES_HOST:5432/POSTGRES_DB?sslmode=disable
+WHATSMEOW_DATABASE_URL=postgres://USER:PASSWORD@POSTGRES_HOST:5432/POSTGRES_DB?sslmode=disable
+REDIS_URL=redis://default:REDIS_PASSWORD@REDIS_HOST:6379/0
 AUTH_SEED_EMAIL=admin@seudominio.com
 AUTH_SEED_PASSWORD=UMA_SENHA_FORTE
 AUTH_SEED_NAME=Administrador Pulse Hub
 AUTH_SEED_ROLE=admin
 ```
 
-### Frontend build arg
+Notas:
+
+- `DATABASE_URL` guarda `sessions`, `contacts`, `chats` e `messages`
+- `WHATSMEOW_DATABASE_URL` guarda o store oficial do `whatsmeow`
+- voce pode usar a mesma URL do Postgres nos dois campos
+- `REDIS_URL` distribui eventos entre conexoes WebSocket/SSE
+
+## Variaveis do frontend
+
+No servico `pulse-hub-web`, configure:
+
+### Build Arg
 
 ```env
 NEXT_PUBLIC_API_URL=https://api.seu-dominio.com
 ```
 
-### Frontend runtime env
+### Runtime Env
 
 ```env
 NEXT_PUBLIC_API_URL=https://api.seu-dominio.com
 ```
 
-### Infra adicional
+## Ordem recomendada de deploy
 
-```text
-Subir um servico WPPConnect Server separado e usar a URL dele em WPPCONNECT_API_URL
+1. conectar o repositorio GitHub no EasyPanel
+2. criar `pulse-hub-postgres`
+3. criar `pulse-hub-redis`
+4. criar `pulse-hub-wa-core`
+5. configurar as envs do backend
+6. subir o backend e validar `GET /health`
+7. criar `pulse-hub-web`
+8. configurar o build arg e a env `NEXT_PUBLIC_API_URL`
+9. subir o frontend
+10. abrir `/login`, autenticar e iniciar a sessao principal
+
+## URL internas recebidas do EasyPanel
+
+Se o EasyPanel te entregar internal URLs completas, use elas diretamente.
+
+Exemplo de formato:
+
+```env
+DATABASE_URL=postgres://postgres:SENHA@nome-interno-postgres:5432/meu_banco?sslmode=disable
+WHATSMEOW_DATABASE_URL=postgres://postgres:SENHA@nome-interno-postgres:5432/meu_banco?sslmode=disable
+REDIS_URL=redis://default:SENHA@nome-interno-redis:6379/0
 ```
 
-## 9. Sequencia de deploy recomendada
+## Dominio sugerido
 
-1. conectar o repositorio GitHub no EasyPanel;
-2. criar ou validar PostgreSQL e Redis;
-3. subir e validar o servico WPPConnect Server;
-4. cadastrar envs do backend;
-5. subir o backend e validar `https://api.seu-dominio.com/health`;
-6. cadastrar build arg e env do frontend;
-7. subir o frontend;
-8. abrir `/login` e entrar com o usuario seed inicial.
+- backend: `api.seu-dominio.com`
+- frontend: `app.seu-dominio.com`
+
+## Smoke test pos deploy
+
+### 1. Health check
+
+```bash
+curl https://api.seu-dominio.com/health
+```
+
+Resposta esperada:
+
+```json
+{"status":"ok","service":"wa-core"}
+```
+
+### 2. Login seed
+
+- abrir `https://app.seu-dominio.com/login`
+- entrar com `AUTH_SEED_EMAIL` e `AUTH_SEED_PASSWORD`
+
+### 3. Inicializar sessao
+
+```bash
+curl -X POST https://api.seu-dominio.com/session/init \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "WhatsApp principal",
+    "phoneNumber": "+5511999999999",
+    "channelName": "Comercial"
+  }'
+```
+
+### 4. Obter QR
+
+```bash
+curl https://api.seu-dominio.com/session/qr
+```
+
+### 5. Confirmar status
+
+```bash
+curl https://api.seu-dominio.com/session/status
+```
+
+### 6. Confirmar eventos realtime
+
+- abrir a UI
+- conectar uma sessao
+- verificar se a tela recebe atualizacao em tempo real
+- validar `connection`, `chat.new`, `message.new` e `message.ack`
+
+## Troubleshooting
+
+### Backend nao sobe
+
+- validar `DATABASE_URL`
+- validar `WHATSMEOW_DATABASE_URL`
+- validar `REDIS_URL`
+- confirmar se Postgres e Redis estao saudaveis no EasyPanel
+
+### QR nao aparece
+
+- verificar `POST /session/init`
+- verificar `GET /session/qr`
+- checar logs do `pulse-hub-wa-core`
+
+### UI nao carrega dados
+
+- confirmar `NEXT_PUBLIC_API_URL`
+- confirmar se o backend responde em `/dashboard/overview`
+- checar CORS e dominio configurado no EasyPanel
+
+### WebSocket nao atualiza
+
+- confirmar proxy com suporte a WebSocket
+- validar `GET /ws`
+- validar conectividade do Redis
+
+## Restricoes atuais
+
+- operacao recomendada com `1 replica` do backend
+- implementacao atual e `single-session`
+- multi-sessao pode ser adicionada depois, mas nao e o alvo desta fase
+
+## Arquivos importantes
+
+- `apps/wa-core/Dockerfile`
+- `apps/wa-core/cmd/server/main.go`
+- `apps/wa-core/internal/store/postgres.go`
+- `apps/wa-core/internal/ws/hub.go`
+- `apps/web/Dockerfile`
+- `.env.example`
+- `.env.easypanel.example`

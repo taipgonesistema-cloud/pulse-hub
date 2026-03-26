@@ -6,6 +6,9 @@ apps/server/.baileys_auth
 apps/server/.pulse-hub-store.json
 apps/server/dist
 apps/web/.next
+apps/wa-core/wa-core
+apps/wa-core/server.exe
+apps/wa-core/.cache
 image.png
 npm-debug.log
 *.log

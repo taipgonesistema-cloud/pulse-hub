@@ -3,14 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "workspaces": [
-    "apps/*"
+    "apps/web"
   ],
   "scripts": {
+    "dev:infra": "docker compose up -d postgres redis",
+    "dev:infra:down": "docker compose stop postgres redis",
     "dev:web": "npm run dev --workspace web",
-    "dev:server": "npm run start:dev --workspace server",
+    "dev:server": "node scripts/go-runner.js run ./cmd/server",
     "build:web": "npm run build --workspace web",
-    "build:server": "npm run build --workspace server",
+    "build:server": "node scripts/go-runner.js build ./cmd/server",
     "lint:web": "npm run lint --workspace web",
-    "lint:server": "npm run lint --workspace server"
+    "lint:server": "node scripts/go-runner.js test ./..."
   }
 }

@@ -4,7 +4,6 @@ WORKDIR /app
 
 COPY package*.json ./
 COPY apps/web/package*.json ./apps/web/
-COPY apps/server/package*.json ./apps/server/
 
 RUN npm ci --include=optional
 

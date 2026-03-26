@@ -6,6 +6,11 @@ apps/server/.wwebjs_auth/
 apps/server/.wwebjs_cache/
 apps/server/.baileys_auth/
 apps/server/.pulse-hub-store.json
+apps/wa-core/server
+apps/wa-core/server.exe
+*.db
+*.db-shm
+*.db-wal
 .env
 .env.local
 .env.*.local

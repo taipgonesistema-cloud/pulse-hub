@@ -1,0 +1,765 @@
+package httpapi
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"hash/fnv"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+
+	"pulsehub/wa-core/internal/models"
+	"pulsehub/wa-core/internal/whatsapp"
+	"pulsehub/wa-core/internal/ws"
+)
+
+type AuthConfig struct {
+	Email    string
+	Password string
+	Name     string
+	Role     string
+}
+
+type API struct {
+	logger  *slog.Logger
+	manager *whatsapp.Manager
+	hub     *ws.Hub
+	auth    AuthConfig
+}
+
+func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, auth AuthConfig) http.Handler {
+	api := &API{
+		logger:  logger,
+		manager: manager,
+		hub:     hub,
+		auth:    auth,
+	}
+
+	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Recoverer)
+	r.Use(api.cors)
+
+	r.Get("/health", api.handleHealth)
+	r.Post("/session/init", api.handleSessionInit)
+	r.Get("/session/qr", api.handleSessionQR)
+	r.Get("/session/status", api.handleSessionStatus)
+	r.Get("/contacts", api.handleContacts)
+	r.Get("/contacts/{jid}/photo", api.handleContactPhoto)
+	r.Get("/chats", api.handleChats)
+	r.Get("/chats/{jid}/messages", api.handleChatMessages)
+	r.Post("/messages/text", api.handleSendText)
+	r.Get("/ws", api.handleWebSocket)
+
+	r.Post("/auth/sign-in", api.handleSignIn)
+	r.Get("/dashboard/overview", api.handleDashboardOverview)
+	r.Route("/whatsapp", func(r chi.Router) {
+		r.Get("/sessions", api.handleListSessions)
+		r.Post("/sessions", api.handleCreateSession)
+		r.Post("/sessions/{id}/connect", api.handleConnectSession)
+		 r.Post("/sessions/{id}/disconnect", api.handleDisconnectSession)
+		r.Get("/sessions/{id}/qr", api.handleSessionQRCompat)
+		r.Get("/sessions/{id}/conversations", api.handleConversations)
+		r.Get("/sessions/{id}/conversations/{jid}/messages", api.handleConversationMessages)
+		r.Post("/sessions/{id}/conversations/{jid}/messages", api.handleConversationSend)
+		r.Post("/sessions/{id}/conversations/{jid}/read", api.handleConversationRead)
+		r.Get("/sessions/{id}/stream", api.handleSessionStream)
+	})
+
+	return r
+}
+
+func (a *API) cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (a *API) handleHealth(w http.ResponseWriter, _ *http.Request) {
+	respondJSON(w, http.StatusOK, map[string]any{
+		"status":  "ok",
+		"service": "wa-core",
+		"time":    models.NowString(),
+	})
+}
+
+func (a *API) handleSessionInit(w http.ResponseWriter, r *http.Request) {
+	var request models.SessionInitRequest
+	if err := decodeJSON(r, &request); err != nil && !errors.Is(err, errEmptyBody) {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	session, err := a.manager.InitSession(r.Context(), request)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, session)
+}
+
+func (a *API) handleSessionQR(w http.ResponseWriter, r *http.Request) {
+	qr, err := a.manager.GetQR(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, qr)
+}
+
+func (a *API) handleSessionStatus(w http.ResponseWriter, r *http.Request) {
+	status, err := a.manager.GetStatus(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, status)
+}
+
+func (a *API) handleContacts(w http.ResponseWriter, r *http.Request) {
+	contacts, err := a.manager.ListContacts(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, contacts)
+}
+
+func (a *API) handleContactPhoto(w http.ResponseWriter, r *http.Request) {
+	jid, err := pathJID(chi.URLParam(r, "jid"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	photo, err := a.manager.GetProfilePhoto(r.Context(), jid)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, photo)
+}
+
+func (a *API) handleChats(w http.ResponseWriter, r *http.Request) {
+	chats, err := a.manager.ListChats(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, chats)
+}
+
+func (a *API) handleChatMessages(w http.ResponseWriter, r *http.Request) {
+	jid, err := pathJID(chi.URLParam(r, "jid"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	messages, err := a.manager.ListMessages(r.Context(), jid)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, messages)
+}
+
+func (a *API) handleSendText(w http.ResponseWriter, r *http.Request) {
+	var request models.SendTextRequest
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	message, err := a.manager.SendText(r.Context(), request)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+	respondJSON(w, http.StatusCreated, message)
+}
+
+func (a *API) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	a.hub.ServeHTTP(w, r)
+}
+
+func (a *API) handleSignIn(w http.ResponseWriter, r *http.Request) {
+	var request models.SignInRequest
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if strings.TrimSpace(request.Email) != a.auth.Email || request.Password != a.auth.Password {
+		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Credenciais invalidas."})
+		return
+	}
+
+	now := models.NowString()
+	response := models.SignInResponse{
+		User: models.AuthUser{
+			ID:          "local-admin",
+			Email:       a.auth.Email,
+			Name:        a.auth.Name,
+			Role:        a.auth.Role,
+			IsActive:    true,
+			LastLoginAt: now,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		},
+		Token: "wa-core-local-token",
+	}
+
+	respondJSON(w, http.StatusOK, response)
+}
+
+func (a *API) handleDashboardOverview(w http.ResponseWriter, r *http.Request) {
+	overview, err := a.buildDashboardOverview(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, overview)
+}
+
+func (a *API) handleListSessions(w http.ResponseWriter, r *http.Request) {
+	sessions, err := a.buildSessionRecords(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, sessions)
+}
+
+func (a *API) handleCreateSession(w http.ResponseWriter, r *http.Request) {
+	var request models.SessionInitRequest
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	session, err := a.manager.CreateOrUpdateSession(r.Context(), request)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	compat, err := a.sessionToCompat(r.Context(), session)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, compat)
+}
+
+func (a *API) handleConnectSession(w http.ResponseWriter, r *http.Request) {
+	if !a.isDefaultSession(chi.URLParam(r, "id")) {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	session, err := a.manager.InitSession(r.Context(), models.SessionInitRequest{})
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	compat, err := a.sessionToCompat(r.Context(), session)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, compat)
+}
+
+func (a *API) handleDisconnectSession(w http.ResponseWriter, r *http.Request) {
+	if !a.isDefaultSession(chi.URLParam(r, "id")) {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	session, err := a.manager.Disconnect(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	compat, err := a.sessionToCompat(r.Context(), session)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, compat)
+}
+
+func (a *API) handleSessionQRCompat(w http.ResponseWriter, r *http.Request) {
+	if !a.isDefaultSession(chi.URLParam(r, "id")) {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	session, err := a.manager.GetSession(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if session == nil {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+	compat, err := a.sessionToCompat(r.Context(), session)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	qr, err := a.manager.GetQR(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]any{
+		"session": compat,
+		"qr": map[string]any{
+			"code":             qr.Code,
+			"imageDataUrl":     qr.ImageDataURL,
+			"expiresInSeconds": qr.ExpiresInSeconds,
+		},
+	})
+}
+
+func (a *API) handleConversations(w http.ResponseWriter, r *http.Request) {
+	if !a.isDefaultSession(chi.URLParam(r, "id")) {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	conversations, err := a.buildConversationRecords(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, conversations)
+}
+
+func (a *API) handleConversationMessages(w http.ResponseWriter, r *http.Request) {
+	if !a.isDefaultSession(chi.URLParam(r, "id")) {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	jid, err := pathJID(chi.URLParam(r, "jid"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	messages, err := a.manager.ListMessages(r.Context(), jid)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	respondJSON(w, http.StatusOK, toMessageRecords(messages, jid))
+}
+
+func (a *API) handleConversationSend(w http.ResponseWriter, r *http.Request) {
+	if !a.isDefaultSession(chi.URLParam(r, "id")) {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	jid, err := pathJID(chi.URLParam(r, "jid"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var request struct {
+		Body string `json:"body"`
+	}
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	message, err := a.manager.SendText(r.Context(), models.SendTextRequest{JID: jid, Text: request.Body})
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, toMessageRecord(*message, jid))
+}
+
+func (a *API) handleConversationRead(w http.ResponseWriter, r *http.Request) {
+	if !a.isDefaultSession(chi.URLParam(r, "id")) {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	jid, err := pathJID(chi.URLParam(r, "jid"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := a.manager.MarkChatRead(r.Context(), jid); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *API) handleSessionStream(w http.ResponseWriter, r *http.Request) {
+	if !a.isDefaultSession(chi.URLParam(r, "id")) {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		respondJSON(w, http.StatusInternalServerError, map[string]any{"message": "Streaming nao suportado."})
+		return
+	}
+
+	ch, unsubscribe := a.hub.Subscribe()
+	defer unsubscribe()
+
+	ticker := time.NewTicker(20 * time.Second)
+	defer ticker.Stop()
+
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_, _ = fmt.Fprint(w, ": ping\n\n")
+			flusher.Flush()
+		case payload := <-ch:
+			compat, ok := toCompatStreamEvent(payload)
+			if !ok {
+				continue
+			}
+			encoded, err := json.Marshal(compat)
+			if err != nil {
+				continue
+			}
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", encoded)
+			flusher.Flush()
+		}
+	}
+}
+
+func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOverview, error) {
+	sessions, err := a.buildSessionRecords(ctx)
+	if err != nil {
+		return nil, err
+	}
+	conversations, err := a.buildConversationRecords(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	overview := &models.DashboardOverview{
+		Product:       "Pulse Hub",
+		Phase:         "whatsmeow-core",
+		Sessions:      sessions,
+		Conversations: conversations,
+	}
+
+	connectedNumbers := 0
+	activeSessions := 0
+	onlineUsers := 0
+	waitingConversations := 0
+	for _, session := range sessions {
+		connectedNumbers++
+		if session.Status == models.SessionStatusActive {
+			activeSessions++
+		}
+		onlineUsers += session.Attendants
+		waitingConversations += session.Waiting
+	}
+
+	overview.Metrics.ConnectedNumbers = connectedNumbers
+	overview.Metrics.ActiveSessions = activeSessions
+	overview.Metrics.OnlineUsers = onlineUsers
+	overview.Metrics.WaitingConversations = waitingConversations
+
+	if len(sessions) > 0 {
+		overview.Channels = []models.ChannelRecord{{
+			ID:               sessions[0].ChannelID,
+			Name:             sessions[0].ChannelName,
+			Color:            channelColor(sessions[0].ChannelName),
+			ConnectedNumbers: 1,
+		}}
+	} else {
+		overview.Channels = []models.ChannelRecord{}
+	}
+
+	return overview, nil
+}
+
+func (a *API) buildSessionRecords(ctx context.Context) ([]models.SessionRecord, error) {
+	session, err := a.manager.GetSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return []models.SessionRecord{}, nil
+	}
+
+	compat, err := a.sessionToCompat(ctx, session)
+	if err != nil {
+		return nil, err
+	}
+	return []models.SessionRecord{compat}, nil
+}
+
+func (a *API) sessionToCompat(ctx context.Context, session *models.Session) (models.SessionRecord, error) {
+	chats, err := a.manager.ListChats(ctx)
+	if err != nil {
+		return models.SessionRecord{}, err
+	}
+
+	waiting := 0
+	unread := 0
+	for _, chat := range chats {
+		if chat.UnreadCount > 0 {
+			waiting++
+		}
+		unread += chat.UnreadCount
+	}
+
+	attendants := 0
+	if session.Status == models.SessionStatusActive {
+		attendants = 1
+	}
+
+	return models.SessionRecord{
+		ID:            session.ID,
+		Name:          session.Name,
+		PhoneNumber:   session.PhoneNumber,
+		ChannelID:     session.ChannelID,
+		ChannelName:   session.ChannelName,
+		Status:        session.Status,
+		Attendants:    attendants,
+		Waiting:       waiting,
+		Unread:        unread,
+		LastHeartbeat: session.UpdatedAt,
+		IsDemo:        false,
+		QRCode:        session.QRCode,
+		QRCodeDataURL: session.QRCodeDataURL,
+		LastError:     session.LastError,
+	}, nil
+}
+
+func (a *API) buildConversationRecords(ctx context.Context) ([]models.ConversationRecord, error) {
+	chats, err := a.manager.ListChats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	session, err := a.manager.GetSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return []models.ConversationRecord{}, nil
+	}
+
+	contacts, err := a.manager.ListContacts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	contactMap := make(map[string]models.Contact, len(contacts))
+	for _, contact := range contacts {
+		contactMap[contact.JID] = contact
+	}
+
+	conversations := make([]models.ConversationRecord, 0, len(chats))
+	for _, chat := range chats {
+		contact := contactMap[chat.JID]
+		avatarURL := contact.PhotoURL
+		name := chat.Name
+		if contact.DisplayName != "" {
+			name = contact.DisplayName
+		}
+		if name == "" {
+			name = chat.JID
+		}
+
+		conversations = append(conversations, models.ConversationRecord{
+			ID:            chat.JID,
+			SessionID:     session.ID,
+			SessionName:   session.Name,
+			Contact:       name,
+			AvatarURL:     avatarURL,
+			ParticipantID: chat.JID,
+			Owner:         "Livre",
+			Status:        "Fila geral",
+			ChannelName:   session.ChannelName,
+			WaitingTime:   waitingLabel(chat.LastMessageAt),
+			Unread:        chat.UnreadCount,
+			Preview:       fallbackText(chat.LastMessageText, "Conversa sincronizada."),
+			LastMessageAt: fallbackText(chat.LastMessageAt, session.UpdatedAt),
+			Messages:      []models.MessageRecord{},
+		})
+	}
+
+	return conversations, nil
+}
+
+func toMessageRecords(messages []models.Message, conversationID string) []models.MessageRecord {
+	items := make([]models.MessageRecord, 0, len(messages))
+	for _, message := range messages {
+		items = append(items, toMessageRecord(message, conversationID))
+	}
+	return items
+}
+
+func toMessageRecord(message models.Message, conversationID string) models.MessageRecord {
+	direction := "incoming"
+	if message.FromMe {
+		direction = "outgoing"
+	}
+	return models.MessageRecord{
+		ID:             message.ID,
+		ConversationID: conversationID,
+		Direction:      direction,
+		Body:           message.Text,
+		Timestamp:      message.Timestamp,
+		Author:         fallbackText(message.Author, "Contato"),
+	}
+}
+
+func toCompatStreamEvent(payload []byte) (map[string]any, bool) {
+	var event models.RealtimeEvent
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return nil, false
+	}
+
+	switch event.Kind {
+	case "connection":
+		return map[string]any{
+			"sessionId": event.SessionID,
+			"type":      "session.updated",
+			"emittedAt": event.OccurredAt,
+		}, true
+	case "chat.new":
+		return map[string]any{
+			"sessionId":      event.SessionID,
+			"conversationId": event.ChatJID,
+			"type":           "conversation.synced",
+			"emittedAt":      event.OccurredAt,
+		}, true
+	case "message.new":
+		return map[string]any{
+			"sessionId":      event.SessionID,
+			"conversationId": event.ChatJID,
+			"type":           "message.created",
+			"direction":      event.Direction,
+			"emittedAt":      event.OccurredAt,
+		}, true
+	default:
+		return nil, false
+	}
+}
+
+func channelColor(value string) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(value))
+	palette := []string{"#7fafff", "#5dfd8a", "#ffb84d", "#ff7d7d", "#66d9ef", "#f6bd60"}
+	return palette[int(h.Sum32())%len(palette)]
+}
+
+func waitingLabel(timestamp string) string {
+	if timestamp == "" {
+		return "agora"
+	}
+	parsed, err := time.Parse(time.RFC3339, timestamp)
+	if err != nil {
+		return "agora"
+	}
+	delta := time.Since(parsed)
+	switch {
+	case delta < time.Minute:
+		return "agora"
+	case delta < time.Hour:
+		return fmt.Sprintf("%dm", int(delta.Minutes()))
+	default:
+		return fmt.Sprintf("%dh", int(delta.Hours()))
+	}
+}
+
+func fallbackText(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}
+
+func decodeJSON(r *http.Request, target any) error {
+	if r.Body == nil {
+		return errEmptyBody
+	}
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		if errors.Is(err, context.Canceled) {
+			return err
+		}
+		if strings.Contains(err.Error(), "EOF") {
+			return errEmptyBody
+		}
+		return err
+	}
+	return nil
+}
+
+func respondJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func respondError(w http.ResponseWriter, status int, err error) {
+	respondJSON(w, status, map[string]any{"message": err.Error()})
+}
+
+func pathJID(value string) (string, error) {
+	decoded, err := url.PathUnescape(value)
+	if err != nil {
+		return "", fmt.Errorf("invalid jid path: %w", err)
+	}
+	decoded = strings.TrimSpace(decoded)
+	if decoded == "" {
+		return "", errors.New("jid is required")
+	}
+	return decoded, nil
+}
+
+func (a *API) isDefaultSession(id string) bool {
+	return id == models.DefaultSessionID || id == ""
+}
+
+var errEmptyBody = errors.New("request body is required")

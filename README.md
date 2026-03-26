@@ -1,83 +1,58 @@
 # Pulse Hub
 
-Plataforma omnichannel com foco inicial em WhatsApp, inbox compartilhado em tempo real e arquitetura pronta para crescer com PostgreSQL, Redis e deploy em EasyPanel.
+Stack propria de WhatsApp usando `Go + tulir/whatsmeow`, com API REST, WebSocket, PostgreSQL, Redis e compatibilidade com a UI web atual.
 
-## Visao Geral
+## O que mudou
 
-O projeto foi estruturado como um monorepo com dashboard web e API separadas, permitindo operar varias sessoes, gerar QR code para conexao, centralizar conversas e evoluir depois para Instagram e Facebook sem reescrever o nucleo do inbox.
+- backend principal agora fica em `apps/wa-core`
+- `whatsmeow` e usado direto, sem WAHA, Evolution, GOWA, WuzAPI ou gateway pronto
+- a UI em `apps/web` continua funcional porque o backend Go expoe:
+  - os endpoints novos pedidos
+  - endpoints de compatibilidade usados pela dashboard atual
 
-## Stack
-
-- `Next.js 16` no frontend em `apps/web`
-- `NestJS 11` no backend em `apps/server`
-- `PostgreSQL` para persistencia de sessoes, conversas, mensagens e canais
-- `Redis` para cache do overview e distribuicao de eventos em tempo real
-- `WPPConnect Server` como servico dedicado para sessao e QR do WhatsApp
-
-## Arquitetura
+## Estrutura
 
 ```text
-apps/web      -> dashboard operacional
-apps/server   -> API + SSE + integracao com WPPConnect
-PostgreSQL    -> persistencia principal
-Redis         -> cache e pub/sub
-WPPConnect    -> sessao, QR e operacao WhatsApp
-EasyPanel     -> deploy via GitHub com servicos separados
+apps/
+|- wa-core/
+|  |- cmd/server
+|  |- internal/http
+|  |- internal/models
+|  |- internal/store
+|  |- internal/whatsapp
+|  |- internal/ws
+|- web/
 ```
 
-## O Que Ja Esta Pronto
+## Backend Go
 
-- criacao de sessoes de WhatsApp por numero e canal
-- conexao e reconexao via QR code
-- inbox compartilhado por sessao
-- leitura e envio de mensagens
-- sincronizacao de conversas e mensagens do WhatsApp
-- cache do overview com Redis
-- persistencia do backend em PostgreSQL
-- estrutura pronta para deploy no EasyPanel
+- `cmd/server` - bootstrap HTTP e config
+- `internal/whatsapp` - sessao `whatsmeow`, QR, eventos, envio e recebimento
+- `internal/store` - PostgreSQL para sessao, contatos, chats e mensagens
+- `internal/http` - rotas REST novas e rotas de compatibilidade da UI
+- `internal/ws` - broadcast WebSocket e base para SSE de compatibilidade
+- `internal/models` - DTOs e tipos compartilhados
 
-## Endpoints Principais
+## Requisitos no Ubuntu
 
-- `GET /health`
-- `GET /dashboard/overview`
-- `GET /whatsapp/sessions`
-- `POST /whatsapp/sessions`
-- `POST /whatsapp/sessions/:id/connect`
-- `POST /whatsapp/sessions/:id/disconnect`
-- `GET /whatsapp/sessions/:id/qr`
-- `GET /whatsapp/sessions/:id/conversations`
-- `GET /whatsapp/sessions/:id/conversations/:conversationId/messages`
-- `POST /whatsapp/sessions/:id/conversations/:conversationId/messages`
-- `POST /whatsapp/sessions/:id/conversations/:conversationId/read`
-- `GET /whatsapp/sessions/:id/stream`
-
-## Estrutura do Repositorio
-
-```text
-.
-|- apps/
-|  |- server/
-|  |  |- src/
-|  |  |- Dockerfile
-|  |- web/
-|     |- src/
-|     |- Dockerfile
-|- docker-compose.yml
-|- EASYPANEL.md
-|- IMPLEMENTACAO_MVP.md
-```
-
-## Rodando Localmente
-
-### 1. Suba a infraestrutura
+Instale Go atual, PostgreSQL e Redis para desenvolvimento local:
 
 ```bash
-docker compose up -d postgres redis
+sudo apt update
+sudo apt install -y build-essential gcc postgresql-client redis-tools
 ```
 
-### 2. Configure o ambiente
+Se ainda nao tiver Go:
 
-Crie um `.env` na raiz com base em `.env.example`.
+```bash
+sudo snap install go --classic
+```
+
+## Ambiente
+
+Crie `.env` na raiz com base em `.env.example`.
+
+Para deploy, use `.env.easypanel.example` como referencia de variaveis.
 
 Exemplo:
 
@@ -85,104 +60,212 @@ Exemplo:
 WEB_PORT=3000
 SERVER_PORT=3333
 NEXT_PUBLIC_API_URL=http://localhost:3333
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/pulse_hub
-REDIS_URL=redis://localhost:6379
-WPPCONNECT_API_URL=http://localhost:21465
-WPPCONNECT_SECRET_KEY=THISISMYSECURETOKEN
-```
-
-### 3. Rode backend e frontend
-
-```bash
-npm run dev:server
-npm run dev:web
-```
-
-## Build e Validacao
-
-```bash
-npm run build:server
-npm run lint:server
-npm test --workspace server
-npm run build:web
-npm run lint:web
-```
-
-## Persistencia e Tempo Real
-
-### PostgreSQL
-
-O backend persiste:
-
-- canais
-- sessoes do WhatsApp
-- conversas
-- mensagens
-
-### Redis
-
-O Redis e usado para:
-
-- cache do `dashboard/overview`
-- pub/sub dos eventos de sessao e mensagens
-- preparar o terreno para filas, locks e retentativas
-
-## Persistencia da Sessao do WhatsApp
-
-As credenciais do WhatsApp passam a ser mantidas pelo servico separado do `WPPConnect Server`, e nao mais pelo backend principal.
-
-## Deploy no EasyPanel
-
-O projeto esta preparado para subir pelo GitHub com frontend e backend separados.
-
-Resumo rapido:
-
-- backend usando `apps/server/Dockerfile`
-- frontend usando `apps/web/Dockerfile`
-- PostgreSQL e Redis como servicos dedicados
-- servico separado do `WPPConnect Server` para gerenciar QR e sessao
-- `NEXT_PUBLIC_API_URL` definido no build e no runtime do frontend
-
-Guia completo em `EASYPANEL.md`.
-
-## Variaveis Importantes
-
-### Backend
-
-```env
-PORT=3333
-DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/pulse_hub
-REDIS_URL=redis://HOST:6379
-WPPCONNECT_API_URL=https://wpp.seu-dominio.com
-WPPCONNECT_SECRET_KEY=THISISMYSECURETOKEN
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable
+WHATSMEOW_DATABASE_URL=postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable
+REDIS_URL=redis://localhost:6379/0
 AUTH_SEED_EMAIL=admin@pulsehub.local
 AUTH_SEED_PASSWORD=PulseHub123!
 AUTH_SEED_NAME=Pulse Hub Admin
 AUTH_SEED_ROLE=admin
 ```
 
-Quando a tabela `users` estiver vazia, o backend cria automaticamente o usuario inicial com essas variaveis para liberar o primeiro acesso.
+## Instalacao
 
-### Frontend
+Instale as dependencias do frontend:
 
-```env
-NEXT_PUBLIC_API_URL=https://api.seu-dominio.com
+```bash
+npm install
 ```
 
-## Roadmap Natural
+Baixe os modulos Go:
 
-- autenticacao e multiusuario
-- atribuicao de conversas
-- tags, notas internas e filtros operacionais
-- filas Redis para processamento assincorono
-- adaptadores para Instagram Direct e Facebook Messenger
-- migracoes formais e observabilidade
+```bash
+cd apps/wa-core
+go mod tidy
+cd ../..
+```
 
-## Documentacao Complementar
+## Rodando localmente
 
-- `EASYPANEL.md` - deploy pelo GitHub no EasyPanel
-- `IMPLEMENTACAO_MVP.md` - contexto tecnico e plano de evolucao
+Infra local:
 
-## Status
+```bash
+npm run dev:infra
+```
 
-Base pronta para desenvolvimento local, persistencia com Postgres/Redis e deploy inicial em EasyPanel.
+Backend Go:
+
+```bash
+npm run dev:server
+```
+
+Frontend Next:
+
+```bash
+npm run dev:web
+```
+
+## Fluxo de login e QR
+
+1. Abra `http://localhost:3000/login`
+2. Entre com as credenciais de `AUTH_SEED_EMAIL` e `AUTH_SEED_PASSWORD`
+3. Na aba `Settings`, crie a sessao principal
+4. Clique em `Gerar QR / conectar`
+5. Escaneie o QR pelo WhatsApp no celular
+6. A sessao deve mudar para `Online`
+
+Tambem e possivel iniciar direto pela API:
+
+```bash
+curl -X POST http://localhost:3333/session/init \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "WhatsApp principal",
+    "phoneNumber": "+5511999999999",
+    "channelName": "Comercial"
+  }'
+```
+
+Depois consulte o QR:
+
+```bash
+curl http://localhost:3333/session/qr
+```
+
+## Endpoints principais
+
+### Core
+
+- `GET /health`
+- `POST /session/init`
+- `GET /session/qr`
+- `GET /session/status`
+- `GET /contacts`
+- `GET /contacts/:jid/photo`
+- `GET /chats`
+- `GET /chats/:jid/messages`
+- `POST /messages/text`
+- `GET /ws`
+
+### Compatibilidade da UI atual
+
+- `POST /auth/sign-in`
+- `GET /dashboard/overview`
+- `GET /whatsapp/sessions`
+- `POST /whatsapp/sessions`
+- `POST /whatsapp/sessions/:id/connect`
+- `POST /whatsapp/sessions/:id/disconnect`
+- `GET /whatsapp/sessions/:id/qr`
+- `GET /whatsapp/sessions/:id/conversations`
+- `GET /whatsapp/sessions/:id/conversations/:jid/messages`
+- `POST /whatsapp/sessions/:id/conversations/:jid/messages`
+- `POST /whatsapp/sessions/:id/conversations/:jid/read`
+- `GET /whatsapp/sessions/:id/stream`
+
+## Testando a API
+
+Status da sessao:
+
+```bash
+curl http://localhost:3333/session/status
+```
+
+Listar contatos:
+
+```bash
+curl http://localhost:3333/contacts
+```
+
+Listar chats:
+
+```bash
+curl http://localhost:3333/chats
+```
+
+Listar mensagens de um chat:
+
+```bash
+curl "http://localhost:3333/chats/5511999999999%40s.whatsapp.net/messages"
+```
+
+Enviar texto:
+
+```bash
+curl -X POST http://localhost:3333/messages/text \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "jid": "5511999999999@s.whatsapp.net",
+    "text": "Oi, mensagem enviada pela API Go"
+  }'
+```
+
+## Testando WebSocket
+
+Conecte em:
+
+```text
+ws://localhost:3333/ws
+```
+
+Eventos emitidos:
+
+- `connection`
+- `chat.new`
+- `message.new`
+- `message.ack`
+
+## Persistencia
+
+Persistencia principal e realtime ficam em:
+
+- PostgreSQL
+  - credenciais/sessao do `whatsmeow`
+  - sessao logica da aplicacao
+  - contatos
+  - chats
+  - mensagens
+- Redis
+  - pub/sub dos eventos em tempo real
+  - base para escalar WebSocket/SSE depois
+
+Configuracao padrao local:
+
+```env
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable
+WHATSMEOW_DATABASE_URL=postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable
+REDIS_URL=redis://localhost:6379/0
+```
+
+## Deploy no EasyPanel
+
+Esse projeto esta preparado para subir pelo GitHub no EasyPanel com:
+
+- backend em `apps/wa-core/Dockerfile`
+- frontend em `apps/web/Dockerfile`
+- PostgreSQL e Redis como servicos separados
+
+Guias:
+
+- `EASYPANEL.md`
+- `IMPLEMENTACAO_COMPLETA.md`
+
+## Comandos uteis
+
+```bash
+npm run dev:infra
+npm run dev:infra:down
+npm run dev:server
+npm run dev:web
+npm run build:server
+npm run build:web
+npm run lint:server
+npm run lint:web
+```
+
+## Observacoes
+
+- o projeto atual esta preparado para `single-session` primeiro
+- a estrutura interna ja deixa a evolucao para multi-sessao mais simples
+- `HistorySync` e usado para hidratar chats e mensagens antigas
+- a listagem de chats e mantida localmente no PostgreSQL
+- fotos de perfil sao resolvidas pelo `whatsmeow` e cacheadas localmente
