@@ -381,7 +381,47 @@ func (m *Manager) ListChats(ctx context.Context) ([]models.Chat, error) {
 }
 
 func (m *Manager) ListMessages(ctx context.Context, chatJID string) ([]models.Message, error) {
-	return m.store.ListMessagesByChat(ctx, chatJID)
+	resolved, err := m.ResolveConversationJID(ctx, chatJID)
+	if err != nil {
+		return nil, err
+	}
+	if resolved == chatJID {
+		return m.store.ListMessagesByChat(ctx, chatJID)
+	}
+
+	primary, err := m.store.ListMessagesByChat(ctx, resolved)
+	if err != nil {
+		return nil, err
+	}
+	secondary, err := m.store.ListMessagesByChat(ctx, chatJID)
+	if err != nil {
+		return nil, err
+	}
+	return mergeMessages(primary, secondary), nil
+}
+
+func (m *Manager) ResolveConversationJID(ctx context.Context, chatJID string) (string, error) {
+	parsed, err := types.ParseJID(strings.TrimSpace(chatJID))
+	if err != nil {
+		return "", fmt.Errorf("invalid jid: %w", err)
+	}
+	parsed = parsed.ToNonAD()
+
+	m.mu.RLock()
+	client := m.client
+	m.mu.RUnlock()
+	if client == nil || client.Store == nil {
+		return parsed.String(), nil
+	}
+
+	alt, err := client.Store.GetAltJID(ctx, parsed)
+	if err != nil {
+		return "", fmt.Errorf("resolve chat jid: %w", err)
+	}
+	if !alt.IsEmpty() {
+		return alt.ToNonAD().String(), nil
+	}
+	return parsed.String(), nil
 }
 
 func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*models.Message, error) {
@@ -458,6 +498,12 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 }
 
 func (m *Manager) MarkChatRead(ctx context.Context, chatJID string) error {
+	resolved, err := m.ResolveConversationJID(ctx, chatJID)
+	if err != nil {
+		return err
+	}
+	chatJID = resolved
+
 	grouped, err := m.store.ListUnreadMessageGroupsByChat(ctx, chatJID)
 	if err != nil {
 		return err
@@ -759,6 +805,8 @@ func (m *Manager) handleHistorySync(evt *appstateevents.HistorySync) {
 	if client == nil {
 		return
 	}
+
+	m.storeHistoryLIDMappings(context.Background(), client, evt.Data.GetPhoneNumberToLidMappings())
 
 	hadChat := false
 	for _, conversation := range evt.Data.GetConversations() {
@@ -1169,6 +1217,53 @@ func ownDeviceJID(client *whatsmeow.Client) string {
 		return ""
 	}
 	return client.Store.ID.String()
+}
+
+func (m *Manager) storeHistoryLIDMappings(ctx context.Context, client *whatsmeow.Client, mappings []*waHistorySync.PhoneNumberToLIDMapping) {
+	if client == nil || client.Store == nil || client.Store.LIDs == nil || len(mappings) == 0 {
+		return
+	}
+
+	items := make([]wmstore.LIDMapping, 0, len(mappings))
+	for _, mapping := range mappings {
+		if mapping == nil {
+			continue
+		}
+		pn, err := types.ParseJID(mapping.GetPnJID())
+		if err != nil {
+			continue
+		}
+		lid, err := types.ParseJID(mapping.GetLidJID())
+		if err != nil {
+			continue
+		}
+		items = append(items, wmstore.LIDMapping{PN: pn.ToNonAD(), LID: lid.ToNonAD()})
+	}
+	if len(items) == 0 {
+		return
+	}
+	if err := client.Store.LIDs.PutManyLIDMappings(ctx, items); err != nil {
+		m.logger.Warn("store history lid mappings failed", "error", err)
+	}
+}
+
+func mergeMessages(primary, secondary []models.Message) []models.Message {
+	merged := make([]models.Message, 0, len(primary)+len(secondary))
+	seen := make(map[string]struct{}, len(primary)+len(secondary))
+	for _, message := range append(primary, secondary...) {
+		if _, ok := seen[message.ID]; ok {
+			continue
+		}
+		seen[message.ID] = struct{}{}
+		merged = append(merged, message)
+	}
+	sort.Slice(merged, func(i, j int) bool {
+		if merged[i].Timestamp == merged[j].Timestamp {
+			return merged[i].ID < merged[j].ID
+		}
+		return merged[i].Timestamp < merged[j].Timestamp
+	})
+	return merged
 }
 
 func normalizeSendJID(ctx context.Context, client *whatsmeow.Client, jid types.JID) (types.JID, error) {

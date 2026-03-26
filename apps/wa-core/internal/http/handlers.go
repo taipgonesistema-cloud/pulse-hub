@@ -598,11 +598,24 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 	}
 
 	conversations := make([]models.ConversationRecord, 0, len(chats))
+	seenConversationIDs := make(map[string]struct{}, len(chats))
 	for _, chat := range chats {
-		if !isVisibleConversationJID(chat.JID) {
+		canonicalJID, err := a.manager.ResolveConversationJID(ctx, chat.JID)
+		if err != nil {
+			canonicalJID = chat.JID
+		}
+		if !isVisibleConversationJID(canonicalJID) {
 			continue
 		}
-		contact := contactMap[chat.JID]
+		if _, exists := seenConversationIDs[canonicalJID]; exists {
+			continue
+		}
+		seenConversationIDs[canonicalJID] = struct{}{}
+
+		contact := contactMap[canonicalJID]
+		if contact.JID == "" {
+			contact = contactMap[chat.JID]
+		}
 		avatarURL := contact.PhotoURL
 		name := chat.Name
 		if contact.DisplayName != "" {
@@ -613,12 +626,12 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 		}
 
 		conversations = append(conversations, models.ConversationRecord{
-			ID:            chat.JID,
+			ID:            canonicalJID,
 			SessionID:     session.ID,
 			SessionName:   session.Name,
 			Contact:       name,
 			AvatarURL:     avatarURL,
-			ParticipantID: chat.JID,
+			ParticipantID: canonicalJID,
 			Owner:         "Livre",
 			Status:        "Fila geral",
 			ChannelName:   session.ChannelName,

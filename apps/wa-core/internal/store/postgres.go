@@ -484,7 +484,16 @@ func (s *Store) SaveMessage(ctx context.Context, message models.Message) (bool, 
 	if affected == 0 {
 		_, err = s.db.ExecContext(ctx, `
 			UPDATE messages
-			SET sender_jid = $1, author = $2, from_me = $3, ack_status = $4, text = $5, raw_json = $6, timestamp = $7
+			SET sender_jid = CASE WHEN $1 = '' THEN sender_jid ELSE $1 END,
+				author = CASE WHEN $2 = '' THEN author ELSE $2 END,
+				from_me = CASE WHEN from_me = TRUE THEN TRUE ELSE $3 END,
+				ack_status = CASE WHEN $4 = '' THEN ack_status ELSE $4 END,
+				text = CASE
+					WHEN ($5 = '' OR $5 = '[midia]') AND text <> '' AND text <> '[midia]' THEN text
+					ELSE $5
+				END,
+				raw_json = CASE WHEN $6 = '' THEN raw_json ELSE $6 END,
+				timestamp = CASE WHEN $7 = '' THEN timestamp ELSE $7 END
 			WHERE id = $8
 		`,
 			message.SenderJID,
