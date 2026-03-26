@@ -65,7 +65,7 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, auth
 		r.Get("/sessions", api.handleListSessions)
 		r.Post("/sessions", api.handleCreateSession)
 		r.Post("/sessions/{id}/connect", api.handleConnectSession)
-		 r.Post("/sessions/{id}/disconnect", api.handleDisconnectSession)
+		r.Post("/sessions/{id}/disconnect", api.handleDisconnectSession)
 		r.Get("/sessions/{id}/qr", api.handleSessionQRCompat)
 		r.Get("/sessions/{id}/conversations", api.handleConversations)
 		r.Get("/sessions/{id}/conversations/{jid}/messages", api.handleConversationMessages)
@@ -598,6 +598,9 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 
 	conversations := make([]models.ConversationRecord, 0, len(chats))
 	for _, chat := range chats {
+		if !isVisibleConversationJID(chat.JID) {
+			continue
+		}
 		contact := contactMap[chat.JID]
 		avatarURL := contact.PhotoURL
 		name := chat.Name
@@ -716,6 +719,20 @@ func fallbackText(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func isVisibleConversationJID(jid string) bool {
+	jid = strings.TrimSpace(jid)
+	if jid == "" {
+		return false
+	}
+	if jid == "status@broadcast" || strings.Contains(jid, "@newsletter") {
+		return false
+	}
+	if jid == "0@s.whatsapp.net" {
+		return false
+	}
+	return true
 }
 
 func decodeJSON(r *http.Request, target any) error {

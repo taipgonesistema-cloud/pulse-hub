@@ -394,6 +394,10 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 	if err != nil {
 		return nil, fmt.Errorf("invalid jid: %w", err)
 	}
+	parsedJID = parsedJID.ToNonAD()
+	if err := validateSendableJID(parsedJID); err != nil {
+		return nil, err
+	}
 
 	m.mu.RLock()
 	client := m.client
@@ -403,10 +407,15 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 		return nil, errors.New("session is not connected")
 	}
 
+	normalizedJID, err := normalizeSendJID(ctx, client, parsedJID)
+	if err != nil {
+		return nil, err
+	}
+
 	messageID := types.MessageID(client.GenerateMessageID())
 	resp, err := client.SendMessage(
 		ctx,
-		parsedJID,
+		normalizedJID,
 		&waE2E.Message{Conversation: proto.String(text)},
 		whatsmeow.SendRequestExtra{ID: messageID},
 	)
@@ -417,7 +426,7 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 	author := "Operador"
 	message := models.Message{
 		ID:        string(resp.ID),
-		ChatJID:   parsedJID.String(),
+		ChatJID:   normalizedJID.String(),
 		SenderJID: ownDeviceJID(client),
 		Author:    author,
 		FromMe:    true,
@@ -426,7 +435,7 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 		Timestamp: resp.Timestamp.UTC().Format(time.RFC3339),
 	}
 
-	if err := m.ensureChatRecord(ctx, parsedJID.String(), text, resp.Timestamp, true); err != nil {
+	if err := m.ensureChatRecord(ctx, normalizedJID.String(), text, resp.Timestamp, true); err != nil {
 		return nil, err
 	}
 	created, err := m.store.SaveMessage(ctx, message)
@@ -1160,6 +1169,41 @@ func ownDeviceJID(client *whatsmeow.Client) string {
 		return ""
 	}
 	return client.Store.ID.String()
+}
+
+func normalizeSendJID(ctx context.Context, client *whatsmeow.Client, jid types.JID) (types.JID, error) {
+	jid = jid.ToNonAD()
+	if err := validateSendableJID(jid); err != nil {
+		return types.EmptyJID, err
+	}
+	if client == nil || client.Store == nil {
+		return jid, nil
+	}
+
+	if jid.Server == types.HiddenUserServer {
+		alt, err := client.Store.GetAltJID(ctx, jid)
+		if err != nil {
+			return types.EmptyJID, fmt.Errorf("resolve recipient jid: %w", err)
+		}
+		if !alt.IsEmpty() {
+			return alt.ToNonAD(), nil
+		}
+	}
+
+	return jid, nil
+}
+
+func validateSendableJID(jid types.JID) error {
+	if jid.IsEmpty() {
+		return errors.New("recipient jid is required")
+	}
+	if jid.Server == types.BroadcastServer || jid.Server == types.NewsletterServer {
+		return fmt.Errorf("messages can't be sent to %s", jid.String())
+	}
+	if jid.Server == types.DefaultUserServer && jid.User == "0" {
+		return fmt.Errorf("messages can't be sent to %s", jid.String())
+	}
+	return nil
 }
 
 func toJSONArray[T any](items []T) string {
