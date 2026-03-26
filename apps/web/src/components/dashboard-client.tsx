@@ -1622,8 +1622,13 @@ function AvatarBadge({
 }) {
   const [hasError, setHasError] = useState(false);
   const sizeClass = small ? 'h-8 w-8 text-xs' : 'h-12 w-12 text-sm';
+  const resolvedSrc = resolveAvatarSrc(src);
 
-  if (src && !hasError) {
+  useEffect(() => {
+    setHasError(false);
+  }, [resolvedSrc]);
+
+  if (resolvedSrc && !hasError) {
     return (
       <div
         className={`shrink-0 overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#2f2f2f,#5d5d5d)] ${sizeClass} ${className}`}
@@ -1634,7 +1639,7 @@ function AvatarBadge({
           className="h-full w-full object-cover"
           onError={() => setHasError(true)}
           referrerPolicy="no-referrer"
-          src={src}
+          src={resolvedSrc}
         />
       </div>
     );
@@ -1901,6 +1906,19 @@ function formatDateLabel(timestamp: string) {
     month: 'short',
     year: 'numeric',
   });
+}
+
+function resolveAvatarSrc(src?: string | null) {
+  if (!src) {
+    return undefined;
+  }
+  if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:')) {
+    return src;
+  }
+  if (src.startsWith('/')) {
+    return `${apiUrl}${src}`;
+  }
+  return src;
 }
 
 function sanitizeOverview(overview: DashboardOverview): DashboardOverview {

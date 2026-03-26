@@ -148,11 +148,23 @@ func (a *API) handleContactPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	photo, err := a.manager.GetProfilePhoto(r.Context(), jid)
+	photo, err := a.manager.GetProfilePhoto(r.Context(), jid, shouldRedirectPhoto(r))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	photo.ProxyURL = avatarProxyPath(photo.CanonicalJID, photo.PhotoID)
+
+	if shouldRedirectPhoto(r) {
+		if photo.PhotoURL == "" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "private, max-age=300")
+		http.Redirect(w, r, photo.PhotoURL, http.StatusTemporaryRedirect)
+		return
+	}
+
 	respondJSON(w, http.StatusOK, photo)
 }
 
@@ -621,7 +633,6 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 		if contact.JID == "" {
 			contact = contactMap[chat.JID]
 		}
-		avatarURL := contact.PhotoURL
 		name := chat.Name
 		if contact.DisplayName != "" {
 			name = contact.DisplayName
@@ -635,7 +646,7 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 			SessionID:     session.ID,
 			SessionName:   session.Name,
 			Contact:       name,
-			AvatarURL:     avatarURL,
+			AvatarURL:     avatarProxyPath(canonicalJID, contact.PhotoID),
 			ParticipantID: canonicalJID,
 			Owner:         "Livre",
 			Status:        "Fila geral",
@@ -751,6 +762,22 @@ func waitingLabel(timestamp string) string {
 	default:
 		return fmt.Sprintf("%dh", int(delta.Hours()))
 	}
+}
+
+func shouldRedirectPhoto(r *http.Request) bool {
+	value := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("redirect")))
+	return value == "1" || value == "true" || value == "yes"
+}
+
+func avatarProxyPath(jid, photoID string) string {
+	if strings.TrimSpace(jid) == "" {
+		return ""
+	}
+	path := "/contacts/" + url.PathEscape(jid) + "/photo?redirect=1"
+	if strings.TrimSpace(photoID) != "" {
+		path += "&v=" + url.QueryEscape(photoID)
+	}
+	return path
 }
 
 func mergeConversationRecords(current, incoming models.ConversationRecord) models.ConversationRecord {

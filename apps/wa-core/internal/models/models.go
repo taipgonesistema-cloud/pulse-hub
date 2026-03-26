@@ -90,21 +90,23 @@ type SessionQRResponse struct {
 }
 
 type SessionStatusResponse struct {
-	Status       SessionStatus `json:"status"`
-	Connected    bool          `json:"connected"`
-	Authenticated bool         `json:"authenticated"`
-	HasQR        bool          `json:"hasQr"`
-	DeviceJID    string        `json:"deviceJid,omitempty"`
-	BusinessName string        `json:"businessName,omitempty"`
-	Platform     string        `json:"platform,omitempty"`
-	LastError    string        `json:"lastError,omitempty"`
+	Status        SessionStatus `json:"status"`
+	Connected     bool          `json:"connected"`
+	Authenticated bool          `json:"authenticated"`
+	HasQR         bool          `json:"hasQr"`
+	DeviceJID     string        `json:"deviceJid,omitempty"`
+	BusinessName  string        `json:"businessName,omitempty"`
+	Platform      string        `json:"platform,omitempty"`
+	LastError     string        `json:"lastError,omitempty"`
 }
 
 type PhotoResponse struct {
-	JID      string `json:"jid"`
-	PhotoID  string `json:"photoId,omitempty"`
-	PhotoURL string `json:"photoUrl,omitempty"`
-	Cached   bool   `json:"cached"`
+	JID          string `json:"jid"`
+	CanonicalJID string `json:"canonicalJid,omitempty"`
+	PhotoID      string `json:"photoId,omitempty"`
+	PhotoURL     string `json:"photoUrl,omitempty"`
+	ProxyURL     string `json:"proxyUrl,omitempty"`
+	Cached       bool   `json:"cached"`
 }
 
 type RealtimeEvent struct {
@@ -194,9 +196,9 @@ type DashboardOverview struct {
 	Product string `json:"product"`
 	Phase   string `json:"phase"`
 	Metrics struct {
-		ConnectedNumbers    int `json:"connectedNumbers"`
-		ActiveSessions      int `json:"activeSessions"`
-		OnlineUsers         int `json:"onlineUsers"`
+		ConnectedNumbers     int `json:"connectedNumbers"`
+		ActiveSessions       int `json:"activeSessions"`
+		OnlineUsers          int `json:"onlineUsers"`
 		WaitingConversations int `json:"waitingConversations"`
 	} `json:"metrics"`
 	Channels      []ChannelRecord      `json:"channels"`

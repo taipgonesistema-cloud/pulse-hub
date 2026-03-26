@@ -349,8 +349,13 @@ func (m *Manager) ListContacts(ctx context.Context) ([]models.Contact, error) {
 	return m.store.ListContacts(ctx)
 }
 
-func (m *Manager) GetProfilePhoto(ctx context.Context, jid string) (*models.PhotoResponse, error) {
-	if err := m.refreshProfilePhoto(ctx, jid, ""); err != nil {
+func (m *Manager) GetProfilePhoto(ctx context.Context, jid string, forceRefresh bool) (*models.PhotoResponse, error) {
+	canonicalJID, err := m.ResolvePhotoJID(ctx, jid)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := m.refreshProfilePhoto(ctx, canonicalJID, "", forceRefresh); err != nil {
 		var unauthorized bool
 		if errors.Is(err, whatsmeow.ErrProfilePictureUnauthorized) || errors.Is(err, whatsmeow.ErrProfilePictureNotSet) {
 			unauthorized = true
@@ -360,19 +365,20 @@ func (m *Manager) GetProfilePhoto(ctx context.Context, jid string) (*models.Phot
 		}
 	}
 
-	contact, err := m.store.GetContact(ctx, jid)
+	contact, err := m.store.GetContact(ctx, canonicalJID)
 	if err != nil {
 		return nil, err
 	}
 	if contact == nil {
-		contact = &models.Contact{JID: jid}
+		contact = &models.Contact{JID: canonicalJID}
 	}
 
 	return &models.PhotoResponse{
-		JID:      jid,
-		PhotoID:  contact.PhotoID,
-		PhotoURL: contact.PhotoURL,
-		Cached:   contact.PhotoURL != "",
+		JID:          jid,
+		CanonicalJID: canonicalJID,
+		PhotoID:      contact.PhotoID,
+		PhotoURL:     contact.PhotoURL,
+		Cached:       contact.PhotoURL != "",
 	}, nil
 }
 
@@ -455,6 +461,25 @@ func (m *Manager) CanonicalConversationJID(ctx context.Context, chatJID string) 
 	}
 
 	return parsed.String(), nil
+}
+
+func (m *Manager) ResolvePhotoJID(ctx context.Context, jid string) (string, error) {
+	canonical, err := m.CanonicalConversationJID(ctx, jid)
+	if err == nil && canonical != "" {
+		return canonical, nil
+	}
+	resolved, resolveErr := m.ResolveConversationJID(ctx, jid)
+	if resolveErr == nil && resolved != "" {
+		return resolved, nil
+	}
+	parsed, parseErr := types.ParseJID(strings.TrimSpace(jid))
+	if parseErr != nil {
+		if err != nil {
+			return "", err
+		}
+		return "", resolveErr
+	}
+	return parsed.ToNonAD().String(), nil
 }
 
 func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*models.Message, error) {
@@ -920,7 +945,7 @@ func (m *Manager) handlePicture(evt *appstateevents.Picture) {
 		}
 		return
 	}
-	if err := m.refreshProfilePhoto(ctx, evt.JID.String(), evt.PictureID); err != nil {
+	if err := m.refreshProfilePhoto(ctx, evt.JID.String(), evt.PictureID, false); err != nil {
 		m.logger.Warn("refresh picture failed", "jid", evt.JID.String(), "error", err)
 	}
 }
@@ -1023,7 +1048,7 @@ func (m *Manager) ensureChatRecord(ctx context.Context, chatJID, preview string,
 
 	if !strings.HasSuffix(chatJID, "@g.us") {
 		go func() {
-			if err := m.refreshProfilePhoto(context.Background(), chatJID, ""); err != nil {
+			if err := m.refreshProfilePhoto(context.Background(), chatJID, "", false); err != nil {
 				if !errors.Is(err, whatsmeow.ErrProfilePictureUnauthorized) && !errors.Is(err, whatsmeow.ErrProfilePictureNotSet) {
 					m.logger.Debug("refresh profile photo skipped", "jid", chatJID, "error", err)
 				}
@@ -1035,7 +1060,7 @@ func (m *Manager) ensureChatRecord(ctx context.Context, chatJID, preview string,
 	return nil
 }
 
-func (m *Manager) refreshProfilePhoto(ctx context.Context, jidText string, pictureID string) error {
+func (m *Manager) refreshProfilePhoto(ctx context.Context, jidText string, pictureID string, forceRefresh bool) error {
 	m.mu.RLock()
 	client := m.client
 	connected := client != nil && client.IsConnected()
@@ -1064,6 +1089,9 @@ func (m *Manager) refreshProfilePhoto(ctx context.Context, jidText string, pictu
 		return nil
 	}
 	existingID := contact.PhotoID
+	if forceRefresh {
+		existingID = ""
+	}
 
 	info, err := client.GetProfilePictureInfo(ctx, jid, &whatsmeow.GetProfilePictureParams{
 		ExistingID: existingID,
