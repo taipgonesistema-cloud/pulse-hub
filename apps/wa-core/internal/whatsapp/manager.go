@@ -185,7 +185,7 @@ func (m *Manager) InitSession(ctx context.Context, req models.SessionInitRequest
 	m.mu.Unlock()
 
 	if client.Store != nil && client.Store.ID == nil {
-		qrChan, err := client.GetQRChannel(ctx)
+		qrChan, err := client.GetQRChannel(context.Background())
 		if err != nil {
 			m.setConnecting(false)
 			_ = m.failSession(ctx, fmt.Sprintf("falha ao abrir QR channel: %v", err))
