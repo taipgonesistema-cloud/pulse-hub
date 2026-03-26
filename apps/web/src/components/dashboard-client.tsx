@@ -38,6 +38,7 @@ import {
 import type {
   AuthUser,
   ChannelRecord,
+  ConversationRecord,
   DashboardOverview,
   MessageRecord,
   SessionRecord,
@@ -92,6 +93,8 @@ type WorkspaceView =
   | 'analytics'
   | 'settings';
 
+type ConversationFilter = 'all' | 'direct' | 'groups' | 'unread';
+
 type Props = {
   initialOverview: DashboardOverview;
 };
@@ -110,7 +113,7 @@ type SessionStreamEvent = {
 
 export function DashboardClient({ initialOverview }: Props) {
   const router = useRouter();
-  const [overview, setOverview] = useState(initialOverview);
+  const [overview, setOverview] = useState(() => sanitizeOverview(initialOverview));
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [activeView, setActiveView] = useState<WorkspaceView>(
@@ -125,6 +128,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [composer, setComposer] = useState('');
   const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all');
   const [typingConversationId, setTypingConversationId] = useState<string | null>(
     null,
   );
@@ -146,12 +150,17 @@ export function DashboardClient({ initialOverview }: Props) {
     [overview.sessions, selectedSessionId],
   );
 
-  const sessionConversations = useMemo(
+  const allSessionConversations = useMemo(
     () =>
       overview.conversations.filter(
         (conversation) => conversation.sessionId === selectedSession?.id,
       ),
     [overview.conversations, selectedSession?.id],
+  );
+
+  const sessionConversations = useMemo(
+    () => filterConversations(allSessionConversations, conversationFilter),
+    [allSessionConversations, conversationFilter],
   );
 
   const selectedConversation = useMemo(
@@ -162,20 +171,35 @@ export function DashboardClient({ initialOverview }: Props) {
     [selectedConversationId, sessionConversations],
   );
 
-  const contacts = useMemo(() => {
-    const seen = new Set<string>();
+  const contacts = useMemo(() => overview.conversations, [overview.conversations]);
 
-    return overview.conversations.filter((conversation) => {
-      const key = `${conversation.participantId}:${conversation.contact}`;
-
-      if (seen.has(key)) {
-        return false;
-      }
-
-      seen.add(key);
-      return true;
-    });
-  }, [overview.conversations]);
+  const conversationFilterOptions = useMemo(
+    () => [
+      {
+        id: 'all' as const,
+        label: 'Todas',
+        count: allSessionConversations.length,
+      },
+      {
+        id: 'direct' as const,
+        label: 'Conversas',
+        count: allSessionConversations.filter((conversation) => !isGroupConversation(conversation))
+          .length,
+      },
+      {
+        id: 'groups' as const,
+        label: 'Grupos',
+        count: allSessionConversations.filter((conversation) => isGroupConversation(conversation))
+          .length,
+      },
+      {
+        id: 'unread' as const,
+        label: 'Nao lidas',
+        count: allSessionConversations.filter((conversation) => conversation.unread > 0).length,
+      },
+    ],
+    [allSessionConversations],
+  );
 
   const activeSessionId = selectedSession?.id ?? null;
   const activeSessionStatus = selectedSession?.status ?? null;
@@ -241,8 +265,8 @@ export function DashboardClient({ initialOverview }: Props) {
       throw new Error('Nao foi possivel atualizar a dashboard.');
     }
 
-    const data = (await response.json()) as DashboardOverview;
-    setOverview(data);
+        const data = (await response.json()) as DashboardOverview;
+        setOverview(sanitizeOverview(data));
   }, []);
 
   const loadMessages = useCallback(
@@ -1090,6 +1114,27 @@ export function DashboardClient({ initialOverview }: Props) {
           )}
         </div>
 
+        <div className="mb-4 flex flex-wrap gap-2 px-2">
+          {conversationFilterOptions.map((option) => {
+            const active = conversationFilter === option.id;
+
+            return (
+              <button
+                key={option.id}
+                className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
+                  active
+                    ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-[var(--primary)]'
+                    : 'border-white/8 bg-white/5 text-[var(--muted)] hover:text-white'
+                }`}
+                onClick={() => setConversationFilter(option.id)}
+                type="button"
+              >
+                {option.label} · {option.count}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="h-[calc(100vh-13.5rem)] space-y-2 overflow-y-auto pr-1 xl:h-[calc(100vh-10.5rem)]">
           {sessionConversations.map((conversation) => {
             const active = selectedConversation?.id === conversation.id;
@@ -1131,6 +1176,9 @@ export function DashboardClient({ initialOverview }: Props) {
                         <MessageCircle className="h-3 w-3" strokeWidth={2.1} />
                         WhatsApp
                       </span>
+                      <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--primary)]">
+                        {isGroupConversation(conversation) ? 'Grupo' : 'Conversa'}
+                      </span>
                       <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
                         {conversation.status}
                       </span>
@@ -1143,7 +1191,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
           {selectedSession && sessionConversations.length === 0 ? (
             <GhostPanel>
-              Session connected. Wait a few seconds or hit refresh to hydrate the queue.
+              Nenhuma conversa encontrada para esse filtro. Troque o filtro ou atualize a fila.
             </GhostPanel>
           ) : null}
         </div>
@@ -1809,4 +1857,76 @@ function formatDateLabel(timestamp: string) {
     month: 'short',
     year: 'numeric',
   });
+}
+
+function sanitizeOverview(overview: DashboardOverview): DashboardOverview {
+  return {
+    ...overview,
+    conversations: dedupeConversations(overview.conversations),
+  };
+}
+
+function dedupeConversations(conversations: ConversationRecord[]) {
+  const deduped = new Map<string, ConversationRecord>();
+
+  for (const conversation of conversations) {
+    const key = [
+      conversation.sessionId,
+      normalizeConversationKey(conversation.participantId || conversation.id),
+    ].join(':');
+    const existing = deduped.get(key);
+
+    if (!existing) {
+      deduped.set(key, conversation);
+      continue;
+    }
+
+    const existingTime = Date.parse(existing.lastMessageAt || '') || 0;
+    const incomingTime = Date.parse(conversation.lastMessageAt || '') || 0;
+    const newest = incomingTime >= existingTime ? conversation : existing;
+    const fallback = newest === conversation ? existing : conversation;
+
+    deduped.set(key, {
+      ...newest,
+      avatarUrl: newest.avatarUrl || fallback.avatarUrl,
+      preview: newest.preview || fallback.preview,
+      unread: Math.max(existing.unread, conversation.unread),
+      messages: newest.messages.length > 0 ? newest.messages : fallback.messages,
+    });
+  }
+
+  return Array.from(deduped.values()).sort((left, right) => {
+    const leftTime = Date.parse(left.lastMessageAt || '') || 0;
+    const rightTime = Date.parse(right.lastMessageAt || '') || 0;
+
+    if (leftTime === rightTime) {
+      return left.contact.localeCompare(right.contact, 'pt-BR');
+    }
+
+    return rightTime - leftTime;
+  });
+}
+
+function filterConversations(
+  conversations: ConversationRecord[],
+  filter: ConversationFilter,
+) {
+  switch (filter) {
+    case 'direct':
+      return conversations.filter((conversation) => !isGroupConversation(conversation));
+    case 'groups':
+      return conversations.filter((conversation) => isGroupConversation(conversation));
+    case 'unread':
+      return conversations.filter((conversation) => conversation.unread > 0);
+    default:
+      return conversations;
+  }
+}
+
+function isGroupConversation(conversation: ConversationRecord) {
+  return conversation.participantId.endsWith('@g.us') || conversation.id.endsWith('@g.us');
+}
+
+function normalizeConversationKey(value: string) {
+  return value.trim().toLowerCase();
 }
