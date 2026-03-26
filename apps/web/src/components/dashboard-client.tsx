@@ -27,6 +27,7 @@ import {
   Wifi,
 } from 'lucide-react';
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -125,7 +126,6 @@ export function DashboardClient({ initialOverview }: Props) {
   const [selectedConversationId, setSelectedConversationId] = useState(
     initialOverview.conversations[0]?.id ?? '',
   );
-  const [composer, setComposer] = useState('');
   const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all');
@@ -633,18 +633,19 @@ export function DashboardClient({ initialOverview }: Props) {
     });
   };
 
-  const sendMessage = () => {
-    if (!selectedSession || !selectedConversation || !composer.trim()) {
-      return;
+  const sendMessage = useCallback((text: string) => {
+    if (!selectedSession || !selectedConversation || !text.trim()) {
+      return Promise.resolve(false);
     }
 
+    const payload = text.trim();
     runAction(async () => {
       const response = await fetch(
         `${apiUrl}/whatsapp/sessions/${selectedSession.id}/conversations/${selectedConversation.id}/messages`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ body: composer, author: 'Operador' }),
+          body: JSON.stringify({ body: payload, author: 'Operador' }),
         },
       );
 
@@ -652,11 +653,11 @@ export function DashboardClient({ initialOverview }: Props) {
         throw new Error('Nao foi possivel enviar a mensagem.');
       }
 
-      setComposer('');
       await loadMessages(selectedSession.id, selectedConversation.id);
       await loadOverview();
     });
-  };
+    return Promise.resolve(true);
+  }, [loadMessages, loadOverview, selectedConversation, selectedSession]);
 
   if (!isAuthReady) {
     return (
@@ -667,10 +668,6 @@ export function DashboardClient({ initialOverview }: Props) {
       </main>
     );
   }
-
-  const applyQuickReply = (reply: string) => {
-    setComposer(reply);
-  };
 
   const activeViewLabel =
     navigationItems.find((item) => item.id === activeView)?.label ?? 'Conversations';
@@ -1296,51 +1293,12 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
 
             <div className="border-t border-white/5 bg-[var(--surface-low)]/45 px-4 py-4 backdrop-blur-xl md:px-6">
-              <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-                {quickReplies.map((reply) => (
-                  <button
-                    key={reply}
-                    className="shrink-0 rounded-full bg-[var(--surface-highest)] px-4 py-2 text-[11px] font-medium text-zinc-300 transition hover:text-white"
-                    onClick={() => applyQuickReply(reply)}
-                    type="button"
-                  >
-                    {reply}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-3 rounded-[30px] bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-18px_rgba(0,0,0,0.9)]">
-                <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
-                  <Plus className="h-5 w-5" strokeWidth={2.1} />
-                </button>
-                <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
-                  <Smile className="h-5 w-5" strokeWidth={2.1} />
-                </button>
-                <input
-                  className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
-                  onChange={(event) => setComposer(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
-                      return;
-                    }
-
-                    event.preventDefault();
-                    sendMessage();
-                  }}
-                  placeholder="Type a message..."
-                  value={composer}
-                />
-                <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
-                  <Mic className="h-5 w-5" strokeWidth={2.1} />
-                </button>
-                <button
-                  className="grid h-12 w-12 place-items-center rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] text-black shadow-[0_0_22px_rgba(127,175,255,0.32)] transition hover:scale-105"
-                  onClick={sendMessage}
-                  type="button"
-                >
-                  <Send className="h-5 w-5" strokeWidth={2.2} />
-                </button>
-              </div>
+              <ConversationComposer
+                conversationKey={`${selectedSession.id}:${selectedConversation?.id ?? 'none'}`}
+                disabled={!selectedConversation || isPending}
+                onSend={sendMessage}
+                quickReplies={quickReplies}
+              />
             </div>
           </>
         ) : (
@@ -1691,7 +1649,93 @@ function AvatarBadge({
   );
 }
 
-function MessageBubble({
+function ConversationComposer({
+  conversationKey,
+  disabled,
+  onSend,
+  quickReplies,
+}: {
+  conversationKey: string;
+  disabled: boolean;
+  onSend: (text: string) => Promise<boolean>;
+  quickReplies: string[];
+}) {
+  const [draft, setDraft] = useState('');
+
+  useEffect(() => {
+    setDraft('');
+  }, [conversationKey]);
+
+  const submit = useCallback(async () => {
+    if (disabled) {
+      return;
+    }
+
+    const payload = draft.trim();
+    if (!payload) {
+      return;
+    }
+
+    const sent = await onSend(payload);
+    if (sent) {
+      setDraft('');
+    }
+  }, [disabled, draft, onSend]);
+
+  return (
+    <>
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+        {quickReplies.map((reply) => (
+          <button
+            key={reply}
+            className="shrink-0 rounded-full bg-[var(--surface-highest)] px-4 py-2 text-[11px] font-medium text-zinc-300 transition hover:text-white"
+            onClick={() => setDraft(reply)}
+            type="button"
+          >
+            {reply}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3 rounded-[30px] bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-18px_rgba(0,0,0,0.9)]">
+        <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
+          <Plus className="h-5 w-5" strokeWidth={2.1} />
+        </button>
+        <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
+          <Smile className="h-5 w-5" strokeWidth={2.1} />
+        </button>
+        <input
+          className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+          disabled={disabled}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
+              return;
+            }
+
+            event.preventDefault();
+            void submit();
+          }}
+          placeholder={disabled ? 'Selecione uma conversa...' : 'Type a message...'}
+          value={draft}
+        />
+        <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
+          <Mic className="h-5 w-5" strokeWidth={2.1} />
+        </button>
+        <button
+          className="grid h-12 w-12 place-items-center rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] text-black shadow-[0_0_22px_rgba(127,175,255,0.32)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={disabled || !draft.trim()}
+          onClick={() => void submit()}
+          type="button"
+        >
+          <Send className="h-5 w-5" strokeWidth={2.2} />
+        </button>
+      </div>
+    </>
+  );
+}
+
+const MessageBubble = memo(function MessageBubble({
   message,
   avatarUrl,
 }: {
@@ -1725,7 +1769,7 @@ function MessageBubble({
       </div>
     </div>
   );
-}
+});
 
 function ProfileSection({
   title,
