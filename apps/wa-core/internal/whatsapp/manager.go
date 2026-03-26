@@ -424,6 +424,35 @@ func (m *Manager) ResolveConversationJID(ctx context.Context, chatJID string) (s
 	return parsed.String(), nil
 }
 
+func (m *Manager) CanonicalConversationJID(ctx context.Context, chatJID string) (string, error) {
+	parsed, err := types.ParseJID(strings.TrimSpace(chatJID))
+	if err != nil {
+		return "", fmt.Errorf("invalid jid: %w", err)
+	}
+	parsed = parsed.ToNonAD()
+
+	if parsed.Server != types.HiddenUserServer {
+		return parsed.String(), nil
+	}
+
+	m.mu.RLock()
+	client := m.client
+	m.mu.RUnlock()
+	if client == nil || client.Store == nil || client.Store.LIDs == nil {
+		return parsed.String(), nil
+	}
+
+	pn, err := client.Store.LIDs.GetPNForLID(ctx, parsed)
+	if err != nil {
+		return "", fmt.Errorf("resolve canonical jid: %w", err)
+	}
+	if !pn.IsEmpty() {
+		return pn.ToNonAD().String(), nil
+	}
+
+	return parsed.String(), nil
+}
+
 func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*models.Message, error) {
 	text := strings.TrimSpace(req.Text)
 	if text == "" {

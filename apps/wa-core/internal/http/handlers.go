@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -545,7 +546,16 @@ func (a *API) sessionToCompat(ctx context.Context, session *models.Session) (mod
 
 	waiting := 0
 	unread := 0
+	seen := make(map[string]struct{}, len(chats))
 	for _, chat := range chats {
+		canonicalJID, err := a.manager.CanonicalConversationJID(ctx, chat.JID)
+		if err != nil {
+			canonicalJID = chat.JID
+		}
+		if _, ok := seen[canonicalJID]; ok {
+			continue
+		}
+		seen[canonicalJID] = struct{}{}
 		if chat.UnreadCount > 0 {
 			waiting++
 		}
@@ -597,20 +607,15 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 		contactMap[contact.JID] = contact
 	}
 
-	conversations := make([]models.ConversationRecord, 0, len(chats))
-	seenConversationIDs := make(map[string]struct{}, len(chats))
+	conversationsByID := make(map[string]models.ConversationRecord, len(chats))
 	for _, chat := range chats {
-		canonicalJID, err := a.manager.ResolveConversationJID(ctx, chat.JID)
+		canonicalJID, err := a.manager.CanonicalConversationJID(ctx, chat.JID)
 		if err != nil {
 			canonicalJID = chat.JID
 		}
 		if !isVisibleConversationJID(canonicalJID) {
 			continue
 		}
-		if _, exists := seenConversationIDs[canonicalJID]; exists {
-			continue
-		}
-		seenConversationIDs[canonicalJID] = struct{}{}
 
 		contact := contactMap[canonicalJID]
 		if contact.JID == "" {
@@ -625,7 +630,7 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 			name = chat.JID
 		}
 
-		conversations = append(conversations, models.ConversationRecord{
+		candidate := models.ConversationRecord{
 			ID:            canonicalJID,
 			SessionID:     session.ID,
 			SessionName:   session.Name,
@@ -640,8 +645,28 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 			Preview:       fallbackText(chat.LastMessageText, "Conversa sincronizada."),
 			LastMessageAt: fallbackText(chat.LastMessageAt, session.UpdatedAt),
 			Messages:      []models.MessageRecord{},
-		})
+		}
+
+		existing, ok := conversationsByID[canonicalJID]
+		if !ok {
+			conversationsByID[canonicalJID] = candidate
+			continue
+		}
+
+		merged := mergeConversationRecords(existing, candidate)
+		conversationsByID[canonicalJID] = merged
 	}
+
+	conversations := make([]models.ConversationRecord, 0, len(conversationsByID))
+	for _, conversation := range conversationsByID {
+		conversations = append(conversations, conversation)
+	}
+	sort.Slice(conversations, func(i, j int) bool {
+		if conversations[i].LastMessageAt == conversations[j].LastMessageAt {
+			return conversations[i].Contact < conversations[j].Contact
+		}
+		return conversations[i].LastMessageAt > conversations[j].LastMessageAt
+	})
 
 	return conversations, nil
 }
@@ -726,6 +751,34 @@ func waitingLabel(timestamp string) string {
 	default:
 		return fmt.Sprintf("%dh", int(delta.Hours()))
 	}
+}
+
+func mergeConversationRecords(current, incoming models.ConversationRecord) models.ConversationRecord {
+	keep := current
+	replace := incoming
+	if incoming.LastMessageAt < current.LastMessageAt {
+		keep = incoming
+		replace = current
+	}
+
+	keep.Unread = max(current.Unread, incoming.Unread)
+	if keep.AvatarURL == "" {
+		keep.AvatarURL = replace.AvatarURL
+	}
+	if strings.TrimSpace(keep.Preview) == "" {
+		keep.Preview = replace.Preview
+	}
+	if strings.TrimSpace(keep.Contact) == "" {
+		keep.Contact = replace.Contact
+	}
+	return keep
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func fallbackText(value, fallback string) string {
