@@ -138,6 +138,7 @@ export function DashboardClient({ initialOverview }: Props) {
   );
   const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all');
   const [contactsFilter, setContactsFilter] = useState<ConversationFilter>('all');
   const [contactsAudienceFilter, setContactsAudienceFilter] = useState<'all' | 'verified'>('all');
@@ -591,6 +592,9 @@ export function DashboardClient({ initialOverview }: Props) {
           };
         });
       } finally {
+        setPendingConversationId((current) =>
+          current === conversationId ? null : current,
+        );
         if (options?.showLoading ?? true) {
           setIsLoadingMessages(false);
         }
@@ -1013,6 +1017,17 @@ export function DashboardClient({ initialOverview }: Props) {
     },
     [loadMessages, loadOverview, selectedConversation, selectedSession],
   );
+
+  const openConversation = useCallback((conversationId: string) => {
+    if (!conversationId || conversationId === selectedConversationId) {
+      return;
+    }
+
+    setPendingConversationId(conversationId);
+    setTypingConversationId(null);
+    setIsLoadingMessages(true);
+    setSelectedConversationId(conversationId);
+  }, [selectedConversationId]);
 
   if (!isAuthReady) {
     return (
@@ -1996,7 +2011,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
         <div className="h-[calc(100vh-11.5rem)] space-y-1.5 overflow-y-auto pr-1">
           {sessionConversations.map((conversation) => {
-            const active = selectedConversation?.id === conversation.id;
+            const active = (pendingConversationId ?? selectedConversation?.id) === conversation.id;
 
             return (
               <button
@@ -2006,7 +2021,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     ? 'bg-[var(--surface-highest)] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]'
                     : 'hover:bg-white/5'
                 }`}
-                onClick={() => setSelectedConversationId(conversation.id)}
+                onClick={() => openConversation(conversation.id)}
                 type="button"
               >
                 <div className="flex gap-3">
@@ -2091,41 +2106,43 @@ export function DashboardClient({ initialOverview }: Props) {
               className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-4"
               onScroll={handleMessagesScroll}
             >
-              <div className="mx-auto flex max-w-none flex-col gap-4">
-                {isLoadingMessages ? <GhostPanel>Loading conversation history...</GhostPanel> : null}
-
-                {messages.map((message) => (
-                  <MessageBubble
-                    key={message.id}
-                    avatarUrl={selectedConversation?.avatarUrl}
-                    message={message}
-                  />
-                ))}
-
-                {typingConversationId === selectedConversation?.id ? (
-                  <div className="flex max-w-[80%] gap-4">
-                    <AvatarBadge
-                      label={selectedConversation.contact}
-                      small
-                      src={selectedConversation.avatarUrl}
+              {isLoadingMessages ? (
+                <ConversationLoadingState contact={selectedConversation?.contact} />
+              ) : (
+                <div className="mx-auto flex max-w-none flex-col gap-4">
+                  {messages.map((message) => (
+                    <MessageBubble
+                      key={message.id}
+                      avatarUrl={selectedConversation?.avatarUrl}
+                      message={message}
                     />
-                    <div className="glass-panel rounded-[26px] rounded-tl-none px-5 py-4 text-sm text-[var(--muted)]">
-                      <div className="flex items-center gap-3">
-                        <span>digitando</span>
-                        <span className="flex gap-1">
-                          <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)] [animation-delay:-0.2s]" />
-                          <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)] [animation-delay:-0.1s]" />
-                          <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)]" />
-                        </span>
+                  ))}
+
+                  {typingConversationId === selectedConversation?.id ? (
+                    <div className="flex max-w-[80%] gap-4">
+                      <AvatarBadge
+                        label={selectedConversation.contact}
+                        small
+                        src={selectedConversation.avatarUrl}
+                      />
+                      <div className="glass-panel rounded-[26px] rounded-tl-none px-5 py-4 text-sm text-[var(--muted)]">
+                        <div className="flex items-center gap-3">
+                          <span>digitando</span>
+                          <span className="flex gap-1">
+                            <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)] [animation-delay:-0.2s]" />
+                            <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)] [animation-delay:-0.1s]" />
+                            <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)]" />
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
 
-                {!isLoadingMessages && messages.length === 0 ? (
-                  <GhostPanel>Open a real chat thread to load the message timeline here.</GhostPanel>
-                ) : null}
-              </div>
+                  {messages.length === 0 ? (
+                    <GhostPanel>Open a real chat thread to load the message timeline here.</GhostPanel>
+                  ) : null}
+                </div>
+              )}
             </div>
 
             <div className="border-t border-white/5 bg-[var(--surface-low)]/45 px-3 py-3 backdrop-blur-xl md:px-4">
@@ -2715,6 +2732,38 @@ function WorkspaceLoadingScreen({ targetView }: { targetView: WorkspaceView }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function ConversationLoadingState({ contact }: { contact?: string }) {
+  return (
+    <div className="grid h-full place-items-center">
+      <div className="flex w-full max-w-3xl flex-col items-center justify-center gap-8 px-6 py-10 text-center">
+        <div className="relative flex items-center justify-center">
+          <div className="h-14 w-14 animate-spin rounded-full border-4 border-white/8 border-t-[var(--primary)]" />
+          <div className="absolute h-8 w-8 rounded-full bg-[var(--surface-low)]" />
+          <div className="absolute h-2 w-2 rounded-full bg-[var(--tertiary)]" />
+        </div>
+
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+            Loading conversation
+          </p>
+          <h3 className="mt-3 text-2xl font-semibold text-white">
+            {contact || 'Abrindo chat'}
+          </h3>
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            Sincronizando timeline, anexos e estado de leitura em tempo real...
+          </p>
+        </div>
+
+        <div className="w-full space-y-4">
+          <div className="ml-auto h-24 w-[56%] animate-pulse rounded-[1.5rem] rounded-tr-none bg-white/[0.05]" />
+          <div className="mr-auto h-16 w-[44%] animate-pulse rounded-[1.5rem] rounded-tl-none bg-white/[0.04]" />
+          <div className="ml-auto h-28 w-[62%] animate-pulse rounded-[1.5rem] rounded-tr-none bg-white/[0.05]" />
+        </div>
+      </div>
+    </div>
   );
 }
 
