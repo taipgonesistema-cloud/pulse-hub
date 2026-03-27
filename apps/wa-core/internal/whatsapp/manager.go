@@ -886,6 +886,14 @@ func (m *Manager) handleEvent(evt interface{}) {
 		m.handlePicture(&event)
 	case *appstateevents.Picture:
 		m.handlePicture(event)
+	case appstateevents.GroupInfo:
+		m.handleGroupInfo(&event)
+	case *appstateevents.GroupInfo:
+		m.handleGroupInfo(event)
+	case appstateevents.JoinedGroup:
+		m.handleJoinedGroup(&event)
+	case *appstateevents.JoinedGroup:
+		m.handleJoinedGroup(event)
 	}
 }
 
@@ -1008,6 +1016,13 @@ func (m *Manager) handleHistorySync(evt *appstateevents.HistorySync) {
 		}
 		hadChat = true
 
+		preferredName := bestHistoryConversationName(conversation, chatJID.String())
+		if preferredName != "" {
+			if err := m.upsertConversationIdentity(context.Background(), chatJID.String(), preferredName, strings.HasSuffix(chatJID.String(), "@g.us")); err != nil {
+				m.logger.Warn("sync conversation identity failed", "chat_jid", chatJID.String(), "error", err)
+			}
+		}
+
 		if err := m.ensureChatRecord(context.Background(), chatJID.String(), "", time.Now(), false); err != nil {
 			m.logger.Warn("ensure chat from history failed", "chat_jid", chatJID.String(), "error", err)
 		}
@@ -1085,6 +1100,38 @@ func (m *Manager) handlePicture(evt *appstateevents.Picture) {
 	}
 	if err := m.refreshProfilePhoto(ctx, evt.JID.String(), evt.PictureID, false); err != nil {
 		m.logger.Warn("refresh picture failed", "jid", evt.JID.String(), "error", err)
+	}
+}
+
+func (m *Manager) handleGroupInfo(evt *appstateevents.GroupInfo) {
+	if evt == nil {
+		return
+	}
+	name := strings.TrimSpace(evt.Notify)
+	if evt.Name != nil && strings.TrimSpace(evt.Name.Name) != "" {
+		name = strings.TrimSpace(evt.Name.Name)
+	}
+	if name == "" {
+		return
+	}
+	if err := m.upsertConversationIdentity(context.Background(), evt.JID.String(), name, true); err != nil {
+		m.logger.Warn("sync group info name failed", "jid", evt.JID.String(), "error", err)
+	}
+}
+
+func (m *Manager) handleJoinedGroup(evt *appstateevents.JoinedGroup) {
+	if evt == nil {
+		return
+	}
+	name := strings.TrimSpace(evt.Notify)
+	if strings.TrimSpace(evt.Name) != "" {
+		name = strings.TrimSpace(evt.Name)
+	}
+	if name == "" {
+		return
+	}
+	if err := m.upsertConversationIdentity(context.Background(), evt.JID.String(), name, true); err != nil {
+		m.logger.Warn("sync joined group name failed", "jid", evt.JID.String(), "error", err)
 	}
 }
 
@@ -1267,10 +1314,63 @@ func (m *Manager) resolveAuthor(ctx context.Context, chatJID, senderJID string, 
 }
 
 func (m *Manager) resolveChatName(ctx context.Context, chatJID string) string {
+	if chat, err := m.store.GetChat(ctx, chatJID); err == nil && chat != nil && isMeaningfulDisplayName(chat.Name, chatJID) {
+		return chat.Name
+	}
 	if contact, err := m.store.GetContact(ctx, chatJID); err == nil && contact != nil && contact.DisplayName != "" {
 		return contact.DisplayName
 	}
 	return localPart(chatJID)
+}
+
+func (m *Manager) upsertConversationIdentity(ctx context.Context, chatJID, preferredName string, isGroup bool) error {
+	preferredName = normalizePreferredName(preferredName)
+	if preferredName == "" || !isMeaningfulDisplayName(preferredName, chatJID) {
+		return nil
+	}
+
+	chat, err := m.store.GetChat(ctx, chatJID)
+	if err != nil {
+		return err
+	}
+	if chat == nil {
+		chat = &models.Chat{
+			JID:        chatJID,
+			ContactJID: chatJID,
+			IsGroup:    isGroup,
+			UpdatedAt:  models.NowString(),
+		}
+	}
+	if shouldReplaceDisplayName(chat.Name, preferredName, chatJID) {
+		chat.Name = preferredName
+	}
+	chat.UpdatedAt = models.NowString()
+	if _, err := m.store.UpsertChat(ctx, *chat); err != nil {
+		return err
+	}
+
+	if !isGroup {
+		existingContact, err := m.store.GetContact(ctx, chatJID)
+		if err != nil {
+			return err
+		}
+		contact := models.Contact{
+			JID:         chatJID,
+			Phone:       fallbackPhone(chatJID, ""),
+			DisplayName: preferredName,
+			UpdatedAt:   models.NowString(),
+		}
+		if existingContact != nil {
+			contact = *existingContact
+			if shouldReplaceDisplayName(existingContact.DisplayName, preferredName, chatJID) {
+				contact.DisplayName = preferredName
+			}
+			contact.UpdatedAt = models.NowString()
+		}
+		return m.store.UpsertContact(ctx, contact)
+	}
+
+	return nil
 }
 
 func (m *Manager) broadcast(event models.RealtimeEvent) {
@@ -1569,10 +1669,83 @@ func defaultAckStatus(fromMe bool) string {
 	return "received"
 }
 
+func bestHistoryConversationName(conversation *waHistorySync.Conversation, chatJID string) string {
+	if conversation == nil {
+		return ""
+	}
+	for _, candidate := range []string{
+		conversation.GetDisplayName(),
+		conversation.GetName(),
+		conversation.GetUsername(),
+		conversation.GetDescription(),
+	} {
+		candidate = normalizePreferredName(candidate)
+		if isMeaningfulDisplayName(candidate, chatJID) {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func normalizePreferredName(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.Join(strings.Fields(value), " ")
+	return value
+}
+
+func isMeaningfulDisplayName(value, jid string) bool {
+	value = normalizePreferredName(value)
+	if value == "" {
+		return false
+	}
+	local := localPart(jid)
+	if value == jid || value == local {
+		return false
+	}
+	if strings.HasSuffix(jid, "@s.whatsapp.net") && isMostlyNumeric(value) {
+		return false
+	}
+	return true
+}
+
+func shouldReplaceDisplayName(current, candidate, jid string) bool {
+	current = normalizePreferredName(current)
+	candidate = normalizePreferredName(candidate)
+	if !isMeaningfulDisplayName(candidate, jid) {
+		return false
+	}
+	if !isMeaningfulDisplayName(current, jid) {
+		return true
+	}
+	if len(candidate) > len(current) && !isMostlyNumeric(candidate) {
+		return true
+	}
+	return false
+}
+
+func isMostlyNumeric(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	digits := 0
+	letters := 0
+	for _, r := range value {
+		switch {
+		case r >= '0' && r <= '9':
+			digits++
+		case (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z'):
+			letters++
+		}
+	}
+	return digits > 0 && letters == 0
+}
+
 func contactDisplayName(jid, firstName, fullName, pushName, businessName, redactedPhone string) string {
 	for _, value := range []string{fullName, firstName, pushName, businessName, redactedPhone} {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
+		value = normalizePreferredName(value)
+		if isMeaningfulDisplayName(value, jid) {
+			return value
 		}
 	}
 	return localPart(jid)
