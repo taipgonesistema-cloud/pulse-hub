@@ -107,12 +107,19 @@ func (s *Store) migrate(ctx context.Context) error {
 		author TEXT NOT NULL DEFAULT '',
 		from_me BOOLEAN NOT NULL DEFAULT FALSE,
 		ack_status TEXT NOT NULL DEFAULT '',
+		kind TEXT NOT NULL DEFAULT 'text',
+		mime_type TEXT NOT NULL DEFAULT '',
+		file_name TEXT NOT NULL DEFAULT '',
 		text TEXT NOT NULL,
 		raw_json TEXT NOT NULL DEFAULT '',
 		timestamp TEXT NOT NULL,
 		created_at TEXT NOT NULL,
 		CONSTRAINT fk_chat FOREIGN KEY(chat_jid) REFERENCES chats(jid) ON DELETE CASCADE
 	);
+
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'text';
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT '';
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT NOT NULL DEFAULT '';
 
 	CREATE INDEX IF NOT EXISTS idx_contacts_display_name ON contacts(display_name);
 	CREATE INDEX IF NOT EXISTS idx_chats_last_message_at ON chats(last_message_at DESC);
@@ -455,10 +462,10 @@ func (s *Store) SaveMessage(ctx context.Context, message models.Message) (bool, 
 
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO messages (
-			id, chat_jid, sender_jid, author, from_me, ack_status, text, raw_json,
-			timestamp, created_at
+			id, chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type,
+			file_name, text, raw_json, timestamp, created_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		ON CONFLICT (id) DO NOTHING
 	`,
 		message.ID,
@@ -467,6 +474,9 @@ func (s *Store) SaveMessage(ctx context.Context, message models.Message) (bool, 
 		message.Author,
 		message.FromMe,
 		message.AckStatus,
+		message.Kind,
+		message.MimeType,
+		message.FileName,
 		message.Text,
 		message.RawJSON,
 		message.Timestamp,
@@ -488,18 +498,24 @@ func (s *Store) SaveMessage(ctx context.Context, message models.Message) (bool, 
 				author = CASE WHEN $2 = '' THEN author ELSE $2 END,
 				from_me = CASE WHEN from_me = TRUE THEN TRUE ELSE $3 END,
 				ack_status = CASE WHEN $4 = '' THEN ack_status ELSE $4 END,
+				kind = CASE WHEN $5 = '' THEN kind ELSE $5 END,
+				mime_type = CASE WHEN $6 = '' THEN mime_type ELSE $6 END,
+				file_name = CASE WHEN $7 = '' THEN file_name ELSE $7 END,
 				text = CASE
-					WHEN ($5 = '' OR $5 = '[midia]') AND text <> '' AND text <> '[midia]' THEN text
-					ELSE $5
+					WHEN ($8 = '' OR $8 = '[midia]') AND text <> '' AND text <> '[midia]' THEN text
+					ELSE $8
 				END,
-				raw_json = CASE WHEN $6 = '' THEN raw_json ELSE $6 END,
-				timestamp = CASE WHEN $7 = '' THEN timestamp ELSE $7 END
-			WHERE id = $8
+				raw_json = CASE WHEN $9 = '' THEN raw_json ELSE $9 END,
+				timestamp = CASE WHEN $10 = '' THEN timestamp ELSE $10 END
+			WHERE id = $11
 		`,
 			message.SenderJID,
 			message.Author,
 			message.FromMe,
 			message.AckStatus,
+			message.Kind,
+			message.MimeType,
+			message.FileName,
 			message.Text,
 			message.RawJSON,
 			message.Timestamp,
@@ -541,7 +557,7 @@ func (s *Store) SaveMessage(ctx context.Context, message models.Message) (bool, 
 
 func (s *Store) ListMessagesByChat(ctx context.Context, chatJID string) ([]models.Message, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, chat_jid, sender_jid, author, from_me, ack_status, text, raw_json, timestamp
+		SELECT id, chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type, file_name, text, raw_json, timestamp
 		FROM messages
 		WHERE chat_jid = $1
 		ORDER BY timestamp ASC, id ASC
@@ -561,6 +577,9 @@ func (s *Store) ListMessagesByChat(ctx context.Context, chatJID string) ([]model
 			&message.Author,
 			&message.FromMe,
 			&message.AckStatus,
+			&message.Kind,
+			&message.MimeType,
+			&message.FileName,
 			&message.Text,
 			&message.RawJSON,
 			&message.Timestamp,
@@ -571,6 +590,37 @@ func (s *Store) ListMessagesByChat(ctx context.Context, chatJID string) ([]model
 	}
 
 	return messages, rows.Err()
+}
+
+func (s *Store) GetMessageByID(ctx context.Context, messageID string) (*models.Message, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type, file_name, text, raw_json, timestamp
+		FROM messages
+		WHERE id = $1
+	`, messageID)
+
+	var message models.Message
+	if err := row.Scan(
+		&message.ID,
+		&message.ChatJID,
+		&message.SenderJID,
+		&message.Author,
+		&message.FromMe,
+		&message.AckStatus,
+		&message.Kind,
+		&message.MimeType,
+		&message.FileName,
+		&message.Text,
+		&message.RawJSON,
+		&message.Timestamp,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get message %s: %w", messageID, err)
+	}
+
+	return &message, nil
 }
 
 func (s *Store) ListUnreadMessageGroupsByChat(ctx context.Context, chatJID string) (map[string][]models.Message, error) {

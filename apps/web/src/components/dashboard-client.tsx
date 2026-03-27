@@ -23,6 +23,7 @@ import {
   Mic,
   MessageCircle,
   MessageSquarePlus,
+  Paperclip,
   Phone,
   Plus,
   QrCode,
@@ -976,6 +977,42 @@ export function DashboardClient({ initialOverview }: Props) {
     });
     return Promise.resolve(true);
   }, [loadMessages, loadOverview, selectedConversation, selectedSession]);
+
+  const sendMedia = useCallback(
+    (file: File, options?: { sticker?: boolean }) => {
+      if (!selectedSession || !selectedConversation) {
+        return Promise.resolve(false);
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('caption', '');
+      if (options?.sticker) {
+        formData.append('sticker', 'true');
+        formData.append('kind', 'sticker');
+      }
+
+      runAction(async () => {
+        const response = await fetch(
+          `${apiUrl}/whatsapp/sessions/${selectedSession.id}/conversations/${selectedConversation.id}/media`,
+          {
+            method: 'POST',
+            body: formData,
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error('Nao foi possivel enviar a midia.');
+        }
+
+        await loadMessages(selectedSession.id, selectedConversation.id);
+        await loadOverview();
+      });
+
+      return Promise.resolve(true);
+    },
+    [loadMessages, loadOverview, selectedConversation, selectedSession],
+  );
 
   if (!isAuthReady) {
     return (
@@ -2121,6 +2158,7 @@ export function DashboardClient({ initialOverview }: Props) {
               <ConversationComposer
                 conversationKey={`${selectedSession.id}:${selectedConversation?.id ?? 'none'}`}
                 disabled={!selectedConversation || isPending}
+                onSendMedia={sendMedia}
                 onSend={sendMessage}
                 quickReplies={quickReplies}
               />
@@ -2759,14 +2797,18 @@ function ConversationComposer({
   conversationKey,
   disabled,
   onSend,
+  onSendMedia,
   quickReplies,
 }: {
   conversationKey: string;
   disabled: boolean;
   onSend: (text: string) => Promise<boolean>;
+  onSendMedia: (file: File, options?: { sticker?: boolean }) => Promise<boolean>;
   quickReplies: string[];
 }) {
   const [draft, setDraft] = useState('');
+  const mediaInputRef = useRef<HTMLInputElement | null>(null);
+  const stickerInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setDraft('');
@@ -2790,6 +2832,32 @@ function ConversationComposer({
 
   return (
     <>
+      <input
+        ref={mediaInputRef}
+        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,application/*"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            void onSendMedia(file);
+          }
+          event.currentTarget.value = '';
+        }}
+        type="file"
+      />
+      <input
+        ref={stickerInputRef}
+        accept="image/webp,.webp"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            void onSendMedia(file, { sticker: true });
+          }
+          event.currentTarget.value = '';
+        }}
+        type="file"
+      />
       <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
         {quickReplies.map((reply) => (
           <button
@@ -2804,10 +2872,20 @@ function ConversationComposer({
       </div>
 
       <div className="flex items-center gap-3 rounded-[30px] bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-18px_rgba(0,0,0,0.9)]">
-        <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
-          <Plus className="h-5 w-5" strokeWidth={2.1} />
+        <button
+          className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]"
+          disabled={disabled}
+          onClick={() => mediaInputRef.current?.click()}
+          type="button"
+        >
+          <Paperclip className="h-5 w-5" strokeWidth={2.1} />
         </button>
-        <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
+        <button
+          className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]"
+          disabled={disabled}
+          onClick={() => stickerInputRef.current?.click()}
+          type="button"
+        >
           <Smile className="h-5 w-5" strokeWidth={2.1} />
         </button>
         <input
@@ -2855,7 +2933,7 @@ const MessageBubble = memo(function MessageBubble({
       <div className="flex max-w-[80%] gap-4">
         <AvatarBadge label={message.author} small src={avatarUrl} />
         <div className="glass-panel rounded-[26px] rounded-tl-none px-5 py-4">
-          <p className="text-lg leading-9 text-white/95">{message.body}</p>
+          <MessageContent message={message} />
           <span className="mt-3 block text-xs text-zinc-500">
             {formatClock(message.timestamp)}
           </span>
@@ -2867,7 +2945,7 @@ const MessageBubble = memo(function MessageBubble({
   return (
     <div className="ml-auto flex max-w-[80%] justify-end">
       <div className="rounded-[26px] rounded-tr-none border border-[rgba(127,175,255,0.2)] bg-[linear-gradient(180deg,rgba(100,161,255,0.16),rgba(100,161,255,0.08))] px-5 py-4 shadow-[inset_0_0_18px_rgba(127,175,255,0.08)]">
-        <p className="text-lg leading-9 text-white/95">{message.body}</p>
+        <MessageContent message={message} />
         <div className="mt-3 flex items-center justify-end gap-2 text-xs text-[var(--primary)]">
           <span>{formatClock(message.timestamp)}</span>
           <span>••</span>
@@ -2876,6 +2954,65 @@ const MessageBubble = memo(function MessageBubble({
     </div>
   );
 });
+
+function MessageContent({ message }: { message: MessageRecord }) {
+  const mediaSrc = resolveApiAsset(message.mediaUrl);
+
+  switch (message.kind) {
+    case 'image':
+      return (
+        <div className="space-y-3">
+          {mediaSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img alt={message.fileName || message.body} className="max-h-[22rem] rounded-2xl object-cover" src={mediaSrc} />
+          ) : null}
+          {message.body && message.body !== '[imagem]' ? <p className="text-lg leading-8 text-white/95">{message.body}</p> : null}
+        </div>
+      );
+    case 'sticker':
+      return mediaSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img alt={message.fileName || 'Sticker'} className="h-36 w-36 rounded-2xl object-contain" src={mediaSrc} />
+      ) : (
+        <p className="text-lg leading-9 text-white/95">{message.body}</p>
+      );
+    case 'video':
+      return (
+        <div className="space-y-3">
+          {mediaSrc ? (
+            <video className="max-h-[22rem] rounded-2xl" controls playsInline src={mediaSrc} />
+          ) : null}
+          {message.body && message.body !== '[video]' ? <p className="text-lg leading-8 text-white/95">{message.body}</p> : null}
+        </div>
+      );
+    case 'audio':
+      return (
+        <div className="space-y-3">
+          {mediaSrc ? <audio className="w-full min-w-[16rem]" controls src={mediaSrc} /> : null}
+          <p className="text-base leading-8 text-white/90">{message.body || '[audio]'}</p>
+        </div>
+      );
+    case 'document':
+      return (
+        <a
+          className="flex items-center gap-3 rounded-2xl bg-white/5 px-4 py-4 text-left transition hover:bg-white/10"
+          href={mediaSrc || '#'}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-white">
+            <Paperclip className="h-5 w-5" strokeWidth={2.1} />
+          </div>
+          <div>
+            <p className="text-base font-semibold text-white">{message.fileName || 'Documento'}</p>
+            <p className="text-sm text-[var(--muted)]">{message.mimeType || 'Arquivo anexado'}</p>
+          </div>
+        </a>
+      );
+    default:
+      return <p className="text-lg leading-9 text-white/95">{message.body}</p>;
+  }
+}
 
 function ProfileSection({
   title,
@@ -3179,6 +3316,13 @@ function contactChannelHealth(conversations: ConversationRecord[]) {
 }
 
 function resolveAvatarSrc(src?: string | null) {
+  if (!src) {
+    return undefined;
+  }
+  return resolveApiAsset(src);
+}
+
+function resolveApiAsset(src?: string | null) {
   if (!src) {
     return undefined;
   }

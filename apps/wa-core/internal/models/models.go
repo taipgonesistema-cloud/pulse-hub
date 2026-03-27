@@ -66,6 +66,9 @@ type Message struct {
 	Author    string `json:"author"`
 	FromMe    bool   `json:"fromMe"`
 	AckStatus string `json:"ackStatus,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	MimeType  string `json:"mimeType,omitempty"`
+	FileName  string `json:"fileName,omitempty"`
 	Text      string `json:"text"`
 	RawJSON   string `json:"rawJson,omitempty"`
 	Timestamp string `json:"timestamp"`
@@ -80,6 +83,15 @@ type SessionInitRequest struct {
 type SendTextRequest struct {
 	JID  string `json:"jid"`
 	Text string `json:"text"`
+}
+
+type SendMediaRequest struct {
+	JID      string
+	Caption  string
+	FileName string
+	MimeType string
+	Data     []byte
+	Sticker  bool
 }
 
 type SessionQRResponse struct {
@@ -153,7 +165,11 @@ type MessageRecord struct {
 	ID             string `json:"id"`
 	ConversationID string `json:"conversationId"`
 	Direction      string `json:"direction"`
+	Kind           string `json:"kind,omitempty"`
 	Body           string `json:"body"`
+	MediaURL       string `json:"mediaUrl,omitempty"`
+	MimeType       string `json:"mimeType,omitempty"`
+	FileName       string `json:"fileName,omitempty"`
 	Timestamp      string `json:"timestamp"`
 	Author         string `json:"author"`
 }

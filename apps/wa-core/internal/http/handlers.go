@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -58,6 +59,8 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, auth
 	r.Get("/chats", api.handleChats)
 	r.Get("/chats/{jid}/messages", api.handleChatMessages)
 	r.Post("/messages/text", api.handleSendText)
+	r.Post("/messages/media", api.handleSendMedia)
+	r.Get("/messages/{id}/media", api.handleMessageMedia)
 	r.Get("/ws", api.handleWebSocket)
 
 	r.Post("/auth/sign-in", api.handleSignIn)
@@ -71,6 +74,7 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, auth
 		r.Get("/sessions/{id}/conversations", api.handleConversations)
 		r.Get("/sessions/{id}/conversations/{jid}/messages", api.handleConversationMessages)
 		r.Post("/sessions/{id}/conversations/{jid}/messages", api.handleConversationSend)
+		r.Post("/sessions/{id}/conversations/{jid}/media", api.handleConversationSendMedia)
 		r.Post("/sessions/{id}/conversations/{jid}/read", api.handleConversationRead)
 		r.Get("/sessions/{id}/stream", api.handleSessionStream)
 	})
@@ -205,6 +209,44 @@ func (a *API) handleSendText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusCreated, message)
+}
+
+func (a *API) handleSendMedia(w http.ResponseWriter, r *http.Request) {
+	req, err := parseMediaUpload(r, "")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	message, err := a.manager.SendMedia(r.Context(), req)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+	respondJSON(w, http.StatusCreated, toMessageRecord(*message, message.ChatJID))
+}
+
+func (a *API) handleMessageMedia(w http.ResponseWriter, r *http.Request) {
+	messageID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if messageID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "message id is required"})
+		return
+	}
+
+	data, mimeType, fileName, err := a.manager.GetMessageMedia(r.Context(), messageID)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if mimeType != "" {
+		w.Header().Set("Content-Type", mimeType)
+	}
+	if strings.TrimSpace(r.URL.Query().Get("download")) != "" {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", fileName))
+	}
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	_, _ = w.Write(data)
 }
 
 func (a *API) handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -412,6 +454,33 @@ func (a *API) handleConversationSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	message, err := a.manager.SendText(r.Context(), models.SendTextRequest{JID: jid, Text: request.Body})
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, toMessageRecord(*message, jid))
+}
+
+func (a *API) handleConversationSendMedia(w http.ResponseWriter, r *http.Request) {
+	if !a.isDefaultSession(chi.URLParam(r, "id")) {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	jid, err := pathJID(chi.URLParam(r, "jid"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	req, err := parseMediaUpload(r, jid)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	message, err := a.manager.SendMedia(r.Context(), req)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
 		return
@@ -695,11 +764,19 @@ func toMessageRecord(message models.Message, conversationID string) models.Messa
 	if message.FromMe {
 		direction = "outgoing"
 	}
+	mediaURL := ""
+	if message.Kind != "" && message.Kind != "text" && message.Kind != "media" {
+		mediaURL = "/messages/" + url.PathEscape(message.ID) + "/media"
+	}
 	return models.MessageRecord{
 		ID:             message.ID,
 		ConversationID: conversationID,
 		Direction:      direction,
+		Kind:           message.Kind,
 		Body:           message.Text,
+		MediaURL:       mediaURL,
+		MimeType:       message.MimeType,
+		FileName:       message.FileName,
 		Timestamp:      message.Timestamp,
 		Author:         fallbackText(message.Author, "Contato"),
 	}
@@ -845,6 +922,47 @@ func decodeJSON(r *http.Request, target any) error {
 		return err
 	}
 	return nil
+}
+
+func parseMediaUpload(r *http.Request, fallbackJID string) (models.SendMediaRequest, error) {
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		return models.SendMediaRequest{}, fmt.Errorf("parse multipart form: %w", err)
+	}
+
+	jid := strings.TrimSpace(r.FormValue("jid"))
+	if jid == "" {
+		jid = strings.TrimSpace(fallbackJID)
+	}
+	if jid == "" {
+		return models.SendMediaRequest{}, errors.New("jid is required")
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		return models.SendMediaRequest{}, errors.New("file is required")
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return models.SendMediaRequest{}, fmt.Errorf("read upload: %w", err)
+	}
+
+	mimeType := strings.TrimSpace(header.Header.Get("Content-Type"))
+	if mimeType == "" && len(data) > 0 {
+		mimeType = http.DetectContentType(data)
+	}
+
+	sticker := strings.EqualFold(strings.TrimSpace(r.FormValue("sticker")), "true") || strings.TrimSpace(r.FormValue("kind")) == "sticker"
+
+	return models.SendMediaRequest{
+		JID:      jid,
+		Caption:  strings.TrimSpace(r.FormValue("caption")),
+		FileName: header.Filename,
+		MimeType: mimeType,
+		Data:     data,
+		Sticker:  sticker,
+	}, nil
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload any) {

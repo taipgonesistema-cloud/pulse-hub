@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sort"
 	"strings"
 	"sync"
@@ -529,6 +530,7 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 		Author:    author,
 		FromMe:    true,
 		AckStatus: "sent",
+		Kind:      "text",
 		Text:      text,
 		Timestamp: resp.Timestamp.UTC().Format(time.RFC3339),
 	}
@@ -553,6 +555,134 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 	}
 
 	return &message, nil
+}
+
+func (m *Manager) SendMedia(ctx context.Context, req models.SendMediaRequest) (*models.Message, error) {
+	if len(req.Data) == 0 {
+		return nil, errors.New("media file is required")
+	}
+
+	parsedJID, err := types.ParseJID(strings.TrimSpace(req.JID))
+	if err != nil {
+		return nil, fmt.Errorf("invalid jid: %w", err)
+	}
+	parsedJID = parsedJID.ToNonAD()
+	if err := validateSendableJID(parsedJID); err != nil {
+		return nil, err
+	}
+
+	m.mu.RLock()
+	client := m.client
+	connected := client != nil && client.IsConnected()
+	m.mu.RUnlock()
+	if !connected {
+		return nil, errors.New("session is not connected")
+	}
+
+	normalizedJID, err := normalizeSendJID(ctx, client, parsedJID)
+	if err != nil {
+		return nil, err
+	}
+
+	messageProto, kind, mimeType, fileName, displayText, err := buildUploadMessage(client, req)
+	if err != nil {
+		return nil, err
+	}
+
+	messageID := types.MessageID(client.GenerateMessageID())
+	resp, err := client.SendMessage(
+		ctx,
+		normalizedJID,
+		messageProto,
+		whatsmeow.SendRequestExtra{ID: messageID},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("send media: %w", err)
+	}
+
+	message := models.Message{
+		ID:        string(resp.ID),
+		ChatJID:   normalizedJID.String(),
+		SenderJID: ownDeviceJID(client),
+		Author:    "Operador",
+		FromMe:    true,
+		AckStatus: "sent",
+		Kind:      kind,
+		MimeType:  mimeType,
+		FileName:  fileName,
+		Text:      displayText,
+		RawJSON:   marshalProto(messageProto),
+		Timestamp: resp.Timestamp.UTC().Format(time.RFC3339),
+	}
+
+	if err := m.ensureChatRecord(ctx, normalizedJID.String(), displayText, resp.Timestamp, true); err != nil {
+		return nil, err
+	}
+	created, err := m.store.SaveMessage(ctx, message)
+	if err != nil {
+		return nil, err
+	}
+	if created {
+		m.broadcast(models.RealtimeEvent{
+			Kind:       "message.new",
+			ChatJID:    message.ChatJID,
+			MessageID:  message.ID,
+			Direction:  "outgoing",
+			Text:       message.Text,
+			OccurredAt: message.Timestamp,
+		})
+	}
+
+	return &message, nil
+}
+
+func (m *Manager) GetMessageMedia(ctx context.Context, messageID string) ([]byte, string, string, error) {
+	stored, err := m.store.GetMessageByID(ctx, messageID)
+	if err != nil {
+		return nil, "", "", err
+	}
+	if stored == nil {
+		return nil, "", "", errors.New("message not found")
+	}
+	if stored.RawJSON == "" {
+		return nil, "", "", errors.New("message has no stored media payload")
+	}
+
+	m.mu.RLock()
+	client := m.client
+	connected := client != nil && client.IsConnected()
+	m.mu.RUnlock()
+	if !connected {
+		return nil, "", "", errors.New("session is not connected")
+	}
+
+	messageProto := &waE2E.Message{}
+	if err := waProto.Unmarshal([]byte(stored.RawJSON), messageProto); err != nil {
+		return nil, "", "", fmt.Errorf("decode stored message payload: %w", err)
+	}
+	messageProto = unwrapMessageProto(messageProto)
+
+	downloadable := downloadableFromMessage(messageProto)
+	if downloadable == nil {
+		return nil, "", "", errors.New("message has no downloadable media")
+	}
+
+	data, err := client.Download(ctx, downloadable)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("download media: %w", err)
+	}
+
+	mimeType := stored.MimeType
+	if mimeType == "" {
+		mimeType = http.DetectContentType(data)
+	}
+
+	fileName := stored.FileName
+	if fileName == "" {
+		fileName = stored.ID
+	}
+
+	return data, mimeType, fileName, nil
 }
 
 func (m *Manager) MarkChatRead(ctx context.Context, chatJID string) error {
@@ -831,7 +961,8 @@ func (m *Manager) handleRealtimeMessage(evt *appstateevents.Message) {
 		return
 	}
 
-	body, ok := extractDisplayText(evt.Message)
+	evt = evt.UnwrapRaw()
+	body, kind, mimeType, fileName, ok := extractMessagePayload(evt.Message)
 	if !ok {
 		return
 	}
@@ -844,6 +975,9 @@ func (m *Manager) handleRealtimeMessage(evt *appstateevents.Message) {
 		evt.Info.IsFromMe,
 		string(evt.Info.ID),
 		body,
+		kind,
+		mimeType,
+		fileName,
 		evt.Info.Timestamp,
 		raw,
 		true,
@@ -884,7 +1018,8 @@ func (m *Manager) handleHistorySync(evt *appstateevents.HistorySync) {
 				continue
 			}
 
-			body, ok := extractDisplayText(parsed.Message)
+			parsed.Message = unwrapMessageProto(parsed.Message)
+			body, kind, mimeType, fileName, ok := extractMessagePayload(parsed.Message)
 			if !ok {
 				continue
 			}
@@ -896,6 +1031,9 @@ func (m *Manager) handleHistorySync(evt *appstateevents.HistorySync) {
 				parsed.Info.IsFromMe,
 				string(parsed.Info.ID),
 				body,
+				kind,
+				mimeType,
+				fileName,
 				parsed.Info.Timestamp,
 				marshalProto(parsed.Message),
 				false,
@@ -957,6 +1095,9 @@ func (m *Manager) ingestMessage(
 	fromMe bool,
 	messageID string,
 	body string,
+	kind string,
+	mimeType string,
+	fileName string,
 	timestamp time.Time,
 	rawJSON string,
 	broadcast bool,
@@ -977,6 +1118,9 @@ func (m *Manager) ingestMessage(
 		Author:    author,
 		FromMe:    fromMe,
 		AckStatus: defaultAckStatus(fromMe),
+		Kind:      kind,
+		MimeType:  mimeType,
+		FileName:  fileName,
 		Text:      body,
 		RawJSON:   rawJSON,
 		Timestamp: timestamp.UTC().Format(time.RFC3339),
@@ -990,16 +1134,16 @@ func (m *Manager) ingestMessage(
 		return nil
 	}
 
-	kind := "incoming"
+	direction := "incoming"
 	if fromMe {
-		kind = "outgoing"
+		direction = "outgoing"
 	}
 
 	m.broadcast(models.RealtimeEvent{
 		Kind:       "message.new",
 		ChatJID:    chatJID,
 		MessageID:  messageID,
-		Direction:  kind,
+		Direction:  direction,
 		Text:       body,
 		OccurredAt: message.Timestamp,
 	})
@@ -1165,38 +1309,226 @@ func qrDataURL(code string) (string, error) {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(png), nil
 }
 
-func extractDisplayText(message *waE2E.Message) (string, bool) {
+func extractMessagePayload(message *waE2E.Message) (string, string, string, string, bool) {
+	message = unwrapMessageProto(message)
 	if message == nil {
-		return "", false
+		return "", "", "", "", false
 	}
 	switch {
 	case message.GetConversation() != "":
-		return strings.TrimSpace(message.GetConversation()), true
+		return strings.TrimSpace(message.GetConversation()), "text", "text/plain", "", true
 	case message.GetExtendedTextMessage().GetText() != "":
-		return strings.TrimSpace(message.GetExtendedTextMessage().GetText()), true
-	case message.GetImageMessage().GetCaption() != "":
-		return strings.TrimSpace(message.GetImageMessage().GetCaption()), true
-	case message.GetVideoMessage().GetCaption() != "":
-		return strings.TrimSpace(message.GetVideoMessage().GetCaption()), true
-	case message.GetDocumentMessage().GetCaption() != "":
-		return strings.TrimSpace(message.GetDocumentMessage().GetCaption()), true
-	case message.GetImageMessage() != nil,
-		message.GetVideoMessage() != nil,
-		message.GetDocumentMessage() != nil,
-		message.GetAudioMessage() != nil,
-		message.GetStickerMessage() != nil,
-		message.GetContactMessage() != nil,
+		return strings.TrimSpace(message.GetExtendedTextMessage().GetText()), "text", "text/plain", "", true
+	case message.GetImageMessage() != nil:
+		caption := strings.TrimSpace(message.GetImageMessage().GetCaption())
+		if caption == "" {
+			caption = "[imagem]"
+		}
+		return caption, "image", message.GetImageMessage().GetMimetype(), "", true
+	case message.GetVideoMessage() != nil:
+		caption := strings.TrimSpace(message.GetVideoMessage().GetCaption())
+		if caption == "" {
+			caption = "[video]"
+		}
+		return caption, "video", message.GetVideoMessage().GetMimetype(), "", true
+	case message.GetDocumentMessage() != nil:
+		caption := strings.TrimSpace(message.GetDocumentMessage().GetCaption())
+		name := strings.TrimSpace(message.GetDocumentMessage().GetFileName())
+		if caption == "" {
+			caption = name
+		}
+		if caption == "" {
+			caption = "[documento]"
+		}
+		return caption, "document", message.GetDocumentMessage().GetMimetype(), name, true
+	case message.GetAudioMessage() != nil:
+		label := "[audio]"
+		if message.GetAudioMessage().GetPTT() {
+			label = "[voice note]"
+		}
+		return label, "audio", message.GetAudioMessage().GetMimetype(), "", true
+	case message.GetStickerMessage() != nil:
+		return "[figurinha]", "sticker", message.GetStickerMessage().GetMimetype(), "", true
+	case message.GetContactMessage() != nil,
 		message.GetContactsArrayMessage() != nil,
 		message.GetLocationMessage() != nil,
 		message.GetLiveLocationMessage() != nil:
-		return "[midia]", true
+		return "[midia]", "media", "", "", true
 	case message.GetProtocolMessage() != nil,
 		message.GetSenderKeyDistributionMessage() != nil,
 		message.GetReactionMessage() != nil,
 		message.GetPlaceholderMessage() != nil:
-		return "", false
+		return "", "", "", "", false
 	default:
-		return "", false
+		return "", "", "", "", false
+	}
+}
+
+func unwrapMessageProto(message *waE2E.Message) *waE2E.Message {
+	if message == nil {
+		return nil
+	}
+	for {
+		switch {
+		case message.GetDeviceSentMessage().GetMessage() != nil:
+			message = message.GetDeviceSentMessage().GetMessage()
+		case message.GetEphemeralMessage().GetMessage() != nil:
+			message = message.GetEphemeralMessage().GetMessage()
+		case message.GetViewOnceMessage().GetMessage() != nil:
+			message = message.GetViewOnceMessage().GetMessage()
+		case message.GetViewOnceMessageV2().GetMessage() != nil:
+			message = message.GetViewOnceMessageV2().GetMessage()
+		case message.GetViewOnceMessageV2Extension().GetMessage() != nil:
+			message = message.GetViewOnceMessageV2Extension().GetMessage()
+		case message.GetEditedMessage().GetMessage() != nil:
+			message = message.GetEditedMessage().GetMessage()
+		default:
+			return message
+		}
+	}
+}
+
+func downloadableFromMessage(message *waE2E.Message) whatsmeow.DownloadableMessage {
+	message = unwrapMessageProto(message)
+	if message == nil {
+		return nil
+	}
+	switch {
+	case message.GetImageMessage() != nil:
+		return message.GetImageMessage()
+	case message.GetVideoMessage() != nil:
+		return message.GetVideoMessage()
+	case message.GetDocumentMessage() != nil:
+		return message.GetDocumentMessage()
+	case message.GetAudioMessage() != nil:
+		return message.GetAudioMessage()
+	case message.GetStickerMessage() != nil:
+		return message.GetStickerMessage()
+	default:
+		return nil
+	}
+}
+
+func buildUploadMessage(client *whatsmeow.Client, req models.SendMediaRequest) (*waE2E.Message, string, string, string, string, error) {
+	if client == nil {
+		return nil, "", "", "", "", errors.New("session client unavailable")
+	}
+	data := req.Data
+	mimeType := strings.TrimSpace(req.MimeType)
+	if mimeType == "" {
+		mimeType = http.DetectContentType(data)
+	}
+	fileName := strings.TrimSpace(req.FileName)
+	caption := strings.TrimSpace(req.Caption)
+
+	mediaType, kind, err := classifyUpload(mimeType, req.Sticker)
+	if err != nil {
+		return nil, "", "", "", "", err
+	}
+	resp, err := client.Upload(context.Background(), data, mediaType)
+	if err != nil {
+		return nil, "", "", "", "", fmt.Errorf("upload media: %w", err)
+	}
+
+	displayText := caption
+	if displayText == "" {
+		switch kind {
+		case "image":
+			displayText = "[imagem]"
+		case "video":
+			displayText = "[video]"
+		case "audio":
+			displayText = "[audio]"
+		case "sticker":
+			displayText = "[figurinha]"
+		default:
+			if fileName != "" {
+				displayText = fileName
+			} else {
+				displayText = "[documento]"
+			}
+		}
+	}
+
+	commonURL := proto.String(resp.URL)
+	commonPath := proto.String(resp.DirectPath)
+	commonLength := proto.Uint64(resp.FileLength)
+
+	switch kind {
+	case "image":
+		return &waE2E.Message{ImageMessage: &waE2E.ImageMessage{
+			Mimetype:      proto.String(mimeType),
+			Caption:       proto.String(caption),
+			URL:           commonURL,
+			DirectPath:    commonPath,
+			MediaKey:      resp.MediaKey,
+			FileEncSHA256: resp.FileEncSHA256,
+			FileSHA256:    resp.FileSHA256,
+			FileLength:    commonLength,
+		}}, kind, mimeType, fileName, displayText, nil
+	case "video":
+		return &waE2E.Message{VideoMessage: &waE2E.VideoMessage{
+			Mimetype:      proto.String(mimeType),
+			Caption:       proto.String(caption),
+			URL:           commonURL,
+			DirectPath:    commonPath,
+			MediaKey:      resp.MediaKey,
+			FileEncSHA256: resp.FileEncSHA256,
+			FileSHA256:    resp.FileSHA256,
+			FileLength:    commonLength,
+		}}, kind, mimeType, fileName, displayText, nil
+	case "audio":
+		return &waE2E.Message{AudioMessage: &waE2E.AudioMessage{
+			Mimetype:      proto.String(mimeType),
+			PTT:           proto.Bool(false),
+			URL:           commonURL,
+			DirectPath:    commonPath,
+			MediaKey:      resp.MediaKey,
+			FileEncSHA256: resp.FileEncSHA256,
+			FileSHA256:    resp.FileSHA256,
+			FileLength:    commonLength,
+		}}, kind, mimeType, fileName, displayText, nil
+	case "sticker":
+		return &waE2E.Message{StickerMessage: &waE2E.StickerMessage{
+			Mimetype:      proto.String("image/webp"),
+			URL:           commonURL,
+			DirectPath:    commonPath,
+			MediaKey:      resp.MediaKey,
+			FileEncSHA256: resp.FileEncSHA256,
+			FileSHA256:    resp.FileSHA256,
+			FileLength:    commonLength,
+		}}, kind, "image/webp", fileName, displayText, nil
+	default:
+		return &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{
+			Mimetype:      proto.String(mimeType),
+			FileName:      proto.String(fileName),
+			Caption:       proto.String(caption),
+			URL:           commonURL,
+			DirectPath:    commonPath,
+			MediaKey:      resp.MediaKey,
+			FileEncSHA256: resp.FileEncSHA256,
+			FileSHA256:    resp.FileSHA256,
+			FileLength:    commonLength,
+		}}, kind, mimeType, fileName, displayText, nil
+	}
+}
+
+func classifyUpload(mimeType string, sticker bool) (whatsmeow.MediaType, string, error) {
+	if sticker {
+		if mimeType != "image/webp" {
+			return whatsmeow.MediaImage, "", errors.New("stickers must be sent as image/webp")
+		}
+		return whatsmeow.MediaImage, "sticker", nil
+	}
+	switch {
+	case strings.HasPrefix(mimeType, "image/"):
+		return whatsmeow.MediaImage, "image", nil
+	case strings.HasPrefix(mimeType, "video/"):
+		return whatsmeow.MediaVideo, "video", nil
+	case strings.HasPrefix(mimeType, "audio/"):
+		return whatsmeow.MediaAudio, "audio", nil
+	default:
+		return whatsmeow.MediaDocument, "document", nil
 	}
 }
 

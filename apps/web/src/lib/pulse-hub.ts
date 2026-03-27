@@ -19,7 +19,11 @@ export type MessageRecord = {
   id: string;
   conversationId: string;
   direction: 'incoming' | 'outgoing' | 'internal';
+  kind?: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'media';
   body: string;
+  mediaUrl?: string;
+  mimeType?: string;
+  fileName?: string;
   timestamp: string;
   author: string;
 };
