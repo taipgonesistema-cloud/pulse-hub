@@ -164,6 +164,9 @@ export function DashboardClient({ initialOverview }: Props) {
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
   const lastConversationAnchorRef = useRef<string | null>(null);
+  const isDashboardView = activeView === 'dashboard';
+  const isContactsView = activeView === 'contacts';
+  const isConversationsView = activeView === 'conversations';
 
   const selectedSession = useMemo(
     () =>
@@ -173,11 +176,16 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   const allSessionConversations = useMemo(
-    () =>
-      overview.conversations.filter(
+    () => {
+      if (!isConversationsView) {
+        return [] as ConversationRecord[];
+      }
+
+      return overview.conversations.filter(
         (conversation) => conversation.sessionId === selectedSession?.id,
-      ),
-    [overview.conversations, selectedSession?.id],
+      );
+    },
+    [isConversationsView, overview.conversations, selectedSession?.id],
   );
 
   const sessionConversations = useMemo(
@@ -186,16 +194,30 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   const selectedConversation = useMemo(
-    () =>
-      sessionConversations.find(
-        (conversation) => conversation.id === selectedConversationId,
-      ) ?? sessionConversations[0],
-    [selectedConversationId, sessionConversations],
+    () => {
+      if (!isConversationsView) {
+        return undefined;
+      }
+
+      return (
+        sessionConversations.find(
+          (conversation) => conversation.id === selectedConversationId,
+        ) ?? sessionConversations[0]
+      );
+    },
+    [isConversationsView, selectedConversationId, sessionConversations],
   );
 
-  const contacts = useMemo(() => overview.conversations, [overview.conversations]);
+  const contacts = useMemo(
+    () => (isContactsView ? overview.conversations : ([] as ConversationRecord[])),
+    [isContactsView, overview.conversations],
+  );
 
   const filteredContacts = useMemo(() => {
+    if (!isContactsView) {
+      return [] as ConversationRecord[];
+    }
+
     const baseContacts = filterConversations(contacts, contactsFilter);
     const searchFiltered = baseContacts.filter((contact) => {
       const term = contactsSearch.trim().toLowerCase();
@@ -226,15 +248,27 @@ export function DashboardClient({ initialOverview }: Props) {
     contactsChannelFilter,
     contactsFilter,
     contactsSearch,
+    isContactsView,
   ]);
 
   const selectedContact = useMemo(
-    () => filteredContacts.find((contact) => contact.id === selectedContactId) ?? filteredContacts[0],
-    [filteredContacts, selectedContactId],
+    () => {
+      if (!isContactsView) {
+        return undefined;
+      }
+
+      return filteredContacts.find((contact) => contact.id === selectedContactId) ?? filteredContacts[0];
+    },
+    [filteredContacts, isContactsView, selectedContactId],
   );
 
   const conversationFilterOptions = useMemo(
-    () => [
+    () => {
+      if (!isConversationsView) {
+        return [] as Array<{ id: ConversationFilter; label: string; count: number }>;
+      }
+
+      return [
       {
         id: 'all' as const,
         label: 'Todas',
@@ -257,12 +291,18 @@ export function DashboardClient({ initialOverview }: Props) {
         label: 'Nao lidas',
         count: allSessionConversations.filter((conversation) => conversation.unread > 0).length,
       },
-    ],
-    [allSessionConversations],
+      ];
+    },
+    [allSessionConversations, isConversationsView],
   );
 
   const contactFilterOptions = useMemo(
-    () => [
+    () => {
+      if (!isContactsView) {
+        return [] as Array<{ id: ConversationFilter; label: string; count: number }>;
+      }
+
+      return [
       {
         id: 'all' as const,
         label: 'Todos',
@@ -283,8 +323,9 @@ export function DashboardClient({ initialOverview }: Props) {
         label: 'Nao lidos',
         count: contacts.filter((contact) => contact.unread > 0).length,
       },
-    ],
-    [contacts],
+      ];
+    },
+    [contacts, isContactsView],
   );
 
   const activeSessionId = selectedSession?.id ?? null;
@@ -292,13 +333,13 @@ export function DashboardClient({ initialOverview }: Props) {
   const activeConversationId = selectedConversation?.id ?? null;
 
   const dashboardConversations = useMemo(
-    () => overview.conversations.slice(0, 3),
-    [overview.conversations],
+    () => (isDashboardView ? overview.conversations.slice(0, 3) : []),
+    [isDashboardView, overview.conversations],
   );
 
   const dashboardLeaderboard = useMemo(
     () =>
-      overview.conversations.slice(0, 3).map((conversation, index) => ({
+      (isDashboardView ? overview.conversations.slice(0, 3) : []).map((conversation, index) => ({
         id: conversation.id,
         label: conversation.contact,
         avatarUrl: conversation.avatarUrl,
@@ -306,27 +347,42 @@ export function DashboardClient({ initialOverview }: Props) {
         closed: [142, 128, 115][index] ?? 96,
         rank: index + 1,
       })),
-    [overview.conversations],
+    [isDashboardView, overview.conversations],
   );
 
   const queueBreakdown = useMemo(() => {
+    if (!isDashboardView) {
+      return { whatsapp: 0, facebook: 0, instagram: 0 };
+    }
+
     const channels = { whatsapp: 0, facebook: 0, instagram: 0 };
     for (const conversation of overview.conversations) {
       const key = getContactChannelKey(conversation);
       channels[key] += 1;
     }
     return channels;
-  }, [overview.conversations]);
+  }, [isDashboardView, overview.conversations]);
 
   const queueLabel = useMemo(() => {
+    if (!isConversationsView) {
+      return 'No session selected';
+    }
+
     if (!selectedSession) {
       return 'No session selected';
     }
 
     return `${selectedSession.channelName} queue`;
-  }, [selectedSession]);
+  }, [isConversationsView, selectedSession]);
 
   const contactInfo = useMemo(() => {
+    if (!isConversationsView) {
+      return {
+        email: 'contact@pulsehub.local',
+        phone: selectedSession?.phoneNumber ?? 'No phone linked',
+      };
+    }
+
     if (!selectedConversation) {
       return {
         email: 'contact@pulsehub.local',
@@ -342,7 +398,7 @@ export function DashboardClient({ initialOverview }: Props) {
       email: `${safeName}@pulsehub.local`,
       phone: selectedConversation.participantId,
     };
-  }, [selectedConversation, selectedSession?.phoneNumber]);
+  }, [isConversationsView, selectedConversation, selectedSession?.phoneNumber]);
 
   const signOut = useCallback(() => {
     window.localStorage.removeItem('pulse-hub.auth-token');
@@ -487,6 +543,10 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   useEffect(() => {
+    if (!isConversationsView) {
+      return;
+    }
+
     if (!selectedSession) {
       setSelectedConversationId('');
       return;
@@ -499,9 +559,13 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!currentConversationExists) {
       setSelectedConversationId(sessionConversations[0]?.id ?? '');
     }
-  }, [selectedConversationId, selectedSession, sessionConversations]);
+  }, [isConversationsView, selectedConversationId, selectedSession, sessionConversations]);
 
   useEffect(() => {
+    if (!isContactsView) {
+      return;
+    }
+
     const currentContactExists = filteredContacts.some(
       (contact) => contact.id === selectedContactId,
     );
@@ -509,9 +573,13 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!currentContactExists) {
       setSelectedContactId(filteredContacts[0]?.id ?? '');
     }
-  }, [filteredContacts, selectedContactId]);
+  }, [filteredContacts, isContactsView, selectedContactId]);
 
   useEffect(() => {
+    if (!isConversationsView) {
+      return;
+    }
+
     if (!isAuthReady) {
       return;
     }
@@ -558,12 +626,17 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [
     activeConversationId,
     activeSessionId,
+    isConversationsView,
     isAuthReady,
     loadMessages,
     markConversationAsRead,
   ]);
 
   useEffect(() => {
+    if (!isConversationsView) {
+      return;
+    }
+
     if (!activeSessionId || !activeConversationId || activeSessionStatus !== 'active') {
       return;
     }
@@ -579,10 +652,15 @@ export function DashboardClient({ initialOverview }: Props) {
     activeConversationId,
     activeSessionId,
     activeSessionStatus,
+    isConversationsView,
     loadMessages,
   ]);
 
   useEffect(() => {
+    if (!isConversationsView) {
+      return;
+    }
+
     if (!activeSessionId) {
       return;
     }
@@ -656,13 +734,21 @@ export function DashboardClient({ initialOverview }: Props) {
       }
       eventSource.close();
     };
-  }, [activeConversationId, activeSessionId, isAuthReady, loadMessages, loadOverview]);
+  }, [activeConversationId, activeSessionId, isAuthReady, isConversationsView, loadMessages, loadOverview]);
 
   useEffect(() => {
+    if (!isConversationsView) {
+      return;
+    }
+
     shouldStickToBottomRef.current = true;
-  }, [activeConversationId]);
+  }, [activeConversationId, isConversationsView]);
 
   useLayoutEffect(() => {
+    if (!isConversationsView) {
+      return;
+    }
+
     if (!messagesRef.current) {
       return;
     }
@@ -680,7 +766,7 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
-  }, [activeConversationId, activeSessionId, messages, typingConversationId]);
+  }, [activeConversationId, activeSessionId, isConversationsView, messages, typingConversationId]);
 
   const handleMessagesScroll = useCallback(() => {
     const container = messagesRef.current;
