@@ -89,6 +89,8 @@ const quickReplies = [
   'Confirm appointment',
 ];
 
+const composerEmojis = ['🙂', '😂', '😍', '🙏', '🎉', '🔥', '✅', '❤️'];
+
 const navigationItems: Array<{
   id: WorkspaceView;
   label: string;
@@ -2152,7 +2154,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
             <div className="border-t border-white/5 bg-[var(--surface-low)]/45 px-3 py-3 backdrop-blur-xl md:px-4">
               <ConversationComposer
-                conversationKey={`${selectedSession.id}:${selectedConversation?.id ?? 'none'}`}
+                key={`${selectedSession.id}:${selectedConversation?.id ?? 'none'}`}
                 disabled={!selectedConversation || isPending}
                 onSendMedia={sendMedia}
                 onSend={sendMessage}
@@ -2785,15 +2787,12 @@ function AvatarBadge({
   src?: string | null;
   className?: string;
 }) {
-  const [hasError, setHasError] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const sizeClass = small ? 'h-8 w-8 text-xs' : 'h-12 w-12 text-sm';
   const resolvedSrc = resolveAvatarSrc(src);
+  const canRenderImage = Boolean(resolvedSrc) && resolvedSrc !== failedSrc;
 
-  useEffect(() => {
-    setHasError(false);
-  }, [resolvedSrc]);
-
-  if (resolvedSrc && !hasError) {
+  if (canRenderImage && resolvedSrc) {
     return (
       <div
         className={`shrink-0 overflow-hidden rounded-2xl bg-[linear-gradient(135deg,#2f2f2f,#5d5d5d)] ${sizeClass} ${className}`}
@@ -2802,7 +2801,7 @@ function AvatarBadge({
         <img
           alt={label}
           className="h-full w-full object-cover"
-          onError={() => setHasError(true)}
+          onError={() => setFailedSrc(resolvedSrc)}
           referrerPolicy="no-referrer"
           src={resolvedSrc}
         />
@@ -2820,25 +2819,21 @@ function AvatarBadge({
 }
 
 function ConversationComposer({
-  conversationKey,
   disabled,
   onSend,
   onSendMedia,
   quickReplies,
 }: {
-  conversationKey: string;
   disabled: boolean;
   onSend: (text: string) => Promise<boolean>;
   onSendMedia: (file: File, options?: { sticker?: boolean }) => Promise<boolean>;
   quickReplies: string[];
 }) {
   const [draft, setDraft] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
   const stickerInputRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    setDraft('');
-  }, [conversationKey]);
 
   const submit = useCallback(async () => {
     if (disabled) {
@@ -2897,19 +2892,74 @@ function ConversationComposer({
         ))}
       </div>
 
+      {showEmojiPicker ? (
+        <div className="mb-3 flex flex-wrap gap-2 rounded-[26px] border border-white/10 bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.9)]">
+          {composerEmojis.map((emoji) => (
+            <button
+              key={emoji}
+              className="grid h-10 w-10 place-items-center rounded-2xl bg-white/5 text-lg transition hover:bg-white/10"
+              disabled={disabled}
+              onClick={() => {
+                setDraft((current) => `${current}${emoji}`);
+                setShowAttachmentMenu(false);
+              }}
+              type="button"
+            >
+              <span aria-hidden>{emoji}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div className="flex items-center gap-3 rounded-[30px] bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-18px_rgba(0,0,0,0.9)]">
+        <div className="relative">
+          <button
+            aria-label="Abrir anexos"
+            className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]"
+            disabled={disabled}
+            onClick={() => {
+              setShowAttachmentMenu((current) => !current);
+              setShowEmojiPicker(false);
+            }}
+            type="button"
+          >
+            <Paperclip className="h-5 w-5" strokeWidth={2.1} />
+          </button>
+          {showAttachmentMenu ? (
+            <div className="absolute bottom-[calc(100%+0.75rem)] left-0 z-10 w-44 rounded-3xl border border-white/10 bg-[var(--surface-highest)] p-2 shadow-[0_22px_40px_-20px_rgba(0,0,0,0.95)]">
+              <button
+                className="flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm text-zinc-200 transition hover:bg-white/5"
+                onClick={() => {
+                  mediaInputRef.current?.click();
+                  setShowAttachmentMenu(false);
+                }}
+                type="button"
+              >
+                <span>Arquivo</span>
+                <Paperclip className="h-4 w-4" strokeWidth={2.1} />
+              </button>
+              <button
+                className="flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm text-zinc-200 transition hover:bg-white/5"
+                onClick={() => {
+                  stickerInputRef.current?.click();
+                  setShowAttachmentMenu(false);
+                }}
+                type="button"
+              >
+                <span>Figurinha</span>
+                <Smile className="h-4 w-4" strokeWidth={2.1} />
+              </button>
+            </div>
+          ) : null}
+        </div>
         <button
-          className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]"
+          aria-label="Abrir emojis"
+          className={`grid h-11 w-11 place-items-center rounded-full text-[var(--muted)] transition ${showEmojiPicker ? 'bg-[var(--primary)]/12 text-[var(--primary)]' : 'bg-white/5'}`}
           disabled={disabled}
-          onClick={() => mediaInputRef.current?.click()}
-          type="button"
-        >
-          <Paperclip className="h-5 w-5" strokeWidth={2.1} />
-        </button>
-        <button
-          className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]"
-          disabled={disabled}
-          onClick={() => stickerInputRef.current?.click()}
+          onClick={() => {
+            setShowEmojiPicker((current) => !current);
+            setShowAttachmentMenu(false);
+          }}
           type="button"
         >
           <Smile className="h-5 w-5" strokeWidth={2.1} />
