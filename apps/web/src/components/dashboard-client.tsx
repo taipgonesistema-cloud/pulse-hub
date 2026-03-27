@@ -168,6 +168,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [viewTransition, setViewTransition] = useState<WorkspaceView | null>(null);
   const currentView = viewTransition ?? activeView;
   const deferredContactsSearch = useDeferredValue(contactsSearch);
+  const isConversationSwitching = pendingConversationId !== null;
   const isDashboardView = activeView === 'dashboard';
   const isAnalyticsView = activeView === 'analytics';
   const isContactsView = activeView === 'contacts';
@@ -2106,10 +2107,14 @@ export function DashboardClient({ initialOverview }: Props) {
               className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-4"
               onScroll={handleMessagesScroll}
             >
-              {isLoadingMessages ? (
+              {isConversationSwitching ? (
                 <ConversationLoadingState contact={selectedConversation?.contact} />
               ) : (
                 <div className="mx-auto flex max-w-none flex-col gap-4">
+                  {isLoadingMessages && messages.length === 0 ? (
+                    <GhostPanel>Loading conversation history...</GhostPanel>
+                  ) : null}
+
                   {messages.map((message) => (
                     <MessageBubble
                       key={message.id}
@@ -2737,30 +2742,32 @@ function WorkspaceLoadingScreen({ targetView }: { targetView: WorkspaceView }) {
 
 function ConversationLoadingState({ contact }: { contact?: string }) {
   return (
-    <div className="grid h-full place-items-center">
-      <div className="flex w-full max-w-3xl flex-col items-center justify-center gap-8 px-6 py-10 text-center">
+    <div className="grid h-full place-items-center bg-[var(--surface)]">
+      <div className="flex w-full max-w-4xl flex-col items-center justify-center gap-8 px-6 py-10 text-center">
         <div className="relative flex items-center justify-center">
-          <div className="h-14 w-14 animate-spin rounded-full border-4 border-white/8 border-t-[var(--primary)]" />
-          <div className="absolute h-8 w-8 rounded-full bg-[var(--surface-low)]" />
-          <div className="absolute h-2 w-2 rounded-full bg-[var(--tertiary)]" />
+          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-white/8 border-t-[#7fafff]" />
+          <div className="absolute h-5 w-5 rounded-full bg-[var(--surface)]" />
+          <div className="absolute top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--tertiary)]" />
         </div>
 
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-            Loading conversation
-          </p>
-          <h3 className="mt-3 text-2xl font-semibold text-white">
-            {contact || 'Abrindo chat'}
-          </h3>
-          <p className="mt-2 text-sm text-[var(--muted)]">
-            Sincronizando timeline, anexos e estado de leitura em tempo real...
+          <span className="inline-flex rounded-full bg-white/6 px-3 py-1 text-[11px] font-medium text-[var(--muted)]">
+            Hoje
+          </span>
+          <p className="mt-4 text-sm text-[var(--muted)]">
+            {contact ? `Abrindo ${contact}...` : 'Abrindo conversa...'}
           </p>
         </div>
 
-        <div className="w-full space-y-4">
-          <div className="ml-auto h-24 w-[56%] animate-pulse rounded-[1.5rem] rounded-tr-none bg-white/[0.05]" />
-          <div className="mr-auto h-16 w-[44%] animate-pulse rounded-[1.5rem] rounded-tl-none bg-white/[0.04]" />
-          <div className="ml-auto h-28 w-[62%] animate-pulse rounded-[1.5rem] rounded-tr-none bg-white/[0.05]" />
+        <div className="flex w-full justify-end">
+          <div className="w-full max-w-[22rem] animate-pulse rounded-[1rem] rounded-br-md bg-white/[0.06] p-4 text-left">
+            <div className="h-3 w-4/5 rounded-full bg-white/10" />
+            <div className="mt-3 h-3 w-3/4 rounded-full bg-white/8" />
+            <div className="mt-3 h-3 w-2/3 rounded-full bg-white/8" />
+            <div className="mt-4 flex justify-end">
+              <div className="h-2.5 w-8 rounded-full bg-white/10" />
+            </div>
+          </div>
         </div>
       </div>
     </div>
