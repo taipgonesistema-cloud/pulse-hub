@@ -46,6 +46,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useDeferredValue,
   useTransition,
 } from 'react';
 import type {
@@ -112,16 +113,12 @@ type Props = {
   initialOverview: DashboardOverview;
 };
 
-type SessionStreamEvent = {
+type RealtimeSocketEvent = {
   sessionId: string;
-  conversationId?: string;
-  type:
-    | 'session.updated'
-    | 'conversation.synced'
-    | 'message.created'
-    | 'typing.started';
+  chatJid?: string;
+  kind: 'connection' | 'chat.new' | 'message.new' | 'message.ack';
   direction?: 'incoming' | 'outgoing';
-  emittedAt?: string;
+  occurredAt?: string;
 };
 
 export function DashboardClient({ initialOverview }: Props) {
@@ -168,6 +165,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const viewTransitionTimerRef = useRef<number | null>(null);
   const [viewTransition, setViewTransition] = useState<WorkspaceView | null>(null);
   const currentView = viewTransition ?? activeView;
+  const deferredContactsSearch = useDeferredValue(contactsSearch);
   const isDashboardView = activeView === 'dashboard';
   const isAnalyticsView = activeView === 'analytics';
   const isContactsView = activeView === 'contacts';
@@ -225,7 +223,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
     const baseContacts = filterConversations(contacts, contactsFilter);
     const searchFiltered = baseContacts.filter((contact) => {
-      const term = contactsSearch.trim().toLowerCase();
+      const term = deferredContactsSearch.trim().toLowerCase();
       if (!term) {
         return true;
       }
@@ -252,7 +250,7 @@ export function DashboardClient({ initialOverview }: Props) {
     contactsAudienceFilter,
     contactsChannelFilter,
     contactsFilter,
-    contactsSearch,
+    deferredContactsSearch,
     isContactsView,
   ]);
 
@@ -532,8 +530,11 @@ export function DashboardClient({ initialOverview }: Props) {
       throw new Error('Nao foi possivel atualizar a dashboard.');
     }
 
-        const data = (await response.json()) as DashboardOverview;
-        setOverview(sanitizeOverview(data));
+    const data = (await response.json()) as DashboardOverview;
+    const nextOverview = sanitizeOverview(data);
+    setOverview((current) =>
+      areOverviewsEquivalent(current, nextOverview) ? current : nextOverview,
+    );
   }, []);
 
   const loadMessages = useCallback(
@@ -557,7 +558,9 @@ export function DashboardClient({ initialOverview }: Props) {
         }
 
         const data = (await response.json()) as MessageRecord[];
-        setMessages(data);
+        setMessages((current) =>
+          areMessageListsEquivalent(current, data) ? current : data,
+        );
         setOverview((current) => {
           let hasChanges = false;
 
@@ -755,82 +758,90 @@ export function DashboardClient({ initialOverview }: Props) {
   ]);
 
   useEffect(() => {
-    if (!isConversationsView) {
+    if (!isAuthReady) {
       return;
     }
 
-    if (!activeSessionId) {
-      return;
-    }
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | null = null;
+    let refreshTimer: number | null = null;
+    let cancelled = false;
 
-    const eventSource = new EventSource(
-      `${apiUrl}/whatsapp/sessions/${activeSessionId}/stream`,
-    );
-    let typingTimeout: number | null = null;
+    const scheduleOverviewRefresh = () => {
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
+      }
 
-    eventSource.onmessage = (event) => {
-      const payload = JSON.parse(event.data) as SessionStreamEvent;
-
-      if (
-        payload.type === 'session.updated' ||
-        payload.type === 'conversation.synced' ||
-        payload.type === 'message.created'
-      ) {
+      refreshTimer = window.setTimeout(() => {
         void loadOverview().catch(() => undefined);
+      }, 180);
+    };
+
+    const connect = () => {
+      if (cancelled) {
+        return;
+      }
+
+      socket = new WebSocket(getWebSocketUrl(`${apiUrl}/ws`));
+
+      socket.onmessage = (event) => {
+        let payload: RealtimeSocketEvent;
+
+        try {
+          payload = JSON.parse(event.data) as RealtimeSocketEvent;
+        } catch {
+          return;
+        }
 
         if (
-          payload.type === 'message.created' &&
-          payload.conversationId &&
-          payload.conversationId === activeConversationId
+          payload.kind === 'connection' ||
+          payload.kind === 'chat.new' ||
+          payload.kind === 'message.new' ||
+          payload.kind === 'message.ack'
         ) {
-          const conversationId = payload.conversationId;
-          const delay = payload.direction === 'incoming' ? 900 : 0;
+          scheduleOverviewRefresh();
+        }
 
+        if (
+          isConversationsView &&
+          activeSessionId &&
+          activeConversationId &&
+          payload.kind === 'message.new' &&
+          payload.chatJid === activeConversationId
+        ) {
+          const delay = payload.direction === 'incoming' ? 700 : 0;
           window.setTimeout(() => {
-            void loadMessages(activeSessionId, conversationId, {
+            void loadMessages(activeSessionId, activeConversationId, {
               showLoading: false,
             }).catch(() => undefined);
           }, delay);
         }
+      };
 
-        return;
-      }
+      socket.onerror = () => {
+        socket?.close();
+      };
 
-      if (!payload.conversationId) {
-        return;
-      }
-
-      if (payload.type === 'typing.started' && payload.direction === 'incoming') {
-        setTypingConversationId(payload.conversationId);
-
-        if (typingTimeout) {
-          window.clearTimeout(typingTimeout);
+      socket.onclose = () => {
+        if (cancelled) {
+          return;
         }
 
-        typingTimeout = window.setTimeout(() => {
-          setTypingConversationId((current) =>
-            current === payload.conversationId ? null : current,
-          );
-        }, 1800);
-        return;
-      }
+        reconnectTimer = window.setTimeout(connect, 1500);
+      };
     };
 
-    eventSource.onerror = () => {
-      void loadOverview().catch(() => undefined);
-
-      if (activeConversationId) {
-        void loadMessages(activeSessionId, activeConversationId, {
-          showLoading: false,
-        }).catch(() => undefined);
-      }
-    };
+    connect();
 
     return () => {
-      if (typingTimeout) {
-        window.clearTimeout(typingTimeout);
+      cancelled = true;
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
       }
-      eventSource.close();
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+      }
+      socket?.close();
     };
   }, [activeConversationId, activeSessionId, isAuthReady, isConversationsView, loadMessages, loadOverview]);
 
@@ -3180,11 +3191,120 @@ function resolveAvatarSrc(src?: string | null) {
   return src;
 }
 
+function getWebSocketUrl(baseUrl: string) {
+  if (baseUrl.startsWith('https://')) {
+    return `wss://${baseUrl.slice('https://'.length)}`;
+  }
+  if (baseUrl.startsWith('http://')) {
+    return `ws://${baseUrl.slice('http://'.length)}`;
+  }
+  return baseUrl;
+}
+
 function sanitizeOverview(overview: DashboardOverview): DashboardOverview {
   return {
     ...overview,
     conversations: dedupeConversations(overview.conversations),
   };
+}
+
+function areOverviewsEquivalent(left: DashboardOverview, right: DashboardOverview) {
+  if (
+    left.product !== right.product ||
+    left.phase !== right.phase ||
+    left.metrics.connectedNumbers !== right.metrics.connectedNumbers ||
+    left.metrics.activeSessions !== right.metrics.activeSessions ||
+    left.metrics.onlineUsers !== right.metrics.onlineUsers ||
+    left.metrics.waitingConversations !== right.metrics.waitingConversations
+  ) {
+    return false;
+  }
+
+  if (left.channels.length !== right.channels.length || left.sessions.length !== right.sessions.length || left.conversations.length !== right.conversations.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.channels.length; index += 1) {
+    const current = left.channels[index];
+    const next = right.channels[index];
+    if (
+      current.id !== next.id ||
+      current.name !== next.name ||
+      current.color !== next.color ||
+      current.connectedNumbers !== next.connectedNumbers
+    ) {
+      return false;
+    }
+  }
+
+  for (let index = 0; index < left.sessions.length; index += 1) {
+    const current = left.sessions[index];
+    const next = right.sessions[index];
+    if (
+      current.id !== next.id ||
+      current.name !== next.name ||
+      current.phoneNumber !== next.phoneNumber ||
+      current.channelId !== next.channelId ||
+      current.channelName !== next.channelName ||
+      current.status !== next.status ||
+      current.attendants !== next.attendants ||
+      current.waiting !== next.waiting ||
+      current.unread !== next.unread ||
+      current.lastHeartbeat !== next.lastHeartbeat ||
+      current.qrCode !== next.qrCode ||
+      current.qrCodeDataUrl !== next.qrCodeDataUrl ||
+      current.lastError !== next.lastError
+    ) {
+      return false;
+    }
+  }
+
+  for (let index = 0; index < left.conversations.length; index += 1) {
+    const current = left.conversations[index];
+    const next = right.conversations[index];
+    if (
+      current.id !== next.id ||
+      current.sessionId !== next.sessionId ||
+      current.sessionName !== next.sessionName ||
+      current.contact !== next.contact ||
+      current.avatarUrl !== next.avatarUrl ||
+      current.participantId !== next.participantId ||
+      current.owner !== next.owner ||
+      current.status !== next.status ||
+      current.channelName !== next.channelName ||
+      current.waitingTime !== next.waitingTime ||
+      current.unread !== next.unread ||
+      current.preview !== next.preview ||
+      current.lastMessageAt !== next.lastMessageAt
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areMessageListsEquivalent(left: MessageRecord[], right: MessageRecord[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    const current = left[index];
+    const next = right[index];
+    if (
+      current.id !== next.id ||
+      current.conversationId !== next.conversationId ||
+      current.direction !== next.direction ||
+      current.body !== next.body ||
+      current.timestamp !== next.timestamp ||
+      current.author !== next.author
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function dedupeConversations(conversations: ConversationRecord[]) {
