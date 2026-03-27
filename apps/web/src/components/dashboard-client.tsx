@@ -129,6 +129,11 @@ export function DashboardClient({ initialOverview }: Props) {
   const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all');
+  const [contactsFilter, setContactsFilter] = useState<ConversationFilter>('all');
+  const [contactsSearch, setContactsSearch] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState(
+    initialOverview.conversations[0]?.id ?? '',
+  );
   const [typingConversationId, setTypingConversationId] = useState<string | null>(
     null,
   );
@@ -173,6 +178,27 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const contacts = useMemo(() => overview.conversations, [overview.conversations]);
 
+  const filteredContacts = useMemo(() => {
+    const filtered = filterConversations(contacts, contactsFilter).filter((contact) => {
+      const term = contactsSearch.trim().toLowerCase();
+      if (!term) {
+        return true;
+      }
+
+      return [contact.contact, contact.participantId, contact.channelName, contact.owner]
+        .join(' ')
+        .toLowerCase()
+        .includes(term);
+    });
+
+    return filtered;
+  }, [contacts, contactsFilter, contactsSearch]);
+
+  const selectedContact = useMemo(
+    () => filteredContacts.find((contact) => contact.id === selectedContactId) ?? filteredContacts[0],
+    [filteredContacts, selectedContactId],
+  );
+
   const conversationFilterOptions = useMemo(
     () => [
       {
@@ -199,6 +225,32 @@ export function DashboardClient({ initialOverview }: Props) {
       },
     ],
     [allSessionConversations],
+  );
+
+  const contactFilterOptions = useMemo(
+    () => [
+      {
+        id: 'all' as const,
+        label: 'Todos',
+        count: contacts.length,
+      },
+      {
+        id: 'direct' as const,
+        label: 'Conversas',
+        count: contacts.filter((contact) => !isGroupConversation(contact)).length,
+      },
+      {
+        id: 'groups' as const,
+        label: 'Grupos',
+        count: contacts.filter((contact) => isGroupConversation(contact)).length,
+      },
+      {
+        id: 'unread' as const,
+        label: 'Nao lidos',
+        count: contacts.filter((contact) => contact.unread > 0).length,
+      },
+    ],
+    [contacts],
   );
 
   const activeSessionId = selectedSession?.id ?? null;
@@ -387,6 +439,16 @@ export function DashboardClient({ initialOverview }: Props) {
       setSelectedConversationId(sessionConversations[0]?.id ?? '');
     }
   }, [selectedConversationId, selectedSession, sessionConversations]);
+
+  useEffect(() => {
+    const currentContactExists = filteredContacts.some(
+      (contact) => contact.id === selectedContactId,
+    );
+
+    if (!currentContactExists) {
+      setSelectedContactId(filteredContacts[0]?.id ?? '');
+    }
+  }, [filteredContacts, selectedContactId]);
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -775,50 +837,292 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const renderContactsView = () => (
     <section className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-            Contact index
-          </p>
-          <h2 className="font-headline mt-3 text-3xl font-semibold text-white">
-            Base viva de contatos
-          </h2>
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+              stitch_contacts_crm
+            </p>
+            <h2 className="font-headline mt-3 text-3xl font-semibold text-white">
+              Central de contatos
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+              Pesquise, filtre, selecione e abra contatos rapidamente sem sair da base
+              operacional.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <MetricCard
+              compact
+              detail="Total catalogado"
+              label="Contatos"
+              tone="primary"
+              value={contacts.length}
+            />
+            <MetricCard
+              compact
+              detail="Com conversa aberta"
+              label="Conversas"
+              tone="secondary"
+              value={contacts.filter((contact) => !isGroupConversation(contact)).length}
+            />
+            <MetricCard
+              compact
+              detail="Nao lidos"
+              label="Pendentes"
+              tone="tertiary"
+              value={contacts.filter((contact) => contact.unread > 0).length}
+            />
+          </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          {contacts.length > 0 ? (
-            contacts.map((contact) => (
+        <div className="grid gap-6 xl:grid-cols-[24rem_minmax(0,1fr)_20rem]">
+          <div className="glass-panel rounded-[30px] p-5">
+            <div className="flex items-center gap-3 rounded-full border border-white/6 bg-[var(--surface-high)] px-4 py-3 text-sm text-[var(--muted)]">
+              <Search className="h-4 w-4" strokeWidth={2.2} />
+              <input
+                className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                onChange={(event) => setContactsSearch(event.target.value)}
+                placeholder="Buscar por nome, jid, canal..."
+                value={contactsSearch}
+              />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {contactFilterOptions.map((option) => {
+                const active = contactsFilter === option.id;
+
+                return (
+                  <button
+                    key={option.id}
+                    className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
+                      active
+                        ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-[var(--primary)]'
+                        : 'border-white/8 bg-white/5 text-[var(--muted)] hover:text-white'
+                    }`}
+                    onClick={() => setContactsFilter(option.id)}
+                    type="button"
+                  >
+                    {option.label} · {option.count}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 max-h-[calc(100vh-18rem)] space-y-2 overflow-y-auto pr-1">
+              {filteredContacts.length > 0 ? (
+                filteredContacts.map((contact) => {
+                  const active = selectedContact?.id === contact.id;
+
+                  return (
+                    <button
+                      key={`${contact.sessionId}:${contact.id}`}
+                      className={`flex w-full items-center gap-4 rounded-[24px] p-4 text-left transition ${
+                        active
+                          ? 'bg-[var(--surface-highest)] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]'
+                          : 'bg-white/4 hover:bg-white/6'
+                      }`}
+                      onClick={() => setSelectedContactId(contact.id)}
+                      type="button"
+                    >
+                      <AvatarBadge label={contact.contact} src={contact.avatarUrl} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate text-base font-semibold text-white">
+                            {contact.contact}
+                          </p>
+                          {contact.unread > 0 ? (
+                            <span className="rounded-full bg-[var(--secondary)] px-2 py-1 text-[10px] font-bold text-black">
+                              {contact.unread}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 truncate text-xs text-[var(--muted)]">
+                          {contact.participantId}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Tag tone="primary">{contact.channelName}</Tag>
+                          <Tag tone="neutral">
+                            {isGroupConversation(contact) ? 'Grupo' : 'Contato'}
+                          </Tag>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <GhostPanel>
+                  Nenhum contato encontrado para esse filtro. Ajuste a busca ou aguarde
+                  a sincronizacao.
+                </GhostPanel>
+              )}
+            </div>
+          </div>
+
+          <div className="glass-panel rounded-[30px] p-6">
+            {selectedContact ? (
+              <div className="space-y-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <AvatarBadge
+                      className="h-16 w-16 rounded-[24px] text-lg"
+                      label={selectedContact.contact}
+                      src={selectedContact.avatarUrl}
+                    />
+                    <div>
+                      <p className="font-headline text-3xl font-semibold text-white">
+                        {selectedContact.contact}
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--muted)]">
+                        {selectedContact.participantId}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
+                      onClick={() => {
+                        setSelectedSessionId(selectedContact.sessionId);
+                        setSelectedConversationId(selectedContact.id);
+                        setActiveView('conversations');
+                      }}
+                      type="button"
+                    >
+                      <MessageCircle className="h-4 w-4" strokeWidth={2.1} />
+                      Abrir conversa
+                    </button>
+                    <button
+                      className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
+                      onClick={() => {
+                        void navigator.clipboard?.writeText(selectedContact.participantId);
+                      }}
+                      type="button"
+                    >
+                      <ContactRound className="h-4 w-4" strokeWidth={2.1} />
+                      Copiar JID
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <MetricCard
+                    compact
+                    detail="Fila atual"
+                    label="Canal"
+                    tone="primary"
+                    value={1}
+                  />
+                  <MetricCard
+                    compact
+                    detail="Nao lidas"
+                    label="Unread"
+                    tone="tertiary"
+                    value={selectedContact.unread}
+                  />
+                  <MetricCard
+                    compact
+                    detail="Ultima atividade"
+                    label="Hoje"
+                    tone="secondary"
+                    value={1}
+                  />
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <ProfileSection title="Dados principais">
+                    <ProfileRow label="Phone" value={selectedContact.participantId} />
+                    <ProfileRow label="Session" value={selectedContact.sessionName} />
+                    <ProfileRow label="Email" value={toContactEmail(selectedContact.contact)} />
+                  </ProfileSection>
+
+                  <ProfileSection title="Classificacao">
+                    <div className="flex flex-wrap gap-2">
+                      <Tag tone="primary">{selectedContact.channelName}</Tag>
+                      <Tag tone="neutral">{selectedContact.owner}</Tag>
+                      <Tag tone="tertiary">{selectedContact.status}</Tag>
+                      <Tag tone="secondary">
+                        {isGroupConversation(selectedContact) ? 'Grupo' : 'Contato direto'}
+                      </Tag>
+                    </div>
+                  </ProfileSection>
+                </div>
+
+                <ProfileSection title="Resumo operacional">
+                  <div className="space-y-4">
+                    <MiniTimelineItem
+                      label="Ultima mensagem"
+                      meta={selectedContact.preview || 'Sem preview'}
+                      tone="primary"
+                    />
+                    <MiniTimelineItem
+                      label="Ultima atividade"
+                      meta={formatDateLabel(selectedContact.lastMessageAt)}
+                      tone="secondary"
+                    />
+                  </div>
+                </ProfileSection>
+              </div>
+            ) : (
+              <GhostPanel>
+                Selecione um contato na coluna lateral para abrir a ficha completa.
+              </GhostPanel>
+            )}
+          </div>
+
+          <div className="glass-panel rounded-[30px] p-6">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+              CRM menu
+            </p>
+            <div className="mt-5 space-y-3">
               <button
-                key={`${contact.sessionId}:${contact.id}`}
-                className="glass-panel flex items-center gap-4 rounded-[28px] p-5 text-left transition hover:bg-white/6"
+                className="flex w-full items-center justify-between rounded-[22px] bg-white/5 px-4 py-4 text-left text-sm text-white transition hover:bg-white/8"
                 onClick={() => {
-                  setSelectedSessionId(contact.sessionId);
-                  setSelectedConversationId(contact.id);
+                  if (!selectedContact) return;
+                  setSelectedSessionId(selectedContact.sessionId);
+                  setSelectedConversationId(selectedContact.id);
                   setActiveView('conversations');
                 }}
                 type="button"
               >
-                <AvatarBadge label={contact.contact} src={contact.avatarUrl} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-lg font-semibold text-white">
-                    {contact.contact}
-                  </p>
-                  <p className="mt-1 text-sm text-[var(--muted)]">
-                    {contact.participantId}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Tag tone="primary">{contact.channelName}</Tag>
-                    <Tag tone="neutral">{contact.owner}</Tag>
+                <span>Atendimento ao vivo</span>
+                <MessageCircle className="h-4 w-4" strokeWidth={2.1} />
+              </button>
+              <button
+                className="flex w-full items-center justify-between rounded-[22px] bg-white/5 px-4 py-4 text-left text-sm text-white transition hover:bg-white/8"
+                onClick={() => selectedContact && setSelectedSessionId(selectedContact.sessionId)}
+                type="button"
+              >
+                <span>Ir para sessao</span>
+                <Wifi className="h-4 w-4" strokeWidth={2.1} />
+              </button>
+              <button
+                className="flex w-full items-center justify-between rounded-[22px] bg-white/5 px-4 py-4 text-left text-sm text-white transition hover:bg-white/8"
+                onClick={() => {
+                  if (!selectedContact) return;
+                  void navigator.clipboard?.writeText(selectedContact.participantId);
+                }}
+                type="button"
+              >
+                <span>Copiar identificador</span>
+                <Briefcase className="h-4 w-4" strokeWidth={2.1} />
+              </button>
+            </div>
+
+            <ProfileSection title="Status atual">
+              {selectedContact ? (
+                <div className="space-y-3">
+                  <div className="rounded-[22px] bg-[var(--surface-high)] px-4 py-4 text-sm text-[var(--muted)]">
+                    {selectedContact.status}
+                  </div>
+                  <div className="rounded-[22px] bg-[var(--surface-high)] px-4 py-4 text-sm text-[var(--muted)]">
+                    {selectedContact.waitingTime}
                   </div>
                 </div>
-              </button>
-            ))
-          ) : (
-            <GhostPanel>
-              Seus contatos vao aparecer aqui assim que a primeira sessao do WhatsApp
-              sincronizar conversas reais.
-            </GhostPanel>
-          )}
+              ) : (
+                <GhostPanel>Nenhum contato selecionado.</GhostPanel>
+              )}
+            </ProfileSection>
+          </div>
         </div>
       </div>
     </section>
@@ -1906,6 +2210,11 @@ function formatDateLabel(timestamp: string) {
     month: 'short',
     year: 'numeric',
   });
+}
+
+function toContactEmail(label: string) {
+  const safeName = label.toLowerCase().replace(/[^a-z0-9]+/g, '.');
+  return `${safeName}@pulsehub.local`;
 }
 
 function resolveAvatarSrc(src?: string | null) {
