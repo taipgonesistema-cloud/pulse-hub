@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EtherCommand | Multi-Channel Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-surface-variant": "#adaaaa",
+              "on-surface": "#ffffff",
+              "on-secondary-fixed": "#00481d",
+              "secondary": "#5dfd8a",
+              "inverse-surface": "#fcf8f8",
+              "background": "#0e0e0e",
+              "inverse-primary": "#005db9",
+              "secondary-container": "#006d2f",
+              "on-secondary-fixed-variant": "#00682d",
+              "surface-container-highest": "#262626",
+              "tertiary-fixed-dim": "#ff788a",
+              "on-tertiary-container": "#100002",
+              "on-primary-container": "#00224b",
+              "on-secondary": "#005d27",
+              "outline": "#777575",
+              "primary-fixed": "#64a1ff",
+              "secondary-dim": "#4cee7d",
+              "on-primary-fixed": "#000000",
+              "on-secondary-container": "#e4ffe2",
+              "inverse-on-surface": "#565554",
+              "surface-bright": "#2c2c2c",
+              "secondary-fixed-dim": "#4cee7d",
+              "surface-variant": "#262626",
+              "on-tertiary-fixed": "#39000d",
+              "primary-container": "#64a1ff",
+              "outline-variant": "#494847",
+              "primary-dim": "#0073e0",
+              "surface-container-low": "#131313",
+              "error-dim": "#d7383b",
+              "on-tertiary": "#490012",
+              "surface-tint": "#7fafff",
+              "on-tertiary-fixed-variant": "#780024",
+              "on-error": "#490006",
+              "on-primary": "#002e60",
+              "primary": "#7fafff",
+              "error": "#ff716c",
+              "surface-dim": "#0e0e0e",
+              "primary-fixed-dim": "#4593ff",
+              "on-background": "#ffffff",
+              "tertiary-container": "#f64d6b",
+              "surface-container-lowest": "#000000",
+              "secondary-fixed": "#5dfd8a",
+              "surface": "#0e0e0e",
+              "error-container": "#9f0519",
+              "on-primary-fixed-variant": "#002b5c",
+              "tertiary-dim": "#ff6e82",
+              "on-error-container": "#ffa8a3",
+              "tertiary": "#ff6e82",
+              "surface-container-high": "#201f1f",
+              "surface-container": "#1a1919",
+              "tertiary-fixed": "#ff909c"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(38, 38, 38, 0.4);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+        }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body selection:bg-primary/30 selection:text-primary">
+<!-- TopNavBar Implementation -->
+<header class="fixed top-0 left-0 right-0 z-50 bg-zinc-950/60 backdrop-blur-2xl border-b border-white/10 flex justify-between items-center w-full px-6 py-3 shadow-[0_8px_32px_0_rgba(0,0,0,0.8)]">
+<div class="flex items-center gap-8">
+<span class="text-2xl font-bold bg-gradient-to-br from-blue-400 to-blue-600 bg-clip-text text-transparent font-headline tracking-tight">EtherCommand</span>
+<div class="hidden md:flex items-center bg-white/5 rounded-full px-4 py-1.5 gap-3 border border-white/5 focus-within:border-primary/50 transition-all duration-300">
+<span class="material-symbols-outlined text-zinc-400 text-sm">search</span>
+<input class="bg-transparent border-none text-sm text-on-surface focus:ring-0 w-64 placeholder:text-zinc-500" placeholder="Search interactions..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-zinc-400 hover:bg-white/5 transition-all duration-300 rounded-full active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-zinc-400 hover:bg-white/5 transition-all duration-300 rounded-full active:scale-95">
+<span class="material-symbols-outlined">apps</span>
+</button>
+<div class="h-8 w-[1px] bg-white/10 mx-2"></div>
+<button class="flex items-center gap-2 bg-primary-container text-on-primary-container px-4 py-1.5 rounded-full font-semibold hover:brightness-110 active:scale-95 transition-all duration-200">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span class="text-sm">Broadcast</span>
+</button>
+<img alt="User profile avatar" class="w-9 h-9 rounded-full object-cover border border-white/20" data-alt="Close up portrait of a confident male professional with a stylish modern haircut in cinematic soft lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuChFJFnNFCapLZLL7xn1xoYhygJdmMlEpX0_i7yjjGc03HL4WZKJ55uhQGarCoooEr1vwHTY-L39zDXrphUjXXNTYJ0LMxRtuZ0Tgo5uovKedHXsOh96uacXtd0x3PsG46FZvXINAeldbn4ARp6-q4YPJE7p6xXbrSgZ1RkjSHdBjhzw72ng445TMwLShrBCkK5jLHFzvuMN9ZdcTdllnRTitgVE1vAKp13XIPg9-E243-88mfhf7gJtnLYPQoi5PtKK3NmCAPn0w"/>
+</div>
+</header>
+<!-- SideNavBar Implementation -->
+<aside class="fixed left-0 top-0 h-screen w-64 z-40 bg-zinc-950/80 backdrop-blur-xl border-r border-white/5 flex flex-col py-8 px-4 pt-24 no-shadows tonal-layering">
+<div class="mb-8 px-2">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container" style="font-variation-settings: 'FILL' 1;">hub</span>
+</div>
+<div>
+<h2 class="text-lg font-black text-white font-headline">Ether OS</h2>
+<p class="text-[10px] text-zinc-500 font-medium tracking-widest uppercase">Omni-Channel v2.4</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ease-in-out bg-blue-600/10 text-blue-400 border-r-2 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="text-sm font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ease-in-out text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" href="#">
+<span class="material-symbols-outlined">chat</span>
+<span class="text-sm font-medium">Conversations</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ease-in-out text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="text-sm font-medium">Contacts</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ease-in-out text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" href="#">
+<span class="material-symbols-outlined">leaderboard</span>
+<span class="text-sm font-medium">Analytics</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ease-in-out text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-sm font-medium">Settings</span>
+</a>
+</nav>
+<div class="mt-auto pt-6 border-t border-white/5 space-y-1">
+<button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-all">
+<span class="material-symbols-outlined">help</span>
+<span class="text-sm font-medium">Support</span>
+</button>
+<button class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-error-dim hover:bg-error/10 transition-all">
+<span class="material-symbols-outlined">logout</span>
+<span class="text-sm font-medium">Sign Out</span>
+</button>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="pl-64 pt-20 min-h-screen bg-background p-8 overflow-x-hidden">
+<div class="max-w-7xl mx-auto space-y-8">
+<!-- Header Section -->
+<div class="flex justify-between items-end">
+<div>
+<h1 class="text-4xl font-extrabold font-headline text-on-surface tracking-tight mb-2">Command Central</h1>
+<p class="text-on-surface-variant flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse shadow-[0_0_8px_#5dfd8a]"></span>
+                        System nominal. 42 active agents processing 1.2k events/hr.
+                    </p>
+</div>
+<div class="flex gap-4">
+<div class="bg-surface-container-low px-4 py-2 rounded-2xl border border-white/5 flex items-center gap-3">
+<div class="flex -space-x-2">
+<img class="w-6 h-6 rounded-full border-2 border-surface-container-low" data-alt="Portrait of a smiling young woman with professional attire" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBjL2npzyyt4jyMNj4HUD7sQqr4-GX2xo9-np8UPlZyVZiFHwqzTqA-VnwyclKOQPaz1Gqv-VcUynnHvRv0seLUjP9G5UlvyNVZbiyFkvEqIdtMVlE1uU1z2uW4yxIR9f61Q0RJ6LyYok0t4BVdLaSZpN5bLMBKEhXcXGCHSqoFvUdNq4YFsJnbkp2r6l60qz_YtPNfPSHdTxdWKZ4juXpB5CF5Y2uWwGVhYAbduy8mTAPPe_3toQshzTl2ThMMNJHhGq8uInvoUQ"/>
+<img class="w-6 h-6 rounded-full border-2 border-surface-container-low" data-alt="Portrait of a focused male agent in office setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB8lYhLRiKchPYwDi4EuF7hFjOhWu5pfJMsjHpdd1we68g6qRBw6_lTuz75A-CX_5_cltAe2wbO8VAABcdw9snXrL9xAyQpWJfq0W8ZaE_Cu--ymxYiIghNEDqVrhnBmEElrsj0Ra9_ynHIWaGm41AGLsFXSBTVZrhBLC8fITq3dGKcNJoc0EhpVGdcI3efJU_itqt9uSlBd6PHn4_qytZwPj74l4AJRyfPStRsjtOIWzEA4sYicwsECn-kjJ7Ak30LLdagrA0BKg"/>
+<div class="w-6 h-6 rounded-full bg-primary-container flex items-center justify-center text-[10px] text-on-primary-container font-bold border-2 border-surface-container-low">+8</div>
+</div>
+<span class="text-sm font-semibold">Active Teams</span>
+</div>
+</div>
+</div>
+<!-- Bento Grid Dashboard -->
+<div class="grid grid-cols-12 gap-6">
+<!-- 1. Total Pending Conversations (Large Widget) -->
+<div class="col-span-12 lg:col-span-5 bg-surface-container-low rounded-[2rem] p-8 border border-white/5 flex flex-col justify-between relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[80px] -mr-32 -mt-32"></div>
+<div class="relative z-10">
+<div class="flex justify-between items-start mb-12">
+<div>
+<h3 class="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-1">Queue Health</h3>
+<p class="text-5xl font-extrabold font-headline text-on-surface">1,482</p>
+<p class="text-primary-fixed text-sm font-semibold mt-2">+12% from last hour</p>
+</div>
+<span class="material-symbols-outlined text-zinc-700 text-4xl">pending_actions</span>
+</div>
+<div class="grid grid-cols-3 gap-4">
+<div class="bg-surface-container-highest p-4 rounded-3xl group-hover:translate-y-[-4px] transition-transform duration-300">
+<div class="flex items-center gap-2 mb-2">
+<div class="w-6 h-6 rounded-full bg-secondary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary text-[14px]" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+</div>
+<span class="text-[10px] font-bold text-zinc-400">WHATSAPP</span>
+</div>
+<p class="text-2xl font-bold">842</p>
+</div>
+<div class="bg-surface-container-highest p-4 rounded-3xl group-hover:translate-y-[-4px] transition-transform duration-300 delay-75">
+<div class="flex items-center gap-2 mb-2">
+<div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[14px]" style="font-variation-settings: 'FILL' 1;">social_leaderboard</span>
+</div>
+<span class="text-[10px] font-bold text-zinc-400">FACEBOOK</span>
+</div>
+<p class="text-2xl font-bold">410</p>
+</div>
+<div class="bg-surface-container-highest p-4 rounded-3xl group-hover:translate-y-[-4px] transition-transform duration-300 delay-150">
+<div class="flex items-center gap-2 mb-2">
+<div class="w-6 h-6 rounded-full bg-tertiary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary text-[14px]" style="font-variation-settings: 'FILL' 1;">photo_camera</span>
+</div>
+<span class="text-[10px] font-bold text-zinc-400">INSTAGRAM</span>
+</div>
+<p class="text-2xl font-bold">230</p>
+</div>
+</div>
+</div>
+</div>
+<!-- 2. Response Time Metrics (Wide Widget) -->
+<div class="col-span-12 lg:col-span-7 bg-surface-container-low rounded-[2rem] p-8 border border-white/5 overflow-hidden">
+<div class="flex justify-between items-start mb-8">
+<div>
+<h3 class="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-1">Average Response Velocity</h3>
+<div class="flex items-baseline gap-3">
+<p class="text-4xl font-extrabold font-headline">1m 42s</p>
+<p class="text-secondary font-bold text-sm">↓ 15s improved</p>
+</div>
+</div>
+<div class="flex gap-2">
+<span class="px-3 py-1 bg-surface-container-highest rounded-full text-xs font-bold text-zinc-400">Live View</span>
+<span class="px-3 py-1 bg-primary/10 rounded-full text-xs font-bold text-primary">Target: &lt;2m</span>
+</div>
+</div>
+<!-- SVG Chart Simulation -->
+<div class="h-48 w-full relative">
+<svg class="w-full h-full drop-shadow-[0_0_15px_rgba(127,175,255,0.4)]" viewbox="0 0 400 100">
+<defs>
+<lineargradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#7fafff" stop-opacity="0.2"></stop>
+<stop offset="100%" stop-color="#7fafff" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<path d="M0,80 Q50,40 100,60 T200,30 T300,50 T400,20" fill="none" stroke="#7fafff" stroke-linecap="round" stroke-width="4"></path>
+<path d="M0,80 Q50,40 100,60 T200,30 T300,50 T400,20 L400,100 L0,100 Z" fill="url(#chartGradient)"></path>
+<circle cx="200" cy="30" fill="#7fafff" r="5" stroke="#0e0e0e" stroke-width="2"></circle>
+</svg>
+<div class="absolute top-4 left-1/2 -translate-x-1/2 bg-surface-container-highest px-3 py-1 rounded-lg border border-white/10 text-[10px] font-bold flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+                            Peak Efficiency: 2:15 PM
+                        </div>
+</div>
+<div class="flex justify-between mt-4 text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+<span>08:00 AM</span>
+<span>10:00 AM</span>
+<span>12:00 PM</span>
+<span>02:00 PM</span>
+<span>04:00 PM</span>
+<span>06:00 PM</span>
+</div>
+</div>
+<!-- 3. Recent Incoming Messages Feed -->
+<div class="col-span-12 lg:col-span-8 space-y-4">
+<div class="flex items-center justify-between mb-2">
+<h3 class="text-lg font-bold font-headline">Live Stream</h3>
+<button class="text-xs font-bold text-primary-fixed hover:underline">View All Messages</button>
+</div>
+<div class="space-y-3">
+<!-- Message Card -->
+<div class="glass-panel p-4 rounded-2xl border border-white/5 flex items-center gap-4 hover:bg-white/5 transition-all duration-300">
+<div class="relative">
+<img class="w-12 h-12 rounded-full object-cover" data-alt="Close up of a woman with a friendly expression in natural light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQCpU6EFb4dqTTrhFvOFTnwOKYMA7axpoDAdxs258Q2Hk4dIuhs-bfFa72ud9oWRP-hSSrhyFb-QSi39oEs90M9ekueOkHl1Mtxa41H98IE9zViuZD6NK2v4KszWQUEIN8Y87nl1DIhYROkZGe4OlgomRPn8zmIGs-eOOH7ergx14Clp1S6VlwEvHQp9RFRvLLA1UuyLTNj4Ba66JYvnT1uYCN27ODeVH4agQO88BQ_2AB8B0yQTqKxBvM5JJCAzs2daI9EhkEPw"/>
+<div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-secondary border-4 border-surface flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary text-[12px]" style="font-variation-settings: 'FILL' 1;">chat_bubble</span>
+</div>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-0.5">
+<span class="font-bold text-on-surface">Elena Rodriguez</span>
+<span class="text-[10px] text-zinc-500 font-medium uppercase tracking-tighter">Just Now</span>
+</div>
+<p class="text-sm text-on-surface-variant truncate max-w-md">The shipment I received yesterday is missing the primary module. Can you check my order #4829?</p>
+</div>
+<div class="flex gap-2">
+<button class="bg-surface-container-highest p-2 rounded-xl text-zinc-400 hover:text-white transition-all">
+<span class="material-symbols-outlined text-[20px]">reply</span>
+</button>
+<button class="bg-surface-container-highest p-2 rounded-xl text-zinc-400 hover:text-white transition-all">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Message Card 2 -->
+<div class="glass-panel p-4 rounded-2xl border border-white/5 flex items-center gap-4 hover:bg-white/5 transition-all duration-300 opacity-90 scale-[0.99]">
+<div class="relative">
+<img class="w-12 h-12 rounded-full object-cover" data-alt="Portrait of a businessman in a suit against a city background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrLNbZycPlnCk23Oet52ylf4mRXnKXPPatvdpho735ILgPniLXo-znKjkI5WkfRY6iq6064kk9fkA3htWAuLazVaQoZqaJq32iQ2sxGta60_ZoC02kraTBVaMJ0igHQW9tbBTq-r6nRejV_1xnyBm6ROZxremM-US3w7j73ZMVYTDO2-DMc9Nwo9iQKJkEQ7Y4YqGjRzdDOvjVK2Y-wUZz7oGa-oURatQVUcb4tjE9H0mv_SnpRTq-yW1KpryElqM2raaJgKCjUw"/>
+<div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary border-4 border-surface flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-[12px]" style="font-variation-settings: 'FILL' 1;">social_leaderboard</span>
+</div>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-0.5">
+<span class="font-bold text-on-surface">Marcus T.</span>
+<span class="text-[10px] text-zinc-500 font-medium uppercase tracking-tighter">4m ago</span>
+</div>
+<p class="text-sm text-on-surface-variant truncate max-w-md">I'm interested in the Enterprise subscription plan for my team of 400 people.</p>
+</div>
+<div class="flex gap-2">
+<button class="bg-surface-container-highest p-2 rounded-xl text-zinc-400 hover:text-white transition-all">
+<span class="material-symbols-outlined text-[20px]">reply</span>
+</button>
+</div>
+</div>
+<!-- Message Card 3 -->
+<div class="glass-panel p-4 rounded-2xl border border-white/5 flex items-center gap-4 hover:bg-white/5 transition-all duration-300 opacity-80 scale-[0.98]">
+<div class="relative">
+<img class="w-12 h-12 rounded-full object-cover" data-alt="Creative professional looking at the camera in a modern studio setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6NCeHhFofA84oCbxaocBXkWGCFo2s_PTTUKuqlZHze2Yo1iE84iN1ROEMWX-3ugYXiI3Uqpss-gAwxT0dHX9bhx_Fk4Xik12P698ECJW7QTmzIcc5C2JYm0sqw6wAVWuEQXUmTePFB0WdaehfcJwLm46PdKSNtReAFo6oTuWhPE3ISyLfsdLSlQcGTMAA2J-ZpepgEkG0bK9kO7o0atryohasb6GDEAQcJ0wisBp8XTk8Lsdxr5nPfzbddvBcM4MKkE1dJzkEtw"/>
+<div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-tertiary border-4 border-surface flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-[12px]" style="font-variation-settings: 'FILL' 1;">photo_camera</span>
+</div>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-center mb-0.5">
+<span class="font-bold text-on-surface">Sarah Bloom</span>
+<span class="text-[10px] text-zinc-500 font-medium uppercase tracking-tighter">12m ago</span>
+</div>
+<p class="text-sm text-on-surface-variant truncate max-w-md">Shared a photo to your story: "Love the new interface updates!"</p>
+</div>
+<div class="flex gap-2">
+<button class="bg-surface-container-highest p-2 rounded-xl text-zinc-400 hover:text-white transition-all">
+<span class="material-symbols-outlined text-[20px]">favorite</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- 4. Agent Performance Leaderboard -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container-low rounded-[2rem] p-6 border border-white/5 self-start">
+<h3 class="text-sm font-bold text-on-surface-variant uppercase tracking-widest mb-6">Top Performers</h3>
+<div class="space-y-6">
+<!-- Agent Item -->
+<div class="flex items-center gap-4">
+<div class="relative">
+<img class="w-10 h-10 rounded-full border border-primary-container" data-alt="Portrait of a professional man with glasses and a warm smile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCwBQxmXDsilwVdV1-NS18esZjm4NAVlR23qhQI3tEM7iYc99NODuk6pXZxilgv2AfwD9vcJgr3l2Ud-j3plYvbHKT5sItSlRdYd0ptFHYfjOYCVVFADym0aKvQ8aUNhEAmNPtzfMM0z28mfptJGeeAGrkpajyGGHztO78NH08f4pXRkhPTcMjEkM2yVC0-_rXbLepJq_WwdHa8gNZjbzeP9Vn1wkaRegijLq-UJC7MY2Jp0-m3hJzbsgUf517i1YhTPQMQnGizQg"/>
+<div class="absolute -top-1 -right-1 bg-yellow-500 text-black text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">1</div>
+</div>
+<div class="flex-1">
+<h4 class="text-sm font-bold">Liam Vance</h4>
+<div class="w-full bg-white/5 h-1.5 rounded-full mt-1.5 overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 94%"></div>
+</div>
+</div>
+<div class="text-right">
+<p class="text-xs font-bold text-on-surface">94% CSAT</p>
+<p class="text-[10px] text-zinc-500">142 closed</p>
+</div>
+</div>
+<!-- Agent Item -->
+<div class="flex items-center gap-4">
+<div class="relative">
+<img class="w-10 h-10 rounded-full border border-white/10" data-alt="Portrait of a confident female executive in a minimalist studio" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDcpvl6K206sMHwGnZcSRbJwewHY0_FBCbCr7Kx5YJTsoUf-76IJk6CXousP0hsnA3ut4RxgIyiDj5bI0oEER7pUmcM8CwPAxNlcISsTRNY0QOzUPuv4LLlNjG3A83GCGoPC4XLuxF7NrfWwBjHzWRff1_EA_NIWR4skk_VEjtq_R-YC0H3IDoYRoxPN72iRgHheYIxj-jECyRZOGAC3L7LGGcai2Fvai-khy_oZdEx9kpRykMySFVlBC7xnWM0Xhn8taOqDwX3JA"/>
+<div class="absolute -top-1 -right-1 bg-zinc-400 text-black text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">2</div>
+</div>
+<div class="flex-1">
+<h4 class="text-sm font-bold">Avery Chen</h4>
+<div class="w-full bg-white/5 h-1.5 rounded-full mt-1.5 overflow-hidden">
+<div class="bg-primary h-full rounded-full opacity-80" style="width: 88%"></div>
+</div>
+</div>
+<div class="text-right">
+<p class="text-xs font-bold text-on-surface">88% CSAT</p>
+<p class="text-[10px] text-zinc-500">128 closed</p>
+</div>
+</div>
+<!-- Agent Item -->
+<div class="flex items-center gap-4">
+<div class="relative">
+<img class="w-10 h-10 rounded-full border border-white/10" data-alt="Professional man in business attire looking focused" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBhFJ5d5q2rcMw5jJMk2LKscaCv8KqmHMrHCBFff3GAqsHe1MT6UhLMqHKAg5em3iMM-vPoDA484vDe-iNGmuSeBqTGnOcjD_HbdeIAzfam419BzFqkPdQyeosz144hOUUHQFg60XGIzzD9RItpy89msG5l2-v4nMtUBiXKaVi4SDyyRMpWPdBUCWc3Oxgqgw0CcuaIw_dF0LGxD6aG9R8oyrD1fdZx__IAIGazjtUfACsvRfJsBXdn_-JFSY5g1WimnXs03WRYqA"/>
+<div class="absolute -top-1 -right-1 bg-orange-700 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">3</div>
+</div>
+<div class="flex-1">
+<h4 class="text-sm font-bold">Julian Cross</h4>
+<div class="w-full bg-white/5 h-1.5 rounded-full mt-1.5 overflow-hidden">
+<div class="bg-primary h-full rounded-full opacity-60" style="width: 82%"></div>
+</div>
+</div>
+<div class="text-right">
+<p class="text-xs font-bold text-on-surface">82% CSAT</p>
+<p class="text-[10px] text-zinc-500">115 closed</p>
+</div>
+</div>
+</div>
+<button class="w-full mt-8 py-3 rounded-2xl bg-surface-container-highest border border-white/5 text-xs font-bold hover:bg-white/5 transition-all tracking-widest uppercase">
+                        Full Performance Audit
+                    </button>
+</div>
+</div>
+<!-- Footer Connectivity Strip -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<div class="bg-surface-container-low p-4 rounded-2xl border border-white/5 flex items-center gap-3">
+<div class="w-3 h-3 rounded-full bg-secondary shadow-[0_0_8px_#5dfd8a]"></div>
+<span class="text-xs font-bold uppercase tracking-widest text-zinc-500">WhatsApp API</span>
+<span class="ml-auto text-xs font-bold">2ms</span>
+</div>
+<div class="bg-surface-container-low p-4 rounded-2xl border border-white/5 flex items-center gap-3">
+<div class="w-3 h-3 rounded-full bg-secondary shadow-[0_0_8px_#5dfd8a]"></div>
+<span class="text-xs font-bold uppercase tracking-widest text-zinc-500">Meta Graph</span>
+<span class="ml-auto text-xs font-bold">14ms</span>
+</div>
+<div class="bg-surface-container-low p-4 rounded-2xl border border-white/5 flex items-center gap-3">
+<div class="w-3 h-3 rounded-full bg-secondary shadow-[0_0_8px_#5dfd8a]"></div>
+<span class="text-xs font-bold uppercase tracking-widest text-zinc-500">AI Engine</span>
+<span class="ml-auto text-xs font-bold">110ms</span>
+</div>
+<div class="bg-surface-container-low p-4 rounded-2xl border border-white/5 flex items-center gap-3">
+<div class="w-3 h-3 rounded-full bg-error-dim animate-pulse shadow-[0_0_8px_#d7383b]"></div>
+<span class="text-xs font-bold uppercase tracking-widest text-zinc-500">Shopify Sync</span>
+<span class="ml-auto text-xs font-bold text-error">Latency</span>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Action Button (FAB) - Suppressed on complex dashboard as per instructions but added here if needed for primary context -->
+<button class="fixed bottom-8 right-8 w-14 h-14 bg-primary rounded-full shadow-[0_8px_24px_rgba(127,175,255,0.4)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all duration-200 z-50 group">
+<span class="material-symbols-outlined text-on-primary text-3xl group-hover:rotate-90 transition-transform duration-300">add</span>
+</button>
+</body></html>

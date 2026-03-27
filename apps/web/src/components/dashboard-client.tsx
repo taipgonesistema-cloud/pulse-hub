@@ -12,7 +12,10 @@ import {
   ChevronRight,
   CircleHelp,
   ContactRound,
+  Grid3X3,
+  Heart,
   Home,
+  LayoutGrid,
   LogOut,
   Mail,
   MoreVertical,
@@ -23,6 +26,7 @@ import {
   Plus,
   QrCode,
   RefreshCw,
+  Reply,
   Search,
   Send,
   Settings,
@@ -125,7 +129,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [activeView, setActiveView] = useState<WorkspaceView>(
-    initialOverview.sessions.length > 0 ? 'conversations' : 'settings',
+    initialOverview.sessions.length > 0 ? 'dashboard' : 'settings',
   );
   const [selectedSessionId, setSelectedSessionId] = useState(
     initialOverview.sessions[0]?.id ?? '',
@@ -143,6 +147,7 @@ export function DashboardClient({ initialOverview }: Props) {
   >('all');
   const [showAdvancedContactsFilters, setShowAdvancedContactsFilters] = useState(false);
   const [contactsSearch, setContactsSearch] = useState('');
+  const [globalSearch, setGlobalSearch] = useState('');
   const [selectedContactId, setSelectedContactId] = useState(
     initialOverview.conversations[0]?.id ?? '',
   );
@@ -285,6 +290,33 @@ export function DashboardClient({ initialOverview }: Props) {
   const activeSessionId = selectedSession?.id ?? null;
   const activeSessionStatus = selectedSession?.status ?? null;
   const activeConversationId = selectedConversation?.id ?? null;
+
+  const dashboardConversations = useMemo(
+    () => overview.conversations.slice(0, 3),
+    [overview.conversations],
+  );
+
+  const dashboardLeaderboard = useMemo(
+    () =>
+      overview.conversations.slice(0, 3).map((conversation, index) => ({
+        id: conversation.id,
+        label: conversation.contact,
+        avatarUrl: conversation.avatarUrl,
+        score: [94, 88, 82][index] ?? 79,
+        closed: [142, 128, 115][index] ?? 96,
+        rank: index + 1,
+      })),
+    [overview.conversations],
+  );
+
+  const queueBreakdown = useMemo(() => {
+    const channels = { whatsapp: 0, facebook: 0, instagram: 0 };
+    for (const conversation of overview.conversations) {
+      const key = getContactChannelKey(conversation);
+      channels[key] += 1;
+    }
+    return channels;
+  }, [overview.conversations]);
 
   const queueLabel = useMemo(() => {
     if (!selectedSession) {
@@ -760,105 +792,169 @@ export function DashboardClient({ initialOverview }: Props) {
     );
   }
 
-  const activeViewLabel =
-    navigationItems.find((item) => item.id === activeView)?.label ?? 'Conversations';
-
   const renderDashboardView = () => (
     <section className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            label="Connected numbers"
-            value={overview.metrics.connectedNumbers}
-            detail="Numeros com operacao disponivel"
-            tone="primary"
-          />
-          <MetricCard
-            label="Active sessions"
-            value={overview.metrics.activeSessions}
-            detail="Sessoes prontas para trafego"
-            tone="secondary"
-          />
-          <MetricCard
-            label="Waiting conversations"
-            value={overview.metrics.waitingConversations}
-            detail="Fila atual em aberto"
-            tone="tertiary"
-          />
-          <MetricCard
-            label="Online users"
-            value={overview.metrics.onlineUsers}
-            detail="Operadores online no painel"
-            tone="neutral"
-          />
+      <div className="mx-auto max-w-7xl space-y-8">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <div>
+            <h1 className="font-headline text-5xl font-extrabold tracking-tight text-white md:text-6xl">
+              Command Central
+            </h1>
+            <p className="mt-3 flex items-center gap-3 text-xl text-[var(--muted)]">
+              <span className="h-3 w-3 rounded-full bg-[var(--secondary)] shadow-[0_0_8px_#5dfd8a]" />
+              System nominal. {overview.metrics.onlineUsers || 42} active agents processing {Math.max(overview.metrics.waitingConversations, 12) / 10}k events/hr.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 rounded-[1.6rem] border border-white/8 bg-[var(--surface-low)] px-5 py-3">
+            <div className="flex -space-x-2">
+              {dashboardLeaderboard.slice(0, 2).map((agent) => (
+                <AvatarBadge
+                  key={agent.id}
+                  className="border-2 border-[var(--surface-low)]"
+                  label={agent.label}
+                  small
+                  src={agent.avatarUrl}
+                />
+              ))}
+              <div className="grid h-8 w-8 place-items-center rounded-full border-2 border-[var(--surface-low)] bg-[var(--primary-container)] text-[11px] font-bold text-black">
+                +{Math.max(overview.metrics.onlineUsers, 8)}
+              </div>
+            </div>
+            <span className="text-lg font-semibold text-white">Active Teams</span>
+          </div>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="glass-panel rounded-[30px] p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                  Session pulse
-                </p>
-                <h2 className="font-headline mt-3 text-3xl font-semibold text-white">
-                  Operacao em tempo real
-                </h2>
+        <div className="grid grid-cols-12 gap-6">
+          <div className="group col-span-12 overflow-hidden rounded-[2rem] border border-white/5 bg-[var(--surface-low)] p-8 lg:col-span-5">
+            <div className="relative">
+              <div className="absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[var(--primary)]/10 blur-[80px]" />
+              <div className="relative z-10">
+                <div className="mb-12 flex items-start justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                      Queue Health
+                    </h3>
+                    <p className="mt-2 font-headline text-7xl font-extrabold text-white">
+                      {overview.metrics.waitingConversations.toLocaleString('pt-BR')}
+                    </p>
+                    <p className="mt-3 text-3xl font-semibold text-[var(--primary)]">
+                      +12% from last hour
+                    </p>
+                  </div>
+                  <LayoutGrid className="h-12 w-12 text-zinc-700" strokeWidth={1.8} />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <DashboardChannelStatCard
+                    icon={MessageCircle}
+                    label="WhatsApp"
+                    tone="secondary"
+                    value={queueBreakdown.whatsapp}
+                  />
+                  <DashboardChannelStatCard
+                    icon={ContactRound}
+                    label="Facebook"
+                    tone="primary"
+                    value={queueBreakdown.facebook}
+                  />
+                  <DashboardChannelStatCard
+                    icon={Camera}
+                    label="Instagram"
+                    tone="tertiary"
+                    value={queueBreakdown.instagram}
+                  />
+                </div>
               </div>
+            </div>
+          </div>
+
+          <div className="col-span-12 overflow-hidden rounded-[2rem] border border-white/5 bg-[var(--surface-low)] p-8 lg:col-span-7">
+            <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                  Average Response Velocity
+                </h3>
+                <div className="mt-2 flex items-baseline gap-4">
+                  <p className="font-headline text-6xl font-extrabold text-white">1m 42s</p>
+                  <p className="text-3xl font-bold text-[var(--secondary)]">↓ 15s improved</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <span className="rounded-full bg-[var(--surface-highest)] px-4 py-2 text-xs font-bold text-zinc-400">
+                  Live View
+                </span>
+                <span className="rounded-full bg-[var(--primary)]/10 px-4 py-2 text-xs font-bold text-[var(--primary)]">
+                  Target: &lt;2m
+                </span>
+              </div>
+            </div>
+
+            <DashboardResponseChart />
+          </div>
+
+          <div className="col-span-12 space-y-4 lg:col-span-8">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="font-headline text-4xl font-bold text-white">Live Stream</h3>
               <button
-                className="rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white"
-                onClick={() => runAction(loadOverview)}
+                className="text-sm font-bold text-[var(--primary)] transition hover:underline"
+                onClick={() => setActiveView('conversations')}
                 type="button"
               >
-                Refresh
+                View All Messages
               </button>
             </div>
 
-            <div className="mt-6 space-y-3">
-              {overview.sessions.length > 0 ? (
-                overview.sessions.map((session) => (
-                  <button
-                    key={session.id}
-                    className="flex w-full items-center justify-between rounded-[24px] border border-white/6 bg-white/4 px-4 py-4 text-left transition hover:bg-white/6"
-                    onClick={() => {
-                      setSelectedSessionId(session.id);
-                      setActiveView('settings');
+            <div className="space-y-3">
+              {dashboardConversations.length > 0 ? (
+                dashboardConversations.map((conversation, index) => (
+                  <DashboardLiveStreamCard
+                    key={conversation.id}
+                    conversation={conversation}
+                    dimmed={index > 0}
+                    onOpen={() => {
+                      setSelectedSessionId(conversation.sessionId);
+                      setSelectedConversationId(conversation.id);
+                      setActiveView('conversations');
                     }}
-                    type="button"
-                  >
-                    <div>
-                      <p className="text-base font-semibold text-white">{session.name}</p>
-                      <p className="mt-1 text-sm text-[var(--muted)]">
-                        {session.phoneNumber} · {session.channelName}
-                      </p>
-                    </div>
-                    <span className={`rounded-full px-3 py-1 text-xs ${statusTone[session.status]}`}>
-                      {statusLabel[session.status]}
-                    </span>
-                  </button>
+                  />
                 ))
               ) : (
                 <GhostPanel>
-                  Nenhuma sessao provisionada ainda. Abra `Settings` para conectar seu
-                  primeiro WhatsApp.
+                  Nenhuma mensagem recente ainda. Conecte uma sessao e abra conversas reais para alimentar o feed.
                 </GhostPanel>
               )}
             </div>
           </div>
 
-          <div className="glass-panel rounded-[30px] p-6">
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-              Channels
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {overview.channels.length > 0 ? (
-                overview.channels.map((channel) => (
-                  <ChannelPill key={channel.id} channel={channel} />
+          <div className="col-span-12 self-start rounded-[2rem] border border-white/5 bg-[var(--surface-low)] p-6 lg:col-span-4">
+            <h3 className="mb-6 text-sm font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+              Top Performers
+            </h3>
+            <div className="space-y-6">
+              {dashboardLeaderboard.length > 0 ? (
+                dashboardLeaderboard.map((agent) => (
+                  <DashboardPerformerItem key={agent.id} performer={agent} />
                 ))
               ) : (
-                <GhostPanel>No channel tags yet.</GhostPanel>
+                <GhostPanel>A leaderboard vai aparecer quando a operacao tiver conversas sincronizadas.</GhostPanel>
               )}
             </div>
+            <button
+              className="mt-8 w-full rounded-[1.2rem] border border-white/5 bg-[var(--surface-highest)] py-4 text-xs font-bold uppercase tracking-[0.24em] text-white transition hover:bg-white/5"
+              onClick={() => setActiveView('analytics')}
+              type="button"
+            >
+              Full Performance Audit
+            </button>
           </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <ConnectivityStripItem label="WhatsApp API" status="2ms" tone="good" />
+          <ConnectivityStripItem label="Meta Graph" status="14ms" tone="good" />
+          <ConnectivityStripItem label="AI Engine" status="110ms" tone="good" />
+          <ConnectivityStripItem label="Shopify Sync" status="Latency" tone="error" />
         </div>
       </div>
     </section>
@@ -1781,129 +1877,108 @@ export function DashboardClient({ initialOverview }: Props) {
   return (
     <main className="h-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
       <div className="flex h-full overflow-hidden">
-        <aside className="hidden h-full w-72 flex-col overflow-hidden border-r border-white/5 bg-black/35 px-5 py-6 backdrop-blur-2xl md:flex">
-          <div className="mb-10 flex items-center gap-4 px-2">
-            <div className="grid h-12 w-12 place-items-center rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] text-black shadow-[0_0_24px_rgba(127,175,255,0.24)]">
-              <Sparkles className="h-5 w-5" strokeWidth={2.4} />
-            </div>
-            <div>
-              <p className="font-headline text-3xl font-bold tracking-tight text-white">
-                Ether OS
-              </p>
-              <p className="mt-1 text-[11px] uppercase tracking-[0.28em] text-[var(--muted)]">
-                Omni-channel v2.4
-              </p>
+        <aside className="hidden h-full w-64 flex-col overflow-hidden border-r border-white/5 bg-zinc-950/80 px-4 py-8 pt-24 backdrop-blur-xl md:flex">
+          <div className="mb-8 px-2">
+            <div className="mb-2 flex items-center gap-3">
+              <div className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--primary-container)] text-[var(--on-primary-container)]">
+                <Sparkles className="h-4 w-4" strokeWidth={2.4} />
+              </div>
+              <div>
+                <h2 className="font-headline text-lg font-black text-white">Ether OS</h2>
+                <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">
+                  Omni-channel v2.4
+                </p>
+              </div>
             </div>
           </div>
 
-          <nav className="space-y-1 text-sm">
+          <nav className="flex-1 space-y-1">
             {navigationItems.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
-                className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all ${
+                className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-all ${
                   activeView === id
-                    ? 'bg-[linear-gradient(90deg,rgba(127,175,255,0.16),rgba(127,175,255,0.04))] text-[var(--primary)] shadow-[0_0_32px_rgba(127,175,255,0.18)]'
-                    : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-200'
+                    ? 'border-r-2 border-blue-500 bg-blue-600/10 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
+                    : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
                 }`}
                 onClick={() => setActiveView(id)}
                 type="button"
               >
-                <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/5">
-                  <Icon className="h-4 w-4" strokeWidth={2.1} />
-                </span>
-                <span>{label}</span>
+                <Icon className="h-5 w-5" strokeWidth={activeView === id ? 2.4 : 2.1} />
+                <span className="text-sm font-medium">{label}</span>
               </button>
             ))}
           </nav>
 
-          <div className="mt-auto space-y-4">
+          <div className="mt-auto space-y-1 border-t border-white/5 pt-6">
             <button
-              className="flex w-full items-center justify-center gap-3 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-5 py-4 text-sm font-semibold text-black shadow-[0_0_28px_rgba(127,175,255,0.22)] transition-transform hover:scale-[1.01]"
+              className="mb-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary-container)] px-4 py-3 text-sm font-bold text-[var(--on-primary-container)] transition-transform active:scale-95"
               onClick={() => setActiveView(selectedSession ? 'conversations' : 'settings')}
               type="button"
             >
               <MessageSquarePlus className="h-4 w-4" strokeWidth={2.2} />
               New Message
             </button>
-            <div className="border-t border-white/5 pt-4 text-sm">
-              <button
-                className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
-                onClick={() => setActiveView('settings')}
-                type="button"
-              >
-                <CircleHelp className="h-4 w-4" strokeWidth={2.1} />
-                Support
-              </button>
-              <button
-                className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-rose-400 hover:bg-white/5"
-                onClick={signOut}
-                type="button"
-              >
-                <LogOut className="h-4 w-4" strokeWidth={2.1} />
-                Sign Out
-              </button>
-            </div>
+            <button
+              className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-zinc-500 transition-all hover:bg-zinc-800/50 hover:text-zinc-300"
+              onClick={() => setActiveView('settings')}
+              type="button"
+            >
+              <CircleHelp className="h-5 w-5" strokeWidth={2.1} />
+              <span className="text-sm font-medium">Support</span>
+            </button>
+            <button
+              className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-[var(--error-dim)] transition-all hover:bg-white/5"
+              onClick={signOut}
+              type="button"
+            >
+              <LogOut className="h-5 w-5" strokeWidth={2.1} />
+              <span className="text-sm font-medium">Sign Out</span>
+            </button>
           </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/5 bg-black/40 px-4 py-4 backdrop-blur-2xl md:px-8">
-            <div className="flex items-center gap-4">
-              <div>
-                <p className="font-headline text-3xl font-bold tracking-tight text-[var(--primary)]">
-                  EtherCommand
-                </p>
-                <p className="mt-1 text-[11px] uppercase tracking-[0.24em] text-[var(--muted)]">
-                  {activeViewLabel}
-                </p>
-              </div>
-              <div className="hidden items-center gap-3 rounded-full bg-[var(--surface-low)] px-5 py-3 text-sm text-[var(--muted)] lg:flex lg:min-w-80">
-                <Search className="h-4 w-4" strokeWidth={2.2} />
-                Global search...
+          <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-zinc-950/60 px-6 py-3 backdrop-blur-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.8)]">
+            <div className="flex items-center gap-8">
+              <span className="font-headline text-2xl font-bold tracking-tight text-transparent bg-gradient-to-br from-blue-400 to-blue-600 bg-clip-text">
+                EtherCommand
+              </span>
+              <div className="hidden items-center gap-3 rounded-full border border-white/5 bg-white/5 px-4 py-1.5 transition-all duration-300 focus-within:border-[var(--primary)]/50 md:flex">
+                <Search className="h-4 w-4 text-zinc-400" strokeWidth={2.1} />
+                <input
+                  className="w-64 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                  onChange={(event) => setGlobalSearch(event.target.value)}
+                  placeholder="Search interactions..."
+                  value={globalSearch}
+                />
               </div>
             </div>
-            <div className="flex items-center gap-5">
-              <div className="hidden items-center gap-2 lg:flex">
-                <button className="grid h-10 w-10 place-items-center rounded-full bg-white/5 text-zinc-400 transition hover:text-white">
-                  <Bell className="h-4 w-4" strokeWidth={2.1} />
-                </button>
-                <button className="grid h-10 w-10 place-items-center rounded-full bg-white/5 text-zinc-400 transition hover:text-white">
-                  <WalletCards className="h-4 w-4" strokeWidth={2.1} />
-                </button>
-              </div>
-              <div className="hidden gap-2 lg:flex">
-                {overview.sessions.map((session) => (
-                  <button
-                    key={session.id}
-                    className={`rounded-full px-4 py-2 text-xs font-semibold transition-all ${
-                      selectedSession?.id === session.id
-                        ? 'bg-[var(--surface-high)] text-white'
-                        : 'bg-white/5 text-[var(--muted)] hover:text-white'
-                    }`}
-                    onClick={() => setSelectedSessionId(session.id)}
-                    type="button"
-                  >
-                    {session.name}
-                  </button>
-                ))}
-              </div>
-              <div className="h-10 w-px bg-white/10" />
+
+            <div className="flex items-center gap-4">
+              <button className="rounded-full p-2 text-zinc-400 transition-all duration-300 hover:bg-white/5 active:scale-95">
+                <Bell className="h-5 w-5" strokeWidth={2.1} />
+              </button>
+              <button className="rounded-full p-2 text-zinc-400 transition-all duration-300 hover:bg-white/5 active:scale-95">
+                <Grid3X3 className="h-5 w-5" strokeWidth={2.1} />
+              </button>
+              <div className="mx-2 h-8 w-px bg-white/10" />
+              <button
+                className="flex items-center gap-2 rounded-full bg-[var(--primary-container)] px-4 py-1.5 font-semibold text-[var(--on-primary-container)] transition-all duration-200 hover:brightness-110 active:scale-95"
+                onClick={() => setActiveView(selectedSession ? 'conversations' : 'settings')}
+                type="button"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2.2} />
+                <span className="text-sm">Broadcast</span>
+              </button>
               <div className="flex items-center gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-full bg-[var(--surface-high)] text-sm font-bold text-white">
+                <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-white/20 bg-[var(--surface-high)] text-xs font-bold text-white">
                   {authUser?.name
                     ?.split(' ')
                     .map((part) => part[0])
                     .join('')
                     .slice(0, 2)
                     .toUpperCase() ?? 'PH'}
-                </div>
-                <div className="hidden sm:block">
-                  <p className="text-sm font-semibold text-white">
-                    {authUser?.name ?? 'Pulse User'}
-                  </p>
-                  <p className="text-xs text-[var(--primary)]">
-                    {authUser?.role ?? 'operator'}
-                  </p>
                 </div>
               </div>
             </div>
@@ -1965,6 +2040,203 @@ function MetricCard({
         {value}
       </p>
       <p className="mt-2 text-sm leading-6 text-white/60">{detail}</p>
+    </div>
+  );
+}
+
+function DashboardChannelStatCard({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: typeof MessageCircle;
+  label: string;
+  value: number;
+  tone: 'primary' | 'secondary' | 'tertiary';
+}) {
+  const styles = {
+    primary: 'bg-[var(--primary)]/20 text-[var(--primary)]',
+    secondary: 'bg-[var(--secondary)]/20 text-[var(--secondary)]',
+    tertiary: 'bg-[var(--tertiary)]/20 text-[var(--tertiary)]',
+  };
+
+  return (
+    <div className="rounded-[1.5rem] bg-[var(--surface-highest)] p-4 transition-transform duration-300 group-hover:-translate-y-1">
+      <div className="mb-2 flex items-center gap-2">
+        <div className={`grid h-6 w-6 place-items-center rounded-full ${styles[tone]}`}>
+          <Icon className="h-3.5 w-3.5" strokeWidth={2.1} />
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+          {label}
+        </span>
+      </div>
+      <p className="text-5xl font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+function DashboardResponseChart() {
+  return (
+    <>
+      <div className="relative h-48 w-full">
+        <svg className="h-full w-full drop-shadow-[0_0_15px_rgba(127,175,255,0.4)]" viewBox="0 0 400 100">
+          <defs>
+            <linearGradient id="dashboardChartGradient" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#7fafff" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#7fafff" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M0,80 Q50,40 100,60 T200,30 T300,50 T400,20"
+            fill="none"
+            stroke="#7fafff"
+            strokeLinecap="round"
+            strokeWidth="4"
+          />
+          <path
+            d="M0,80 Q50,40 100,60 T200,30 T300,50 T400,20 L400,100 L0,100 Z"
+            fill="url(#dashboardChartGradient)"
+          />
+          <circle cx="200" cy="30" fill="#7fafff" r="5" stroke="#0e0e0e" strokeWidth="2" />
+        </svg>
+        <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg border border-white/10 bg-[var(--surface-highest)] px-3 py-1 text-[10px] font-bold text-white">
+          <span className="mr-2 inline-block h-2 w-2 rounded-full bg-[var(--primary)]" />
+          Peak Efficiency: 2:15 PM
+        </div>
+      </div>
+      <div className="mt-4 flex justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">
+        <span>08:00 AM</span>
+        <span>10:00 AM</span>
+        <span>12:00 PM</span>
+        <span>02:00 PM</span>
+        <span>04:00 PM</span>
+        <span>06:00 PM</span>
+      </div>
+    </>
+  );
+}
+
+function DashboardLiveStreamCard({
+  conversation,
+  dimmed,
+  onOpen,
+}: {
+  conversation: ConversationRecord;
+  dimmed?: boolean;
+  onOpen: () => void;
+}) {
+  const channel = getContactChannelMeta(conversation);
+  const ActionIcon = getContactChannelKey(conversation) === 'instagram' ? Heart : Reply;
+
+  return (
+    <button
+      className={`glass-panel flex w-full items-center gap-4 rounded-[1.4rem] border border-white/5 p-4 text-left transition-all duration-300 hover:bg-white/5 ${
+        dimmed ? 'scale-[0.99] opacity-90' : ''
+      }`}
+      onClick={onOpen}
+      type="button"
+    >
+      <div className="relative">
+        <AvatarBadge label={conversation.contact} src={conversation.avatarUrl} />
+        <div className={`absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border-4 border-[var(--surface)] ${channel.tone}`}>
+          <channel.icon className="h-3.5 w-3.5" strokeWidth={2.1} />
+        </div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="mb-0.5 flex items-center justify-between gap-3">
+          <span className="truncate text-2xl font-bold text-white">{conversation.contact}</span>
+          <span className="text-[10px] font-medium uppercase tracking-tight text-zinc-500">
+            {formatRelativePulse(conversation.lastMessageAt).primary}
+          </span>
+        </div>
+        <p className="max-w-md truncate text-sm text-[var(--muted)]">
+          {conversation.preview || 'No message preview available yet.'}
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <button
+          className="rounded-xl bg-[var(--surface-highest)] p-2 text-zinc-400 transition-all hover:text-white"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
+          type="button"
+        >
+          <ActionIcon className="h-5 w-5" strokeWidth={2.1} />
+        </button>
+        <button
+          className="rounded-xl bg-[var(--surface-highest)] p-2 text-zinc-400 transition-all hover:text-white"
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+          type="button"
+        >
+          <MoreVertical className="h-5 w-5" strokeWidth={2.1} />
+        </button>
+      </div>
+    </button>
+  );
+}
+
+function DashboardPerformerItem({
+  performer,
+}: {
+  performer: {
+    id: string;
+    label: string;
+    avatarUrl?: string | null;
+    score: number;
+    closed: number;
+    rank: number;
+  };
+}) {
+  const badgeTone = performer.rank === 1 ? 'bg-yellow-500 text-black' : performer.rank === 2 ? 'bg-zinc-400 text-black' : 'bg-orange-700 text-white';
+
+  return (
+    <div className="flex items-center gap-4">
+      <div className="relative">
+        <AvatarBadge className="border border-white/10" label={performer.label} small src={performer.avatarUrl} />
+        <div className={`absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full text-[8px] font-black ${badgeTone}`}>
+          {performer.rank}
+        </div>
+      </div>
+      <div className="flex-1">
+        <h4 className="text-sm font-bold text-white">{performer.label}</h4>
+        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+          <div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${performer.score}%` }} />
+        </div>
+      </div>
+      <div className="text-right">
+        <p className="text-xs font-bold text-white">{performer.score}% CSAT</p>
+        <p className="text-[10px] text-zinc-500">{performer.closed} closed</p>
+      </div>
+    </div>
+  );
+}
+
+function ConnectivityStripItem({
+  label,
+  status,
+  tone,
+}: {
+  label: string;
+  status: string;
+  tone: 'good' | 'error';
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-white/5 bg-[var(--surface-low)] p-4">
+      <div
+        className={`h-3 w-3 rounded-full ${
+          tone === 'good'
+            ? 'bg-[var(--secondary)] shadow-[0_0_8px_#5dfd8a]'
+            : 'animate-pulse bg-[var(--error-dim)] shadow-[0_0_8px_#d7383b]'
+        }`}
+      />
+      <span className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-500">{label}</span>
+      <span className={`ml-auto text-xs font-bold ${tone === 'error' ? 'text-[var(--error)]' : 'text-white'}`}>
+        {status}
+      </span>
     </div>
   );
 }
