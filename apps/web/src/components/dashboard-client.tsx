@@ -165,6 +165,9 @@ export function DashboardClient({ initialOverview }: Props) {
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
   const lastConversationAnchorRef = useRef<string | null>(null);
+  const viewTransitionTimerRef = useRef<number | null>(null);
+  const [viewTransition, setViewTransition] = useState<WorkspaceView | null>(null);
+  const currentView = viewTransition ?? activeView;
   const isDashboardView = activeView === 'dashboard';
   const isAnalyticsView = activeView === 'analytics';
   const isContactsView = activeView === 'contacts';
@@ -472,6 +475,27 @@ export function DashboardClient({ initialOverview }: Props) {
     router.push('/login');
   }, [router]);
 
+  const navigateToView = useCallback(
+    (nextView: WorkspaceView) => {
+      if (nextView === activeView && viewTransition === null) {
+        return;
+      }
+
+      if (viewTransitionTimerRef.current) {
+        window.clearTimeout(viewTransitionTimerRef.current);
+      }
+
+      setViewTransition(nextView);
+      viewTransitionTimerRef.current = window.setTimeout(() => {
+        setActiveView(nextView);
+        window.requestAnimationFrame(() => {
+          setViewTransition(null);
+        });
+      }, 180);
+    },
+    [activeView, viewTransition],
+  );
+
   useEffect(() => {
     const token = window.localStorage.getItem('pulse-hub.auth-token');
     const rawUser = window.localStorage.getItem('pulse-hub.auth-user');
@@ -490,6 +514,14 @@ export function DashboardClient({ initialOverview }: Props) {
       router.replace('/login');
     }
   }, [router]);
+
+  useEffect(() => {
+    return () => {
+      if (viewTransitionTimerRef.current) {
+        window.clearTimeout(viewTransitionTimerRef.current);
+      }
+    };
+  }, []);
 
   const loadOverview = useCallback(async () => {
     const response = await fetch(`${apiUrl}/dashboard/overview`, {
@@ -874,7 +906,7 @@ export function DashboardClient({ initialOverview }: Props) {
       setSessionForm({ name: '', phoneNumber: '', channelName: '' });
       await loadOverview();
       setSelectedSessionId(createdSession.id);
-      setActiveView('settings');
+      navigateToView('settings');
     });
   };
 
@@ -1050,7 +1082,7 @@ export function DashboardClient({ initialOverview }: Props) {
               <h3 className="font-headline text-4xl font-bold text-white">Live Stream</h3>
               <button
                 className="text-sm font-bold text-[var(--primary)] transition hover:underline"
-                onClick={() => setActiveView('conversations')}
+                onClick={() => navigateToView('conversations')}
                 type="button"
               >
                 View All Messages
@@ -1067,7 +1099,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     onOpen={() => {
                       setSelectedSessionId(conversation.sessionId);
                       setSelectedConversationId(conversation.id);
-                      setActiveView('conversations');
+                      navigateToView('conversations');
                     }}
                   />
                 ))
@@ -1094,7 +1126,7 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
             <button
               className="mt-8 w-full rounded-[1.2rem] border border-white/5 bg-[var(--surface-highest)] py-4 text-xs font-bold uppercase tracking-[0.24em] text-white transition hover:bg-white/5"
-              onClick={() => setActiveView('analytics')}
+              onClick={() => navigateToView('analytics')}
               type="button"
             >
               Full Performance Audit
@@ -1327,7 +1359,7 @@ export function DashboardClient({ initialOverview }: Props) {
                                 event.stopPropagation();
                                 setSelectedSessionId(contact.sessionId);
                                 setSelectedConversationId(contact.id);
-                                setActiveView('conversations');
+                                navigateToView('conversations');
                               }}
                               type="button"
                             >
@@ -2089,7 +2121,7 @@ export function DashboardClient({ initialOverview }: Props) {
               <GhostPanel>Create or restore a WhatsApp session to begin.</GhostPanel>
               <button
                 className="rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-5 py-3 text-sm font-semibold text-black"
-                onClick={() => setActiveView('settings')}
+                onClick={() => navigateToView('settings')}
                 type="button"
               >
                 Abrir configuracoes
@@ -2156,7 +2188,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 <button
                   className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
                   onClick={() => {
-                    setActiveView('settings');
+                    navigateToView('settings');
                     connectSession(selectedSession.id);
                   }}
                   type="button"
@@ -2223,14 +2255,14 @@ export function DashboardClient({ initialOverview }: Props) {
               <button
                 key={id}
                 className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-all ${
-                  activeView === id
+                  currentView === id
                     ? 'border-r-2 border-blue-500 bg-blue-600/10 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
                     : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
                 }`}
-                onClick={() => setActiveView(id)}
+                onClick={() => navigateToView(id)}
                 type="button"
               >
-                <Icon className="h-5 w-5" strokeWidth={activeView === id ? 2.4 : 2.1} />
+                <Icon className="h-5 w-5" strokeWidth={currentView === id ? 2.4 : 2.1} />
                 <span className="text-sm font-medium">{label}</span>
               </button>
             ))}
@@ -2239,7 +2271,7 @@ export function DashboardClient({ initialOverview }: Props) {
           <div className="mt-auto space-y-1 border-t border-white/5 pt-6">
             <button
               className="mb-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary-container)] px-4 py-3 text-sm font-bold text-[var(--on-primary-container)] transition-transform active:scale-95"
-              onClick={() => setActiveView(selectedSession ? 'conversations' : 'settings')}
+              onClick={() => navigateToView(selectedSession ? 'conversations' : 'settings')}
               type="button"
             >
               <MessageSquarePlus className="h-4 w-4" strokeWidth={2.2} />
@@ -2247,7 +2279,7 @@ export function DashboardClient({ initialOverview }: Props) {
             </button>
             <button
               className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-zinc-500 transition-all hover:bg-zinc-800/50 hover:text-zinc-300"
-              onClick={() => setActiveView('settings')}
+              onClick={() => navigateToView('settings')}
               type="button"
             >
               <CircleHelp className="h-5 w-5" strokeWidth={2.1} />
@@ -2291,7 +2323,7 @@ export function DashboardClient({ initialOverview }: Props) {
               <div className="mx-2 h-8 w-px bg-white/10" />
               <button
                 className="flex items-center gap-2 rounded-full bg-[var(--primary-container)] px-4 py-1.5 font-semibold text-[var(--on-primary-container)] transition-all duration-200 hover:brightness-110 active:scale-95"
-                onClick={() => setActiveView(selectedSession ? 'conversations' : 'settings')}
+                onClick={() => navigateToView(selectedSession ? 'conversations' : 'settings')}
                 type="button"
               >
                 <Plus className="h-4 w-4" strokeWidth={2.2} />
@@ -2310,15 +2342,19 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
           </header>
 
-          {activeView === 'dashboard'
-            ? renderDashboardView()
-            : activeView === 'contacts'
-              ? renderContactsView()
-              : activeView === 'analytics'
-                ? renderAnalyticsView()
-                : activeView === 'settings'
-                  ? renderSettingsView()
-                  : renderConversationsView()}
+          {viewTransition ? (
+            <WorkspaceLoadingScreen targetView={viewTransition} />
+          ) : activeView === 'dashboard' ? (
+            renderDashboardView()
+          ) : activeView === 'contacts' ? (
+            renderContactsView()
+          ) : activeView === 'analytics' ? (
+            renderAnalyticsView()
+          ) : activeView === 'settings' ? (
+            renderSettingsView()
+          ) : (
+            renderConversationsView()
+          )}
         </div>
       </div>
     </main>
@@ -2564,6 +2600,102 @@ function ConnectivityStripItem({
         {status}
       </span>
     </div>
+  );
+}
+
+function WorkspaceLoadingScreen({ targetView }: { targetView: WorkspaceView }) {
+  const config: Record<
+    WorkspaceView,
+    { label: string; detail: string; icon: typeof Home }
+  > = {
+    dashboard: {
+      label: 'Command Central',
+      detail: 'Carregando sinais da operacao e feed em tempo real...',
+      icon: Home,
+    },
+    conversations: {
+      label: 'Conversations',
+      detail: 'Hidratando filas, timeline e estado do atendimento...',
+      icon: MessageCircle,
+    },
+    contacts: {
+      label: 'Contacts',
+      detail: 'Montando CRM, filtros e perfis dos contatos...',
+      icon: ContactRound,
+    },
+    analytics: {
+      label: 'Service Intelligence',
+      detail: 'Calculando estatisticas e organizando a leitura operacional...',
+      icon: BarChart3,
+    },
+    settings: {
+      label: 'Settings',
+      detail: 'Sincronizando sessoes, QR e configuracoes do workspace...',
+      icon: Settings,
+    },
+  };
+
+  const { label, detail, icon: Icon } = config[targetView];
+
+  return (
+    <section className="grid min-h-0 flex-1 place-items-center overflow-hidden px-6 py-8">
+      <div className="relative w-full max-w-4xl overflow-hidden rounded-[2rem] border border-white/6 bg-[linear-gradient(180deg,rgba(19,19,19,0.96),rgba(15,15,15,0.98))] p-8 md:p-12">
+        <div className="absolute -right-24 -top-20 h-56 w-56 rounded-full bg-[var(--primary)]/10 blur-[80px]" />
+        <div className="absolute -bottom-20 -left-12 h-48 w-48 rounded-full bg-[var(--secondary)]/10 blur-[70px]" />
+
+        <div className="relative z-10 flex flex-col gap-10">
+          <div className="flex flex-wrap items-center gap-5">
+            <div className="grid h-16 w-16 place-items-center rounded-[1.4rem] bg-[linear-gradient(135deg,#7fafff,#64a1ff)] text-black shadow-[0_0_28px_rgba(127,175,255,0.24)]">
+              <Icon className="h-7 w-7" strokeWidth={2.2} />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.28em] text-[var(--muted)]">
+                Loading workspace
+              </p>
+              <h2 className="font-headline mt-2 text-4xl font-extrabold text-white md:text-5xl">
+                {label}
+              </h2>
+              <p className="mt-2 max-w-2xl text-base leading-7 text-[var(--muted)]">
+                {detail}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={index}
+                className="overflow-hidden rounded-[1.5rem] border border-white/5 bg-[var(--surface-low)]/80 p-5"
+              >
+                <div className="h-3 w-24 animate-pulse rounded-full bg-white/10" />
+                <div className="mt-5 h-10 w-20 animate-pulse rounded-2xl bg-white/10" />
+                <div className="mt-8 h-2 w-full animate-pulse rounded-full bg-white/5" />
+                <div className="mt-3 h-2 w-3/4 animate-pulse rounded-full bg-white/5" />
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            <div className="h-3 w-32 animate-pulse rounded-full bg-white/10" />
+            <div className="grid gap-3">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-4 rounded-[1.4rem] border border-white/5 bg-[var(--surface-low)]/70 px-5 py-4"
+                >
+                  <div className="h-12 w-12 animate-pulse rounded-2xl bg-white/10" />
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <div className="h-3 w-1/3 animate-pulse rounded-full bg-white/10" />
+                    <div className="h-2.5 w-2/3 animate-pulse rounded-full bg-white/5" />
+                  </div>
+                  <div className="h-8 w-20 animate-pulse rounded-full bg-white/10" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
