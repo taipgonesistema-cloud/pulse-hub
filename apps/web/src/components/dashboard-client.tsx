@@ -1025,14 +1025,14 @@ export function DashboardClient({ initialOverview }: Props) {
   }
 
   const renderDashboardView = () => (
-    <section className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-8">
-      <div className="mx-auto max-w-7xl space-y-8">
+    <section className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
+      <div className="mx-auto max-w-none space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
-            <h1 className="font-headline text-5xl font-extrabold tracking-tight text-white md:text-6xl">
+            <h1 className="font-headline text-3xl font-extrabold tracking-tight text-white md:text-4xl">
               Command Central
             </h1>
-            <p className="mt-3 flex items-center gap-3 text-xl text-[var(--muted)]">
+            <p className="mt-2 flex items-center gap-3 text-sm text-[var(--muted)] md:text-base">
               <span className="h-3 w-3 rounded-full bg-[var(--secondary)] shadow-[0_0_8px_#5dfd8a]" />
               System nominal. {overview.metrics.onlineUsers || 42} active agents processing {Math.max(overview.metrics.waitingConversations, 12) / 10}k events/hr.
             </p>
@@ -1058,7 +1058,7 @@ export function DashboardClient({ initialOverview }: Props) {
         </div>
 
         <div className="grid grid-cols-12 gap-6">
-          <div className="group col-span-12 overflow-hidden rounded-[2rem] border border-white/5 bg-[var(--surface-low)] p-8 lg:col-span-5">
+          <div className="group col-span-12 overflow-hidden rounded-[1.5rem] border border-white/5 bg-[var(--surface-low)] p-6 lg:col-span-5">
             <div className="relative">
               <div className="absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[var(--primary)]/10 blur-[80px]" />
               <div className="relative z-10">
@@ -1067,14 +1067,14 @@ export function DashboardClient({ initialOverview }: Props) {
                     <h3 className="text-sm font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
                       Queue Health
                     </h3>
-                    <p className="mt-2 font-headline text-7xl font-extrabold text-white">
+                    <p className="mt-2 font-headline text-5xl font-extrabold text-white md:text-6xl">
                       {overview.metrics.waitingConversations.toLocaleString('pt-BR')}
                     </p>
-                    <p className="mt-3 text-3xl font-semibold text-[var(--primary)]">
+                    <p className="mt-2 text-xl font-semibold text-[var(--primary)] md:text-2xl">
                       +12% from last hour
                     </p>
                   </div>
-                  <LayoutGrid className="h-12 w-12 text-zinc-700" strokeWidth={1.8} />
+                  <LayoutGrid className="h-9 w-9 text-zinc-700" strokeWidth={1.8} />
                 </div>
 
                 <div className="grid grid-cols-3 gap-4">
@@ -1101,22 +1101,22 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
           </div>
 
-          <div className="col-span-12 overflow-hidden rounded-[2rem] border border-white/5 bg-[var(--surface-low)] p-8 lg:col-span-7">
+          <div className="col-span-12 overflow-hidden rounded-[1.5rem] border border-white/5 bg-[var(--surface-low)] p-6 lg:col-span-7">
             <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
               <div>
                 <h3 className="text-sm font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
                   Average Response Velocity
                 </h3>
                 <div className="mt-2 flex items-baseline gap-4">
-                  <p className="font-headline text-6xl font-extrabold text-white">1m 42s</p>
-                  <p className="text-3xl font-bold text-[var(--secondary)]">↓ 15s improved</p>
+                  <p className="font-headline text-4xl font-extrabold text-white md:text-5xl">1m 42s</p>
+                  <p className="text-xl font-bold text-[var(--secondary)] md:text-2xl">↓ 15s improved</p>
                 </div>
               </div>
               <div className="flex gap-2">
-                <span className="rounded-full bg-[var(--surface-highest)] px-4 py-2 text-xs font-bold text-zinc-400">
+                <span className="rounded-full bg-[var(--surface-highest)] px-3 py-1.5 text-[11px] font-bold text-zinc-400">
                   Live View
                 </span>
-                <span className="rounded-full bg-[var(--primary)]/10 px-4 py-2 text-xs font-bold text-[var(--primary)]">
+                <span className="rounded-full bg-[var(--primary)]/10 px-3 py-1.5 text-[11px] font-bold text-[var(--primary)]">
                   Target: &lt;2m
                 </span>
               </div>
@@ -1127,7 +1127,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
           <div className="col-span-12 space-y-4 lg:col-span-8">
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="font-headline text-4xl font-bold text-white">Live Stream</h3>
+              <h3 className="font-headline text-2xl font-bold text-white">Live Stream</h3>
               <button
                 className="text-sm font-bold text-[var(--primary)] transition hover:underline"
                 onClick={() => navigateToView('conversations')}
@@ -1159,7 +1159,7 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
           </div>
 
-          <div className="col-span-12 self-start rounded-[2rem] border border-white/5 bg-[var(--surface-low)] p-6 lg:col-span-4">
+          <div className="col-span-12 self-start rounded-[1.5rem] border border-white/5 bg-[var(--surface-low)] p-5 lg:col-span-4">
             <h3 className="mb-6 text-sm font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
               Top Performers
             </h3>
@@ -1193,17 +1193,17 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   const renderContactsView = () => (
-    <section className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-8">
-      <div className="mx-auto max-w-7xl space-y-8">
+    <section className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
+      <div className="mx-auto max-w-none space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
               stitch_contacts_crm
             </p>
-            <h2 className="font-headline mt-3 text-5xl font-extrabold tracking-tight text-white md:text-[4.5rem]">
+            <h2 className="font-headline mt-2 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
               Contacts
             </h2>
-            <p className="mt-3 max-w-3xl text-lg text-[var(--muted)]">
+            <p className="mt-2 max-w-3xl text-sm text-[var(--muted)] md:text-base">
               Manage your multi-channel relationships across the Ether network.
             </p>
           </div>
@@ -1311,12 +1311,12 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
         ) : null}
 
-        <div className="overflow-hidden rounded-[2rem] border border-white/5 bg-[linear-gradient(180deg,rgba(19,19,19,0.96),rgba(15,15,15,0.98))]">
+        <div className="overflow-hidden rounded-[1.5rem] border border-white/5 bg-[linear-gradient(180deg,rgba(19,19,19,0.96),rgba(15,15,15,0.98))]">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[980px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-white/5 bg-[var(--surface-low)]/60">
-                  <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[0.24em] text-[var(--muted)]">
+                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.24em] text-[var(--muted)]">
                     Identity
                   </th>
                   <th className="px-6 py-6 text-[10px] font-black uppercase tracking-[0.24em] text-[var(--muted)]">
@@ -1331,7 +1331,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   <th className="px-6 py-6 text-[10px] font-black uppercase tracking-[0.24em] text-[var(--muted)]">
                     Connectivity
                   </th>
-                  <th className="px-8 py-6 text-right text-[10px] font-black uppercase tracking-[0.24em] text-[var(--muted)]">
+                  <th className="px-6 py-5 text-right text-[10px] font-black uppercase tracking-[0.24em] text-[var(--muted)]">
                     Actions
                   </th>
                 </tr>
@@ -1353,7 +1353,7 @@ export function DashboardClient({ initialOverview }: Props) {
                         }`}
                         onClick={() => setSelectedContactId(contact.id)}
                       >
-                        <td className="px-8 py-5">
+                        <td className="px-6 py-4">
                           <div className="flex items-center gap-4">
                             <div className="relative">
                               <AvatarBadge label={contact.contact} src={contact.avatarUrl} />
@@ -1399,7 +1399,7 @@ export function DashboardClient({ initialOverview }: Props) {
                             </span>
                           </div>
                         </td>
-                        <td className="px-8 py-5">
+                        <td className="px-6 py-4">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               className="rounded-full bg-white/5 px-4 py-2 text-xs font-semibold text-[var(--muted)] transition hover:text-white"
@@ -1430,7 +1430,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   })
                 ) : (
                   <tr>
-                    <td className="px-8 py-12" colSpan={6}>
+                    <td className="px-6 py-10" colSpan={6}>
                       <GhostPanel>
                         Nenhum contato encontrado com os filtros atuais. Ajuste a busca ou sincronize mais conversas.
                       </GhostPanel>
@@ -1441,7 +1441,7 @@ export function DashboardClient({ initialOverview }: Props) {
             </table>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/5 bg-[var(--surface-low)]/60 px-8 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/5 bg-[var(--surface-low)]/60 px-6 py-3">
             <div className="text-xs font-medium text-[var(--muted)]">
               Showing {filteredContacts.length === 0 ? 0 : 1}-{filteredContacts.length} of {contacts.length} contacts
             </div>
@@ -1466,7 +1466,7 @@ export function DashboardClient({ initialOverview }: Props) {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
-          <div className="rounded-[2rem] bg-[var(--surface-low)] p-6">
+          <div className="rounded-[1.5rem] bg-[var(--surface-low)] p-5">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--muted)]">
                 Channel Health
@@ -1488,7 +1488,7 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-[2rem] border border-[var(--primary)]/20 bg-[linear-gradient(135deg,rgba(127,175,255,0.12),rgba(14,14,14,1))] p-6">
+          <div className="relative overflow-hidden rounded-[1.5rem] border border-[var(--primary)]/20 bg-[linear-gradient(135deg,rgba(127,175,255,0.12),rgba(14,14,14,1))] p-5">
             <div className="relative z-10 max-w-xl">
               <h3 className="font-headline text-4xl font-bold text-white">Sync Real-time CRM</h3>
               <p className="mt-3 text-base leading-8 text-[var(--muted)]">
@@ -1513,17 +1513,17 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   const renderAnalyticsView = () => (
-    <section className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-8">
-      <div className="mx-auto max-w-7xl space-y-8">
+    <section className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
+      <div className="mx-auto max-w-none space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
               Operational signal
             </p>
-            <h2 className="font-headline mt-3 text-5xl font-extrabold tracking-tight text-white md:text-6xl">
+            <h2 className="font-headline mt-2 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
               Service Intelligence
             </h2>
-            <p className="mt-2 text-lg text-[var(--muted)]">
+            <p className="mt-2 text-sm text-[var(--muted)] md:text-base">
               Real-time performance metrics across all Meta channels.
             </p>
           </div>
@@ -1542,7 +1542,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
         {analyticsModel ? (
           <div className="grid grid-cols-12 gap-6">
-            <div className="col-span-12 overflow-hidden rounded-xl bg-[var(--surface-low)] p-6 lg:col-span-4">
+            <div className="col-span-12 overflow-hidden rounded-[1.25rem] bg-[var(--surface-low)] p-5 lg:col-span-4">
               <div className="relative">
                 <div className="absolute right-0 top-0 p-4">
                   <BadgeCheck className="h-16 w-16 text-white/15" strokeWidth={1.8} />
@@ -1567,7 +1567,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="font-headline text-6xl font-black text-white">
+                    <span className="font-headline text-4xl font-black text-white md:text-5xl">
                       {analyticsModel.csat.toFixed(1)}
                     </span>
                     <span className="mt-1 text-sm font-bold text-[var(--secondary)]">
@@ -1588,13 +1588,13 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
             </div>
 
-            <div className="col-span-12 rounded-xl bg-[var(--surface-low)] p-6 lg:col-span-8">
+            <div className="col-span-12 rounded-[1.25rem] bg-[var(--surface-low)] p-5 lg:col-span-8">
               <div className="mb-10 flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--muted)]">
                     Conversations per Channel
                   </h3>
-                  <p className="mt-1 font-headline text-5xl font-bold text-white">
+                  <p className="mt-1 font-headline text-3xl font-bold text-white md:text-4xl">
                     {(analyticsModel.totalConversations / 10).toFixed(1)}k Total
                   </p>
                 </div>
@@ -1619,7 +1619,7 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
             </div>
 
-            <div className="col-span-12 rounded-xl bg-[var(--surface-low)] p-6">
+            <div className="col-span-12 rounded-[1.25rem] bg-[var(--surface-low)] p-5">
               <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--muted)]">
@@ -1668,7 +1668,7 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
             </div>
 
-            <div className="col-span-12 overflow-hidden rounded-xl bg-[var(--surface-low)]">
+            <div className="col-span-12 overflow-hidden rounded-[1.25rem] bg-[var(--surface-low)]">
               <div className="flex flex-col gap-4 border-b border-white/5 p-6 md:flex-row md:items-center md:justify-between">
                 <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--muted)]">
                   Recent Resolved Tickets
@@ -1729,14 +1729,14 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   const renderSettingsView = () => (
-    <section className="min-h-0 flex-1 overflow-y-auto px-5 py-6 md:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <section className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
+      <div className="mx-auto max-w-none space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
               WhatsApp configuration
             </p>
-            <h2 className="font-headline mt-3 text-3xl font-semibold text-white">
+            <h2 className="font-headline mt-2 text-2xl font-semibold text-white">
               Conectar e gerenciar sessoes
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
@@ -1753,7 +1753,7 @@ export function DashboardClient({ initialOverview }: Props) {
           </button>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
           <div className="space-y-6">
             <div className="glass-panel rounded-[30px] p-6">
               <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
@@ -1945,17 +1945,17 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   const renderConversationsView = () => (
-    <div className="grid min-h-0 flex-1 overflow-hidden grid-cols-1 xl:grid-cols-[21rem_minmax(0,1fr)_21rem]">
-      <section className="min-h-0 overflow-hidden border-r border-white/5 bg-[var(--surface-low)]/35 px-4 py-5 xl:px-3">
-        <div className="mb-5 flex items-center justify-between px-2">
+    <div className="grid min-h-0 flex-1 overflow-hidden grid-cols-1 xl:grid-cols-[19rem_minmax(0,1fr)] 2xl:grid-cols-[19rem_minmax(0,1fr)_17rem]">
+      <section className="min-h-0 overflow-hidden border-r border-white/5 bg-[var(--surface-low)]/35 px-3 py-4">
+        <div className="mb-4 flex items-center justify-between px-1">
           <div>
-            <h2 className="font-headline text-3xl font-bold text-white">Active Queues</h2>
-            <p className="mt-1 text-xs uppercase tracking-[0.22em] text-[var(--muted)]">
+            <h2 className="font-headline text-xl font-bold text-white">Conversations</h2>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-[var(--muted)]">
               {queueLabel}
             </p>
           </div>
           <button
-            className="rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white"
+            className="rounded-full bg-white/5 px-3 py-1.5 text-[11px] text-[var(--muted)] hover:text-white"
             onClick={() => runAction(loadOverview)}
             type="button"
           >
@@ -1963,7 +1963,7 @@ export function DashboardClient({ initialOverview }: Props) {
           </button>
         </div>
 
-        <div className="mb-4 flex flex-wrap gap-2 px-2">
+        <div className="mb-3 flex flex-wrap gap-2 px-1">
           {overview.channels.length > 0 ? (
             overview.channels.map((channel) => <ChannelPill key={channel.id} channel={channel} />)
           ) : (
@@ -1973,7 +1973,7 @@ export function DashboardClient({ initialOverview }: Props) {
           )}
         </div>
 
-        <div className="mb-4 flex flex-wrap gap-2 px-2">
+        <div className="mb-3 flex flex-wrap gap-2 px-1">
           {conversationFilterOptions.map((option) => {
             const active = conversationFilter === option.id;
 
@@ -1994,14 +1994,14 @@ export function DashboardClient({ initialOverview }: Props) {
           })}
         </div>
 
-        <div className="h-[calc(100vh-13.5rem)] space-y-2 overflow-y-auto pr-1 xl:h-[calc(100vh-10.5rem)]">
+        <div className="h-[calc(100vh-11.5rem)] space-y-1.5 overflow-y-auto pr-1">
           {sessionConversations.map((conversation) => {
             const active = selectedConversation?.id === conversation.id;
 
             return (
               <button
                 key={conversation.id}
-                className={`w-full rounded-[24px] p-3 text-left transition-all ${
+                className={`w-full rounded-[18px] p-2.5 text-left transition-all ${
                   active
                     ? 'bg-[var(--surface-highest)] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]'
                     : 'hover:bg-white/5'
@@ -2014,7 +2014,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="truncate text-lg font-semibold text-white">
+                        <p className="truncate text-sm font-semibold text-white">
                           {conversation.contact}
                         </p>
                         <p className="mt-0.5 text-xs text-[var(--muted)]">
@@ -2027,10 +2027,10 @@ export function DashboardClient({ initialOverview }: Props) {
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-1 truncate text-sm text-[var(--primary)]">
+                    <p className="mt-1 truncate text-[13px] text-[var(--primary)]">
                       {conversation.preview || 'No preview yet'}
                     </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
+                     <div className="mt-2 flex flex-wrap gap-1.5">
                       <span className="inline-flex items-center gap-1 rounded-full bg-[var(--secondary)]/14 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--secondary)]">
                         <MessageCircle className="h-3 w-3" strokeWidth={2.1} />
                         WhatsApp
@@ -2059,7 +2059,7 @@ export function DashboardClient({ initialOverview }: Props) {
       <section className="flex min-h-0 flex-col overflow-hidden bg-[var(--surface)]">
         {selectedSession ? (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-black/10 px-5 py-4 backdrop-blur-md">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-black/10 px-4 py-3 backdrop-blur-md">
               <div className="flex items-center gap-3">
                 {selectedConversation ? (
                   <AvatarBadge
@@ -2070,7 +2070,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   <span className="h-3 w-3 rounded-full bg-[var(--secondary)] shadow-[0_0_16px_rgba(93,253,138,0.8)]" />
                 )}
                 <div>
-                  <p className="font-headline text-3xl font-semibold text-white">
+                  <p className="font-headline text-xl font-semibold text-white md:text-2xl">
                     {selectedConversation?.contact ?? selectedSession.name}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
@@ -2084,40 +2084,14 @@ export function DashboardClient({ initialOverview }: Props) {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <button className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white">
-                  <Video className="h-4 w-4" strokeWidth={2.1} />
-                  Video
-                </button>
-                <button className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white">
-                  <Phone className="h-4 w-4" strokeWidth={2.1} />
-                  Call
-                </button>
-                <button
-                  className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
-                  onClick={() => connectSession(selectedSession.id)}
-                  type="button"
-                >
-                  <QrCode className="h-4 w-4" strokeWidth={2.1} />
-                  Connect
-                </button>
-                <button
-                  className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
-                  onClick={() => disconnectSession(selectedSession.id)}
-                  type="button"
-                >
-                  <Wifi className="h-4 w-4" strokeWidth={2.1} />
-                  Disconnect
-                </button>
-              </div>
             </div>
 
             <div
               ref={messagesRef}
-              className="min-h-0 flex-1 overflow-y-auto px-5 py-6"
+              className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-4"
               onScroll={handleMessagesScroll}
             >
-              <div className="mx-auto flex max-w-5xl flex-col gap-6">
+              <div className="mx-auto flex max-w-none flex-col gap-4">
                 {isLoadingMessages ? <GhostPanel>Loading conversation history...</GhostPanel> : null}
 
                 {messages.map((message) => (
@@ -2154,7 +2128,7 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
             </div>
 
-            <div className="border-t border-white/5 bg-[var(--surface-low)]/45 px-4 py-4 backdrop-blur-xl md:px-6">
+            <div className="border-t border-white/5 bg-[var(--surface-low)]/45 px-3 py-3 backdrop-blur-xl md:px-4">
               <ConversationComposer
                 conversationKey={`${selectedSession.id}:${selectedConversation?.id ?? 'none'}`}
                 disabled={!selectedConversation || isPending}
@@ -2180,22 +2154,22 @@ export function DashboardClient({ initialOverview }: Props) {
         )}
       </section>
 
-      <aside className="hidden min-h-0 overflow-y-auto bg-[var(--surface-low)]/20 px-6 py-6 xl:block">
+      <aside className="hidden min-h-0 overflow-y-auto bg-[var(--surface-low)]/20 px-4 py-4 2xl:block">
         {selectedConversation && selectedSession ? (
-          <div className="space-y-7">
+          <div className="space-y-5">
             <div className="flex flex-col items-center text-center">
               <div className="relative">
                 <AvatarBadge
-                  className="h-28 w-28 rounded-[28px] text-4xl"
+                  className="h-20 w-20 rounded-[22px] text-2xl"
                   label={selectedConversation.contact}
                   src={selectedConversation.avatarUrl}
                 />
-                <div className="absolute -bottom-2 -right-2 grid h-12 w-12 place-items-center rounded-full bg-[var(--secondary)] text-black shadow-[0_0_22px_rgba(93,253,138,0.5)]">
-                  <MessageCircle className="h-5 w-5" strokeWidth={2.4} />
+                <div className="absolute -bottom-1 -right-1 grid h-9 w-9 place-items-center rounded-full bg-[var(--secondary)] text-black shadow-[0_0_18px_rgba(93,253,138,0.5)]">
+                  <MessageCircle className="h-4 w-4" strokeWidth={2.4} />
                 </div>
               </div>
 
-              <h3 className="mt-6 font-headline text-5xl font-bold tracking-tight text-white">
+              <h3 className="mt-4 font-headline text-2xl font-bold tracking-tight text-white">
                 {selectedConversation.contact}
               </h3>
               <p className="mt-2 text-sm text-[var(--muted)]">
@@ -2284,77 +2258,73 @@ export function DashboardClient({ initialOverview }: Props) {
   return (
     <main className="h-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
       <div className="flex h-full overflow-hidden">
-        <aside className="hidden h-full w-64 flex-col overflow-hidden border-r border-white/5 bg-zinc-950/80 px-4 py-8 pt-24 backdrop-blur-xl md:flex">
-          <div className="mb-8 px-2">
-            <div className="mb-2 flex items-center gap-3">
-              <div className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--primary-container)] text-[var(--on-primary-container)]">
+        <aside className="hidden h-full w-[4.5rem] flex-col overflow-hidden border-r border-white/5 bg-zinc-950/80 px-2 py-4 backdrop-blur-xl md:flex">
+          <div className="mb-6 flex justify-center">
+            <div className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--primary-container)] text-[var(--on-primary-container)]">
                 <Sparkles className="h-4 w-4" strokeWidth={2.4} />
               </div>
-              <div>
-                <h2 className="font-headline text-lg font-black text-white">Ether OS</h2>
-                <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-500">
-                  Omni-channel v2.4
-                </p>
-              </div>
-            </div>
           </div>
 
           <nav className="flex-1 space-y-1">
             {navigationItems.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
-                className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-all ${
+                aria-label={label}
+                className={`flex w-full items-center justify-center rounded-xl px-3 py-3 text-left transition-all ${
                   currentView === id
-                    ? 'border-r-2 border-blue-500 bg-blue-600/10 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.3)]'
+                    ? 'bg-blue-600/10 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.22)]'
                     : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
                 }`}
                 onClick={() => navigateToView(id)}
+                title={label}
                 type="button"
               >
                 <Icon className="h-5 w-5" strokeWidth={currentView === id ? 2.4 : 2.1} />
-                <span className="text-sm font-medium">{label}</span>
               </button>
             ))}
           </nav>
 
           <div className="mt-auto space-y-1 border-t border-white/5 pt-6">
             <button
-              className="mb-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary-container)] px-4 py-3 text-sm font-bold text-[var(--on-primary-container)] transition-transform active:scale-95"
+              aria-label="New Message"
+              className="mb-4 flex w-full items-center justify-center rounded-xl bg-[var(--primary-container)] px-3 py-3 text-[var(--on-primary-container)] transition-transform active:scale-95"
               onClick={() => navigateToView(selectedSession ? 'conversations' : 'settings')}
+              title="New Message"
               type="button"
             >
               <MessageSquarePlus className="h-4 w-4" strokeWidth={2.2} />
-              New Message
             </button>
             <button
-              className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-zinc-500 transition-all hover:bg-zinc-800/50 hover:text-zinc-300"
+              aria-label="Support"
+              className="flex w-full items-center justify-center rounded-xl px-3 py-3 text-zinc-500 transition-all hover:bg-zinc-800/50 hover:text-zinc-300"
               onClick={() => navigateToView('settings')}
+              title="Support"
               type="button"
             >
               <CircleHelp className="h-5 w-5" strokeWidth={2.1} />
-              <span className="text-sm font-medium">Support</span>
             </button>
             <button
-              className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-[var(--error-dim)] transition-all hover:bg-white/5"
+              aria-label="Sign Out"
+              className="flex w-full items-center justify-center rounded-xl px-3 py-3 text-[var(--error-dim)] transition-all hover:bg-white/5"
               onClick={signOut}
+              title="Sign Out"
               type="button"
             >
               <LogOut className="h-5 w-5" strokeWidth={2.1} />
-              <span className="text-sm font-medium">Sign Out</span>
             </button>
           </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-zinc-950/60 px-6 py-3 backdrop-blur-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.8)]">
-            <div className="flex items-center gap-8">
-              <span className="font-headline text-2xl font-bold tracking-tight text-transparent bg-gradient-to-br from-blue-400 to-blue-600 bg-clip-text">
+          <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/8 bg-zinc-950/60 px-4 py-2.5 backdrop-blur-2xl shadow-[0_8px_24px_0_rgba(0,0,0,0.55)] md:px-5">
+            <div className="flex items-center gap-5">
+              <span className="font-headline text-xl font-bold tracking-tight text-transparent bg-gradient-to-br from-blue-400 to-blue-600 bg-clip-text">
                 EtherCommand
               </span>
-              <div className="hidden items-center gap-3 rounded-full border border-white/5 bg-white/5 px-4 py-1.5 transition-all duration-300 focus-within:border-[var(--primary)]/50 md:flex">
+              <div className="hidden items-center gap-3 rounded-full border border-white/5 bg-white/5 px-4 py-1.5 transition-all duration-300 focus-within:border-[var(--primary)]/50 lg:flex">
                 <Search className="h-4 w-4 text-zinc-400" strokeWidth={2.1} />
                 <input
-                  className="w-64 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                  className="w-80 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
                   onChange={(event) => setGlobalSearch(event.target.value)}
                   placeholder="Search interactions..."
                   value={globalSearch}
@@ -2362,16 +2332,16 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2.5">
               <button className="rounded-full p-2 text-zinc-400 transition-all duration-300 hover:bg-white/5 active:scale-95">
                 <Bell className="h-5 w-5" strokeWidth={2.1} />
               </button>
               <button className="rounded-full p-2 text-zinc-400 transition-all duration-300 hover:bg-white/5 active:scale-95">
                 <Grid3X3 className="h-5 w-5" strokeWidth={2.1} />
               </button>
-              <div className="mx-2 h-8 w-px bg-white/10" />
+              <div className="mx-1 h-7 w-px bg-white/10" />
               <button
-                className="flex items-center gap-2 rounded-full bg-[var(--primary-container)] px-4 py-1.5 font-semibold text-[var(--on-primary-container)] transition-all duration-200 hover:brightness-110 active:scale-95"
+                className="flex items-center gap-2 rounded-full bg-[var(--primary-container)] px-3 py-1.5 text-sm font-semibold text-[var(--on-primary-container)] transition-all duration-200 hover:brightness-110 active:scale-95"
                 onClick={() => navigateToView(selectedSession ? 'conversations' : 'settings')}
                 type="button"
               >
@@ -2379,7 +2349,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 <span className="text-sm">Broadcast</span>
               </button>
               <div className="flex items-center gap-3">
-                <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-white/20 bg-[var(--surface-high)] text-xs font-bold text-white">
+                <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-full border border-white/20 bg-[var(--surface-high)] text-[11px] font-bold text-white">
                   {authUser?.name
                     ?.split(' ')
                     .map((part) => part[0])

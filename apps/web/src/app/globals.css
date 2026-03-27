@@ -31,13 +31,14 @@
 
 html {
   scroll-behavior: smooth;
+  font-size: 15px;
 }
 
 body {
   min-height: 100%;
   background:
-    radial-gradient(circle at top left, rgba(127, 175, 255, 0.12), transparent 28%),
-    radial-gradient(circle at top right, rgba(255, 110, 130, 0.08), transparent 24%),
+    radial-gradient(circle at top left, rgba(127, 175, 255, 0.08), transparent 24%),
+    radial-gradient(circle at top right, rgba(255, 110, 130, 0.04), transparent 18%),
     linear-gradient(180deg, #070707 0%, #0b0b0b 35%, #0e0e0e 100%);
   color: var(--foreground);
   font-family: var(--font-sans-stack);
@@ -64,7 +65,7 @@ a {
 
 .glass-panel {
   background: var(--surface-variant);
-  backdrop-filter: blur(24px);
+  backdrop-filter: blur(16px);
   border: 1px solid rgba(73, 72, 71, 0.15);
 }
 
