@@ -149,7 +149,6 @@ const contactsBoards = [
   },
 ];
 
-const contactsKanbanStorageKey = 'pulse-hub.contacts-kanban';
 const contactsKanbanBoardStorageKey = 'pulse-hub.contacts-kanban-board';
 
 const navigationItems: Array<{
@@ -180,7 +179,7 @@ type Props = {
 type RealtimeSocketEvent = {
   sessionId: string;
   chatJid?: string;
-  kind: 'connection' | 'chat.new' | 'message.new' | 'message.ack';
+  kind: 'connection' | 'chat.new' | 'message.new' | 'message.ack' | 'kanban.stage.updated';
   direction?: 'incoming' | 'outgoing';
   occurredAt?: string;
 };
@@ -201,6 +200,14 @@ type ComposerAttachment = {
 type ContactsBoardId = 'contacts' | 'unread' | 'verified' | 'groups';
 
 type ContactKanbanStageId = 'new' | 'qualified' | 'active' | 'followup' | 'won';
+
+type ContactKanbanStageRecord = {
+  sessionId: string;
+  conversationId: string;
+  stage: ContactKanbanStageId;
+  updatedBy?: string;
+  updatedAt: string;
+};
 
 export function DashboardClient({ initialOverview }: Props) {
   const router = useRouter();
@@ -231,6 +238,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [contactKanbanStageMap, setContactKanbanStageMap] = useState<
     Record<string, ContactKanbanStageId>
   >({});
+  const [isLoadingContactKanban, setIsLoadingContactKanban] = useState(true);
   const [draggedContactKey, setDraggedContactKey] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<ContactKanbanStageId | null>(null);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -265,6 +273,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const currentView = viewTransition ?? activeView;
   const hasWorkspaceData = overview.sessions.length > 0 || overview.conversations.length > 0;
   const shouldShowInitialSkeleton = isPending && !hasWorkspaceData && !errorMessage;
+  const shouldShowContactsSkeleton = shouldShowInitialSkeleton || isLoadingContactKanban;
   const deferredContactsSearch = useDeferredValue(contactsSearch);
   const isConversationSwitching = pendingConversationId !== null;
   const isDashboardView = activeView === 'dashboard';
@@ -700,18 +709,6 @@ export function DashboardClient({ initialOverview }: Props) {
     setConversationFilter('all');
   }, []);
 
-  const moveContactToStage = useCallback(
-    (contact: ConversationRecord, nextStage: ContactKanbanStageId) => {
-      const storageKey = buildContactKanbanKey(contact);
-      setContactKanbanStageMap((current) => ({
-        ...current,
-        [storageKey]: nextStage,
-      }));
-      setSelectedContactId(contact.id);
-    },
-    [],
-  );
-
   const navigateToView = useCallback(
     (nextView: WorkspaceView) => {
       if (nextView === activeView && viewTransition === null) {
@@ -768,17 +765,6 @@ export function DashboardClient({ initialOverview }: Props) {
   }, []);
 
   useEffect(() => {
-    const rawStageMap = window.localStorage.getItem(contactsKanbanStorageKey);
-    if (rawStageMap) {
-      try {
-        setContactKanbanStageMap(
-          JSON.parse(rawStageMap) as Record<string, ContactKanbanStageId>,
-        );
-      } catch {
-        window.localStorage.removeItem(contactsKanbanStorageKey);
-      }
-    }
-
     const rawBoard = window.localStorage.getItem(contactsKanbanBoardStorageKey);
     if (
       rawBoard &&
@@ -787,13 +773,6 @@ export function DashboardClient({ initialOverview }: Props) {
       setActiveContactsBoard(rawBoard as ContactsBoardId);
     }
   }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      contactsKanbanStorageKey,
-      JSON.stringify(contactKanbanStageMap),
-    );
-  }, [contactKanbanStageMap]);
 
   useEffect(() => {
     window.localStorage.setItem(contactsKanbanBoardStorageKey, activeContactsBoard);
@@ -814,6 +793,36 @@ export function DashboardClient({ initialOverview }: Props) {
       areOverviewsEquivalent(current, nextOverview) ? current : nextOverview,
     );
   }, []);
+
+  const loadContactKanbanStages = useCallback(async () => {
+    const response = await fetch(`${apiUrl}/whatsapp/contacts/kanban`, {
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error('Nao foi possivel carregar o kanban de contatos.');
+    }
+
+    const records = (await response.json()) as ContactKanbanStageRecord[];
+    setContactKanbanStageMap(() => {
+      const nextMap: Record<string, ContactKanbanStageId> = {};
+      for (const record of records) {
+        nextMap[`${record.sessionId}:${record.conversationId}`] = record.stage;
+      }
+      return nextMap;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthReady) {
+      return;
+    }
+
+    setIsLoadingContactKanban(true);
+    void loadContactKanbanStages()
+      .catch(() => undefined)
+      .finally(() => setIsLoadingContactKanban(false));
+  }, [isAuthReady, loadContactKanbanStages]);
 
   const fetchConversationMessages = useCallback(async (sessionId: string, conversationId: string) => {
     const response = await fetch(
@@ -1261,6 +1270,10 @@ export function DashboardClient({ initialOverview }: Props) {
           scheduleOverviewRefresh();
         }
 
+        if (payload.kind === 'kanban.stage.updated') {
+          void loadContactKanbanStages().catch(() => undefined);
+        }
+
         if (
           isConversationsView &&
           activeSessionId &&
@@ -1307,6 +1320,7 @@ export function DashboardClient({ initialOverview }: Props) {
     activeSessionId,
     isAuthReady,
     isConversationsView,
+    loadContactKanbanStages,
     loadMessages,
     loadOverview,
   ]);
@@ -1399,6 +1413,49 @@ export function DashboardClient({ initialOverview }: Props) {
       void executeAction(handler, options);
     });
   }, [executeAction]);
+
+  const moveContactToStage = useCallback(
+    async (contact: ConversationRecord, nextStage: ContactKanbanStageId) => {
+      const storageKey = buildContactKanbanKey(contact);
+      const previousStage = contactKanbanStageMap[storageKey];
+
+      setContactKanbanStageMap((current) => ({
+        ...current,
+        [storageKey]: nextStage,
+      }));
+      setSelectedContactId(contact.id);
+
+      const persisted = await executeAction(async () => {
+        const response = await fetch(`${apiUrl}/whatsapp/contacts/kanban`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: contact.sessionId,
+            conversationId: contact.id,
+            stage: nextStage,
+            updatedBy: authUser?.name || authUser?.email || 'Operador',
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Nao foi possivel salvar a etapa do contato.');
+        }
+      });
+
+      if (!persisted) {
+        setContactKanbanStageMap((current) => {
+          const nextMap = { ...current };
+          if (previousStage) {
+            nextMap[storageKey] = previousStage;
+          } else {
+            delete nextMap[storageKey];
+          }
+          return nextMap;
+        });
+      }
+    },
+    [authUser?.email, authUser?.name, contactKanbanStageMap, executeAction],
+  );
 
   const createSession = () => {
     runAction(async () => {
@@ -1758,7 +1815,7 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
         </aside>
 
-        <div className="min-h-0 overflow-hidden rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(12,12,14,0.98))] shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)]">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(12,12,14,0.98))] shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)]">
           <div className="border-b border-white/6 px-4 py-4 md:px-5">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
@@ -1862,8 +1919,8 @@ export function DashboardClient({ initialOverview }: Props) {
             ) : null}
           </div>
 
-          <div className="min-h-0 overflow-x-auto overflow-y-hidden px-4 pb-4 pt-4 md:px-5">
-            {shouldShowInitialSkeleton ? (
+          <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden px-4 pb-4 pt-4 md:px-5">
+            {shouldShowContactsSkeleton ? (
               <div className="flex gap-4">
                 {Array.from({ length: 4 }, (_, index) => (
                   <div key={index} className="w-[19rem] shrink-0 rounded-[28px] border border-white/6 bg-white/[0.025] p-4">
@@ -1879,11 +1936,11 @@ export function DashboardClient({ initialOverview }: Props) {
                 title="Nenhum contato disponivel no board"
               />
             ) : (
-              <div className="flex min-h-full items-start gap-4 pb-2">
+              <div className="flex h-full min-h-0 items-start gap-4 pb-2">
                 {kanbanColumns.map((column) => (
                   <div
                     key={column.id}
-                    className={`flex min-h-[calc(100vh-19rem)] w-[19rem] shrink-0 flex-col rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-3 transition ${dragOverStage === column.id ? 'border-[var(--primary)]/35 shadow-[0_0_0_1px_rgba(127,175,255,0.12)]' : ''}`}
+                    className={`flex h-full min-h-0 w-[19rem] shrink-0 flex-col rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-3 transition ${dragOverStage === column.id ? 'border-[var(--primary)]/35 shadow-[0_0_0_1px_rgba(127,175,255,0.12)]' : ''}`}
                     onDragOver={(event) => {
                       event.preventDefault();
                       setDragOverStage(column.id);
@@ -1904,7 +1961,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       );
 
                       if (droppedContact) {
-                        moveContactToStage(droppedContact, column.id);
+                        void moveContactToStage(droppedContact, column.id);
                       }
 
                       setDraggedContactKey(null);
@@ -1926,7 +1983,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       </div>
                     </div>
 
-                    <div className="mt-3 flex-1 space-y-3 overflow-y-auto pr-1">
+                    <div className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
                       {column.contacts.map((contact) => (
                         <ContactKanbanCard
                           key={buildContactKanbanKey(contact)}
@@ -3580,7 +3637,7 @@ function ContactKanbanDetailPanel({
 }: {
   contact: ConversationRecord;
   stage: ContactKanbanStageId;
-  onMoveStage: (contact: ConversationRecord, stage: ContactKanbanStageId) => void;
+  onMoveStage: (contact: ConversationRecord, stage: ContactKanbanStageId) => void | Promise<void>;
   onOpenConversation: () => void;
   onCopyId: () => void;
 }) {
@@ -3627,7 +3684,9 @@ function ContactKanbanDetailPanel({
                   ? 'border-[var(--primary)]/30 bg-[var(--primary)]/10'
                   : 'border-white/6 bg-white/[0.02] hover:bg-white/[0.04]'
               }`}
-              onClick={() => onMoveStage(contact, item.id)}
+              onClick={() => {
+                void onMoveStage(contact, item.id);
+              }}
               type="button"
             >
               <span className="text-sm font-medium text-white">{item.label}</span>

@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"pulsehub/wa-core/internal/models"
+	appstore "pulsehub/wa-core/internal/store"
 	"pulsehub/wa-core/internal/whatsapp"
 	"pulsehub/wa-core/internal/ws"
 )
@@ -33,14 +34,16 @@ type API struct {
 	logger  *slog.Logger
 	manager *whatsapp.Manager
 	hub     *ws.Hub
+	store   *appstore.Store
 	auth    AuthConfig
 }
 
-func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, auth AuthConfig) http.Handler {
+func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, store *appstore.Store, auth AuthConfig) http.Handler {
 	api := &API{
 		logger:  logger,
 		manager: manager,
 		hub:     hub,
+		store:   store,
 		auth:    auth,
 	}
 
@@ -66,6 +69,8 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, auth
 	r.Post("/auth/sign-in", api.handleSignIn)
 	r.Get("/dashboard/overview", api.handleDashboardOverview)
 	r.Route("/whatsapp", func(r chi.Router) {
+		r.Get("/contacts/kanban", api.handleListContactKanbanStages)
+		r.Put("/contacts/kanban", api.handleUpdateContactKanbanStage)
 		r.Get("/sessions", api.handleListSessions)
 		r.Post("/sessions", api.handleCreateSession)
 		r.Post("/sessions/{id}/connect", api.handleConnectSession)
@@ -509,6 +514,62 @@ func (a *API) handleConversationRead(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (a *API) handleListContactKanbanStages(w http.ResponseWriter, r *http.Request) {
+	items, err := a.store.ListContactKanbanStages(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, items)
+}
+
+func (a *API) handleUpdateContactKanbanStage(w http.ResponseWriter, r *http.Request) {
+	var request models.UpdateContactKanbanStageRequest
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	request.SessionID = strings.TrimSpace(request.SessionID)
+	request.ConversationID = strings.TrimSpace(request.ConversationID)
+	request.Stage = strings.TrimSpace(strings.ToLower(request.Stage))
+	request.UpdatedBy = strings.TrimSpace(request.UpdatedBy)
+
+	if request.SessionID == "" || request.ConversationID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "sessionId e conversationId sao obrigatorios."})
+		return
+	}
+
+	if !isValidContactKanbanStage(request.Stage) {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Etapa do kanban invalida."})
+		return
+	}
+
+	record := models.ContactKanbanStageRecord{
+		SessionID:      request.SessionID,
+		ConversationID: request.ConversationID,
+		Stage:          request.Stage,
+		UpdatedBy:      request.UpdatedBy,
+		UpdatedAt:      models.NowString(),
+	}
+
+	if err := a.store.SaveContactKanbanStage(r.Context(), record); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	a.hub.Broadcast(models.RealtimeEvent{
+		Kind:       "kanban.stage.updated",
+		SessionID:  record.SessionID,
+		ChatJID:    record.ConversationID,
+		Text:       record.Stage,
+		OccurredAt: record.UpdatedAt,
+	})
+
+	respondJSON(w, http.StatusOK, record)
+}
+
 func (a *API) handleSessionStream(w http.ResponseWriter, r *http.Request) {
 	if !a.isDefaultSession(chi.URLParam(r, "id")) {
 		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
@@ -890,6 +951,15 @@ func fallbackText(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func isValidContactKanbanStage(value string) bool {
+	switch value {
+	case "new", "qualified", "active", "followup", "won":
+		return true
+	default:
+		return false
+	}
 }
 
 func isVisibleConversationJID(jid string) bool {

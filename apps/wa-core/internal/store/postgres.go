@@ -117,6 +117,15 @@ func (s *Store) migrate(ctx context.Context) error {
 		CONSTRAINT fk_chat FOREIGN KEY(chat_jid) REFERENCES chats(jid) ON DELETE CASCADE
 	);
 
+	CREATE TABLE IF NOT EXISTS contact_kanban_stage (
+		session_id TEXT NOT NULL,
+		conversation_id TEXT NOT NULL,
+		stage TEXT NOT NULL,
+		updated_by TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL,
+		PRIMARY KEY (session_id, conversation_id)
+	);
+
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'text';
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT '';
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT NOT NULL DEFAULT '';
@@ -124,6 +133,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	CREATE INDEX IF NOT EXISTS idx_contacts_display_name ON contacts(display_name);
 	CREATE INDEX IF NOT EXISTS idx_chats_last_message_at ON chats(last_message_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp ON messages(chat_jid, timestamp ASC);
+	CREATE INDEX IF NOT EXISTS idx_contact_kanban_stage_updated_at ON contact_kanban_stage(updated_at DESC);
 	`
 
 	if _, err := s.db.ExecContext(ctx, query); err != nil {
@@ -671,5 +681,60 @@ func (s *Store) UpdateMessageAck(ctx context.Context, messageID, ackStatus strin
 	if err != nil {
 		return fmt.Errorf("update ack for message %s: %w", messageID, err)
 	}
+	return nil
+}
+
+func (s *Store) ListContactKanbanStages(ctx context.Context) ([]models.ContactKanbanStageRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT session_id, conversation_id, stage, updated_by, updated_at
+		FROM contact_kanban_stage
+		ORDER BY updated_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list contact kanban stages: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]models.ContactKanbanStageRecord, 0)
+	for rows.Next() {
+		var item models.ContactKanbanStageRecord
+		if err := rows.Scan(
+			&item.SessionID,
+			&item.ConversationID,
+			&item.Stage,
+			&item.UpdatedBy,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan contact kanban stage: %w", err)
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate contact kanban stages: %w", err)
+	}
+
+	return items, nil
+}
+
+func (s *Store) SaveContactKanbanStage(ctx context.Context, item models.ContactKanbanStageRecord) error {
+	if item.UpdatedAt == "" {
+		item.UpdatedAt = models.NowString()
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO contact_kanban_stage (
+			session_id, conversation_id, stage, updated_by, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (session_id, conversation_id) DO UPDATE SET
+			stage = excluded.stage,
+			updated_by = excluded.updated_by,
+			updated_at = excluded.updated_at
+	`, item.SessionID, item.ConversationID, item.Stage, item.UpdatedBy, item.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("save contact kanban stage: %w", err)
+	}
+
 	return nil
 }

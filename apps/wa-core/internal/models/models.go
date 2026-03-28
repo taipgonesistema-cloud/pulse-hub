@@ -222,6 +222,21 @@ type DashboardOverview struct {
 	Conversations []ConversationRecord `json:"conversations"`
 }
 
+type ContactKanbanStageRecord struct {
+	SessionID      string `json:"sessionId"`
+	ConversationID string `json:"conversationId"`
+	Stage          string `json:"stage"`
+	UpdatedBy      string `json:"updatedBy,omitempty"`
+	UpdatedAt      string `json:"updatedAt"`
+}
+
+type UpdateContactKanbanStageRequest struct {
+	SessionID      string `json:"sessionId"`
+	ConversationID string `json:"conversationId"`
+	Stage          string `json:"stage"`
+	UpdatedBy      string `json:"updatedBy,omitempty"`
+}
+
 func NowString() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }

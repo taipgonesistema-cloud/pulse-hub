@@ -63,7 +63,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	router := httpapi.NewRouter(logger, manager, hub, httpapi.AuthConfig{
+	router := httpapi.NewRouter(logger, manager, hub, store, httpapi.AuthConfig{
 		Email:    cfg.AuthEmail,
 		Password: cfg.AuthPassword,
 		Name:     cfg.AuthName,
