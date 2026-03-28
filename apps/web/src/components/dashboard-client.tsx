@@ -36,6 +36,7 @@ import {
   Smile,
   Sparkles,
   Wifi,
+  X,
 } from 'lucide-react';
 import {
   Fragment,
@@ -184,7 +185,6 @@ export function DashboardClient({ initialOverview }: Props) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastTimersRef = useRef(new Map<number, number>());
   const toastIdRef = useRef(0);
-  const hasConnectedRealtimeRef = useRef(false);
   const currentView = viewTransition ?? activeView;
   const deferredContactsSearch = useDeferredValue(contactsSearch);
   const isConversationSwitching = pendingConversationId !== null;
@@ -548,17 +548,31 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const pushToast = useCallback(
     (toast: Omit<ToastItem, 'id'>) => {
-      const id = toastIdRef.current + 1;
-      toastIdRef.current = id;
+      const nextToastKey = buildToastKey(toast);
+      const existingToast = toasts.find((item) => buildToastKey(item) === nextToastKey);
+      const id = existingToast ? existingToast.id : toastIdRef.current + 1;
 
-      setToasts((current) => [...current.slice(-2), { ...toast, id }]);
+      if (!existingToast) {
+        toastIdRef.current = id;
+      }
+
+      const existingTimer = toastTimersRef.current.get(id);
+      if (existingTimer) {
+        window.clearTimeout(existingTimer);
+      }
+
+      setToasts((current) => {
+        const nextItem = { ...toast, id };
+        const withoutDuplicate = current.filter((item) => item.id !== id);
+        return [...withoutDuplicate.slice(-2), nextItem];
+      });
 
       const timer = window.setTimeout(() => {
         dismissToast(id);
       }, 3600);
       toastTimersRef.current.set(id, timer);
     },
-    [dismissToast],
+    [dismissToast, toasts],
   );
 
   const navigateToView = useCallback(
@@ -1058,18 +1072,6 @@ export function DashboardClient({ initialOverview }: Props) {
 
       socket = new WebSocket(getWebSocketUrl(`${apiUrl}/ws`));
 
-      socket.onopen = () => {
-        if (hasConnectedRealtimeRef.current) {
-          pushToast({
-            tone: 'success',
-            title: 'Realtime restored',
-            description: 'Live updates are back in sync.',
-          });
-        }
-
-        hasConnectedRealtimeRef.current = true;
-      };
-
       socket.onmessage = (event) => {
         let payload: RealtimeSocketEvent;
 
@@ -1113,14 +1115,6 @@ export function DashboardClient({ initialOverview }: Props) {
           return;
         }
 
-        if (hasConnectedRealtimeRef.current) {
-          pushToast({
-            tone: 'info',
-            title: 'Realtime reconnecting',
-            description: 'The dashboard is retrying the live connection.',
-          });
-        }
-
         reconnectTimer = window.setTimeout(connect, 1500);
       };
     };
@@ -1144,7 +1138,6 @@ export function DashboardClient({ initialOverview }: Props) {
     isConversationsView,
     loadMessages,
     loadOverview,
-    pushToast,
   ]);
 
   useEffect(() => {
@@ -3580,28 +3573,29 @@ function ToastCard({
 }) {
   const toneClass =
     toast.tone === 'success'
-      ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
+      ? 'border-emerald-400/20 before:bg-emerald-400'
       : toast.tone === 'error'
-        ? 'border-rose-400/20 bg-rose-400/10 text-rose-100'
-        : 'border-sky-400/20 bg-sky-400/10 text-sky-100';
+        ? 'border-rose-400/20 before:bg-rose-400'
+        : 'border-sky-400/20 before:bg-sky-400';
 
   return (
     <div
-      className={`pointer-events-auto rounded-[24px] border px-4 py-3 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl ${toneClass}`}
+      className={`pointer-events-auto relative overflow-hidden rounded-[22px] border bg-[rgba(10,14,18,0.94)] px-4 py-3 shadow-[0_18px_36px_-20px_rgba(0,0,0,0.72)] backdrop-blur-xl before:absolute before:inset-y-3 before:left-3 before:w-1 before:rounded-full ${toneClass}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex items-start justify-between gap-3 pl-3">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-white">{toast.title}</p>
           {toast.description ? (
-            <p className="mt-1 text-xs text-white/70">{toast.description}</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-400">{toast.description}</p>
           ) : null}
         </div>
         <button
-          className="rounded-full bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70 transition hover:bg-black/20 hover:text-white"
+          aria-label="Fechar notificacao"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
           onClick={() => onDismiss(toast.id)}
           type="button"
         >
-          Close
+          <X className="h-4 w-4" strokeWidth={2.1} />
         </button>
       </div>
     </div>
@@ -4000,6 +3994,10 @@ function normalizeConversationKey(value: string) {
 
 function buildConversationCacheKey(sessionId: string, conversationId: string) {
   return `${sessionId}:${conversationId}`;
+}
+
+function buildToastKey(toast: Pick<ToastItem, 'tone' | 'title' | 'description'>) {
+  return [toast.tone, toast.title, toast.description ?? ''].join('::');
 }
 
 function isTypingTarget(target: EventTarget | null) {
