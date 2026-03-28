@@ -2336,49 +2336,60 @@ export function DashboardClient({ initialOverview }: Props) {
           </button>
         </div>
 
-        <div className="mb-3 flex flex-wrap gap-2 px-1">
-          {overview.channels.length > 0 ? (
-            overview.channels.map((channel) => <ChannelPill key={channel.id} channel={channel} />)
-          ) : (
-            <span className="rounded-full bg-white/5 px-3 py-1.5 text-[11px] text-[var(--muted)]">
-              No channel tags yet
+        <div className="mb-4 rounded-[24px] border border-white/6 bg-white/[0.03] p-3">
+          <div className="flex items-center justify-between gap-3 px-1">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              Queue Filters
             </span>
-          )}
-        </div>
+            {conversationSearchTerm ? (
+              <span className="rounded-full bg-[var(--primary)]/10 px-2.5 py-1 text-[10px] font-semibold text-[var(--primary)]">
+                {visibleSessionConversations.length} result{visibleSessionConversations.length === 1 ? '' : 's'}
+              </span>
+            ) : null}
+          </div>
 
-        <div className="mb-3 flex flex-wrap gap-2 px-1">
-          {conversationFilterOptions.map((option) => {
-            const active = conversationFilter === option.id;
+          <div className="mt-3 flex flex-wrap gap-2 px-1">
+            {overview.channels.length > 0 ? (
+              overview.channels.map((channel) => <ChannelPill key={channel.id} channel={channel} />)
+            ) : (
+              <span className="text-xs text-[var(--muted)]">Nenhum canal sincronizado ainda.</span>
+            )}
+          </div>
 
-            return (
-              <button
-                key={option.id}
-                className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
-                  active
-                    ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-[var(--primary)]'
-                    : 'border-white/8 bg-white/5 text-[var(--muted)] hover:text-white'
-                }`}
-                onClick={() => setConversationFilter(option.id)}
-                type="button"
-              >
-                {option.label} · {option.count}
-              </button>
-            );
-          })}
-        </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {conversationFilterOptions.map((option) => {
+              const active = conversationFilter === option.id;
 
-        <div className="mb-3 flex flex-wrap items-center gap-2 px-1">
-          <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-            Ctrl/Cmd+K Search
-          </span>
-          <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
-            Alt+Up/Down Switch
-          </span>
-          {conversationSearchTerm ? (
-            <span className="rounded-full border border-[var(--primary)]/20 bg-[var(--primary)]/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">
-              {visibleSessionConversations.length} match{visibleSessionConversations.length === 1 ? '' : 'es'}
-            </span>
-          ) : null}
+              return (
+                <button
+                  key={option.id}
+                  className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 text-left transition-all ${
+                    active
+                      ? 'border-[var(--primary)]/35 bg-[var(--primary)]/12 shadow-[0_0_0_1px_rgba(127,175,255,0.08)]'
+                      : 'border-white/8 bg-white/4 hover:border-white/12 hover:bg-white/6'
+                  }`}
+                  onClick={() => setConversationFilter(option.id)}
+                  type="button"
+                >
+                  <span className={`text-[12px] font-medium ${active ? 'text-white' : 'text-zinc-300'}`}>
+                    {option.label}
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      active ? 'bg-[var(--primary)]/14 text-[var(--primary)]' : 'bg-white/6 text-zinc-400'
+                    }`}
+                  >
+                    {option.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] text-zinc-500">
+            <span>Search `Ctrl/Cmd+K`</span>
+            <span>Switch `Alt+Up/Down`</span>
+          </div>
         </div>
 
         <div className="h-[calc(100vh-11.5rem)] space-y-1.5 overflow-y-auto pr-1">
@@ -2840,8 +2851,11 @@ export function DashboardClient({ initialOverview }: Props) {
 
 function ChannelPill({ channel }: { channel: ChannelRecord }) {
   return (
-    <span className="rounded-full bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">
-      {channel.name} · {channel.connectedNumbers}
+    <span className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-3 py-1.5 text-[11px] text-zinc-300">
+      <span className="font-medium">{channel.name}</span>
+      <span className="rounded-full bg-white/8 px-2 py-0.5 text-[10px] font-semibold text-zinc-400">
+        {channel.connectedNumbers}
+      </span>
     </span>
   );
 }
