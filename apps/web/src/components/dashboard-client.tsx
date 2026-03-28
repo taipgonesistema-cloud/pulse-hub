@@ -799,9 +799,9 @@ export function DashboardClient({ initialOverview }: Props) {
       : null;
     const cachedMessages = cacheKey ? messageCacheRef.current.get(cacheKey) : undefined;
 
-    setPendingConversationId(cachedMessages ? null : conversationId);
+    setPendingConversationId(conversationId);
     setTypingConversationId(null);
-    setIsLoadingMessages(!cachedMessages);
+    setIsLoadingMessages(true);
     if (cachedMessages) {
       setMessages((current) =>
         areMessageListsEquivalent(current, cachedMessages) ? current : cachedMessages,
