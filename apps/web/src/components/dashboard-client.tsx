@@ -9,8 +9,6 @@ import {
   Briefcase,
   Camera,
   CalendarDays,
-  ChevronLeft,
-  ChevronRight,
   CircleHelp,
   ContactRound,
   Grid3X3,
@@ -91,6 +89,69 @@ const quickReplies = [
 
 const composerEmojis = ['🙂', '😂', '😍', '🙏', '🎉', '🔥', '✅', '❤️'];
 
+const contactsKanbanStages = [
+  {
+    id: 'new' as const,
+    label: 'Novos Leads',
+    accent: 'bg-sky-400',
+    surface: 'from-sky-500/12 to-transparent',
+  },
+  {
+    id: 'qualified' as const,
+    label: 'Qualificados',
+    accent: 'bg-violet-400',
+    surface: 'from-violet-500/12 to-transparent',
+  },
+  {
+    id: 'active' as const,
+    label: 'Em Atendimento',
+    accent: 'bg-emerald-400',
+    surface: 'from-emerald-500/12 to-transparent',
+  },
+  {
+    id: 'followup' as const,
+    label: 'Follow-up',
+    accent: 'bg-amber-400',
+    surface: 'from-amber-500/12 to-transparent',
+  },
+  {
+    id: 'won' as const,
+    label: 'Fechados',
+    accent: 'bg-pink-400',
+    surface: 'from-pink-500/12 to-transparent',
+  },
+];
+
+const contactsBoards = [
+  {
+    id: 'contacts' as const,
+    label: 'Contatos',
+    description: 'Toda a base sincronizada',
+    icon: LayoutGrid,
+  },
+  {
+    id: 'unread' as const,
+    label: 'Nao lidos',
+    description: 'Com novas mensagens',
+    icon: Bell,
+  },
+  {
+    id: 'verified' as const,
+    label: 'Verificados',
+    description: 'Perfis prioritarios',
+    icon: BadgeCheck,
+  },
+  {
+    id: 'groups' as const,
+    label: 'Grupos',
+    description: 'Fluxos coletivos',
+    icon: ContactRound,
+  },
+];
+
+const contactsKanbanStorageKey = 'pulse-hub.contacts-kanban';
+const contactsKanbanBoardStorageKey = 'pulse-hub.contacts-kanban-board';
+
 const navigationItems: Array<{
   id: WorkspaceView;
   label: string;
@@ -137,6 +198,10 @@ type ComposerAttachment = {
   sticker: boolean;
 };
 
+type ContactsBoardId = 'contacts' | 'unread' | 'verified' | 'groups';
+
+type ContactKanbanStageId = 'new' | 'qualified' | 'active' | 'followup' | 'won';
+
 export function DashboardClient({ initialOverview }: Props) {
   const router = useRouter();
   const [overview, setOverview] = useState(() => sanitizeOverview(initialOverview));
@@ -162,6 +227,12 @@ export function DashboardClient({ initialOverview }: Props) {
   >('all');
   const [showAdvancedContactsFilters, setShowAdvancedContactsFilters] = useState(false);
   const [contactsSearch, setContactsSearch] = useState('');
+  const [activeContactsBoard, setActiveContactsBoard] = useState<ContactsBoardId>('contacts');
+  const [contactKanbanStageMap, setContactKanbanStageMap] = useState<
+    Record<string, ContactKanbanStageId>
+  >({});
+  const [draggedContactKey, setDraggedContactKey] = useState<string | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<ContactKanbanStageId | null>(null);
   const [globalSearch, setGlobalSearch] = useState('');
   const [selectedContactId, setSelectedContactId] = useState(
     initialOverview.conversations[0]?.id ?? '',
@@ -274,7 +345,7 @@ export function DashboardClient({ initialOverview }: Props) {
     [isContactsView, overview.conversations],
   );
 
-  const filteredContacts = useMemo(() => {
+  const contactsBase = useMemo(() => {
     if (!isContactsView) {
       return [] as ConversationRecord[];
     }
@@ -311,6 +382,38 @@ export function DashboardClient({ initialOverview }: Props) {
     deferredContactsSearch,
     isContactsView,
   ]);
+
+  const filteredContacts = useMemo(
+    () => filterContactsBoard(contactsBase, activeContactsBoard),
+    [activeContactsBoard, contactsBase],
+  );
+
+  const contactsBoardOptions = useMemo(
+    () =>
+      contactsBoards.map((board) => ({
+        ...board,
+        count: filterContactsBoard(contactsBase, board.id).length,
+      })),
+    [contactsBase],
+  );
+
+  const kanbanColumns = useMemo(() => {
+    const sortedContacts = [...filteredContacts].sort((left, right) => {
+      if (right.unread !== left.unread) {
+        return right.unread - left.unread;
+      }
+
+      return new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime();
+    });
+
+    return contactsKanbanStages.map((stage) => ({
+      ...stage,
+      contacts: sortedContacts.filter(
+        (contact) =>
+          resolveContactKanbanStage(contact, contactKanbanStageMap) === stage.id,
+      ),
+    }));
+  }, [contactKanbanStageMap, filteredContacts]);
 
   const selectedContact = useMemo(
     () => {
@@ -588,6 +691,7 @@ export function DashboardClient({ initialOverview }: Props) {
     setContactsFilter('all');
     setContactsAudienceFilter('all');
     setContactsChannelFilter('all');
+    setActiveContactsBoard('contacts');
     setShowAdvancedContactsFilters(false);
   }, []);
 
@@ -595,6 +699,18 @@ export function DashboardClient({ initialOverview }: Props) {
     setGlobalSearch('');
     setConversationFilter('all');
   }, []);
+
+  const moveContactToStage = useCallback(
+    (contact: ConversationRecord, nextStage: ContactKanbanStageId) => {
+      const storageKey = buildContactKanbanKey(contact);
+      setContactKanbanStageMap((current) => ({
+        ...current,
+        [storageKey]: nextStage,
+      }));
+      setSelectedContactId(contact.id);
+    },
+    [],
+  );
 
   const navigateToView = useCallback(
     (nextView: WorkspaceView) => {
@@ -650,6 +766,38 @@ export function DashboardClient({ initialOverview }: Props) {
       toastTimers.clear();
     };
   }, []);
+
+  useEffect(() => {
+    const rawStageMap = window.localStorage.getItem(contactsKanbanStorageKey);
+    if (rawStageMap) {
+      try {
+        setContactKanbanStageMap(
+          JSON.parse(rawStageMap) as Record<string, ContactKanbanStageId>,
+        );
+      } catch {
+        window.localStorage.removeItem(contactsKanbanStorageKey);
+      }
+    }
+
+    const rawBoard = window.localStorage.getItem(contactsKanbanBoardStorageKey);
+    if (
+      rawBoard &&
+      contactsBoards.some((board) => board.id === rawBoard)
+    ) {
+      setActiveContactsBoard(rawBoard as ContactsBoardId);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      contactsKanbanStorageKey,
+      JSON.stringify(contactKanbanStageMap),
+    );
+  }, [contactKanbanStageMap]);
+
+  useEffect(() => {
+    window.localStorage.setItem(contactsKanbanBoardStorageKey, activeContactsBoard);
+  }, [activeContactsBoard]);
 
   const loadOverview = useCallback(async () => {
     const response = await fetch(`${apiUrl}/dashboard/overview`, {
@@ -1551,65 +1699,111 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   const renderContactsView = () => (
-    <section className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
-      <div className="mx-auto max-w-none space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-6">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-              stitch_contacts_crm
-            </p>
-            <h2 className="font-headline mt-2 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-              Contacts
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm text-[var(--muted)] md:text-base">
-              Manage your multi-channel relationships across the Ether network.
-            </p>
-          </div>
-
-          <div className="inline-flex items-center rounded-full border border-white/8 bg-[var(--surface-low)] p-1">
-            <button
-              className={`rounded-full px-5 py-3 text-sm font-semibold transition ${
-                contactsAudienceFilter === 'all'
-                  ? 'bg-[var(--surface-highest)] text-white'
-                  : 'text-[var(--muted)] hover:text-white'
-              }`}
-              onClick={() => setContactsAudienceFilter('all')}
-              type="button"
-            >
-              All Users
-            </button>
-            <button
-              className={`inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition ${
-                contactsAudienceFilter === 'verified'
-                  ? 'bg-[var(--surface-highest)] text-white'
-                  : 'text-[var(--muted)] hover:text-white'
-              }`}
-              onClick={() => setContactsAudienceFilter('verified')}
-              type="button"
-            >
-              <BadgeCheck className="h-4 w-4" strokeWidth={2.1} />
-              Meta Verified
-            </button>
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1.7fr)_minmax(0,0.9fr)_minmax(0,0.9fr)]">
-          <div className="rounded-[28px] bg-[var(--surface-low)] px-5 py-4">
-            <div className="flex items-center gap-3 text-sm text-[var(--muted)]">
-              <Search className="h-5 w-5" strokeWidth={2.2} />
-              <input
-                className="min-w-0 flex-1 bg-transparent text-base text-white outline-none placeholder:text-zinc-500"
-                onChange={(event) => setContactsSearch(event.target.value)}
-                placeholder="Search by name, ID, or channel handle..."
-                value={contactsSearch}
-              />
+    <section className="min-h-0 flex-1 overflow-hidden px-4 py-5 md:px-6">
+      <div className="grid h-full min-h-0 gap-5 xl:grid-cols-[14.5rem_minmax(0,1fr)_21rem]">
+        <aside className="min-h-0 rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(14,14,16,0.98))] p-4 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)]">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
+                Boards
+              </p>
+              <h2 className="mt-2 font-headline text-2xl font-bold text-white">Contacts</h2>
             </div>
+            <button
+              className="grid h-10 w-10 place-items-center rounded-full bg-[var(--primary)] text-black shadow-[0_0_20px_rgba(127,175,255,0.24)]"
+              onClick={resetContactsView}
+              type="button"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2.6} />
+            </button>
           </div>
 
-          <div className="rounded-[28px] bg-[var(--surface-low)] px-5 py-4">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-medium text-[var(--muted)]">Channel</span>
-              <div className="flex items-center gap-2">
+          <div className="mt-5 space-y-2">
+            {contactsBoardOptions.map((board) => (
+              <button
+                key={board.id}
+                className={`w-full rounded-[20px] border px-3 py-3 text-left transition ${
+                  activeContactsBoard === board.id
+                    ? 'border-white/10 bg-white/[0.07] shadow-[0_0_0_1px_rgba(255,255,255,0.04)]'
+                    : 'border-transparent bg-transparent hover:border-white/6 hover:bg-white/[0.03]'
+                }`}
+                onClick={() => setActiveContactsBoard(board.id)}
+                type="button"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`grid h-9 w-9 place-items-center rounded-2xl ${activeContactsBoard === board.id ? 'bg-[var(--primary)]/18 text-[var(--primary)]' : 'bg-white/5 text-zinc-400'}`}>
+                      <board.icon className="h-4 w-4" strokeWidth={2.1} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-white">{board.label}</p>
+                      <p className="mt-0.5 text-[11px] text-zinc-500">{board.description}</p>
+                    </div>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${activeContactsBoard === board.id ? 'bg-[var(--primary)]/14 text-[var(--primary)]' : 'bg-white/5 text-zinc-400'}`}>
+                    {board.count}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-5 rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-500">
+              Workflow
+            </p>
+            <p className="mt-3 text-sm leading-6 text-zinc-400">
+              Arraste cada contato entre colunas para organizar sua operacao comercial sem sair da tela.
+            </p>
+          </div>
+        </aside>
+
+        <div className="min-h-0 overflow-hidden rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(12,12,14,0.98))] shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)]">
+          <div className="border-b border-white/6 px-4 py-4 md:px-5">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
+                  CRM Kanban
+                </p>
+                <h3 className="mt-2 font-headline text-3xl font-bold text-white">Pipeline de contatos</h3>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Base filtrada em tempo real com arraste entre etapas e acesso rapido para conversas.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+                  onClick={() => setContactsAudienceFilter((current) => (current === 'verified' ? 'all' : 'verified'))}
+                  type="button"
+                >
+                  <BadgeCheck className="h-4 w-4" strokeWidth={2.1} />
+                  {contactsAudienceFilter === 'verified' ? 'So verificados' : 'Todos os perfis'}
+                </button>
+                <button
+                  className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black shadow-[0_0_18px_rgba(127,175,255,0.26)] transition hover:scale-[1.01]"
+                  onClick={() => runAction(loadOverview)}
+                  type="button"
+                >
+                  <RefreshCw className="h-4 w-4" strokeWidth={2.1} />
+                  Deep sync
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.45fr)_auto_auto]">
+              <div className="rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-3">
+                <div className="flex items-center gap-3 text-sm text-zinc-400">
+                  <Search className="h-4 w-4" strokeWidth={2.2} />
+                  <input
+                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                    onChange={(event) => setContactsSearch(event.target.value)}
+                    placeholder="Buscar por nome, telefone, canal ou responsavel..."
+                    value={contactsSearch}
+                  />
+                </div>
+              </div>
+
+              <div className="inline-flex items-center rounded-[24px] border border-white/8 bg-white/[0.03] p-1">
                 {([
                   { id: 'whatsapp', icon: MessageCircle, color: 'text-[var(--secondary)]' },
                   { id: 'facebook', icon: ContactRound, color: 'text-[var(--primary)]' },
@@ -1621,7 +1815,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     <button
                       key={id}
                       className={`grid h-10 w-10 place-items-center rounded-full transition ${
-                        active ? 'bg-white/8 text-white' : 'hover:bg-white/5'
+                        active ? 'bg-white/10 text-white' : 'hover:bg-white/5'
                       }`}
                       onClick={() =>
                         setContactsChannelFilter((current) => (current === id ? 'all' : id))
@@ -1633,244 +1827,160 @@ export function DashboardClient({ initialOverview }: Props) {
                   );
                 })}
               </div>
-            </div>
-          </div>
 
-          <button
-            className="inline-flex items-center justify-center gap-3 rounded-[28px] bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-6 py-4 text-lg font-bold text-black transition hover:scale-[1.01]"
-            onClick={() => setShowAdvancedContactsFilters((current) => !current)}
-            type="button"
-          >
-            <SlidersHorizontal className="h-5 w-5" strokeWidth={2.2} />
-            Advanced Filters
-          </button>
-        </div>
-
-        {showAdvancedContactsFilters ? (
-          <div className="flex flex-wrap gap-2">
-            {contactFilterOptions.map((option) => {
-              const active = contactsFilter === option.id;
-
-              return (
-                <button
-                  key={option.id}
-                  className={`rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
-                    active
-                      ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-[var(--primary)]'
-                      : 'border-white/8 bg-white/5 text-[var(--muted)] hover:text-white'
-                  }`}
-                  onClick={() => setContactsFilter(option.id)}
-                  type="button"
-                >
-                  {option.label} · {option.count}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
-
-        <div className="overflow-hidden rounded-[1.5rem] border border-white/5 bg-[linear-gradient(180deg,rgba(19,19,19,0.96),rgba(15,15,15,0.98))]">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] border-collapse text-left">
-              <thead>
-                <tr className="border-b border-white/5 bg-[var(--surface-low)]/60">
-                  <th className="px-6 py-5 text-[10px] font-black uppercase tracking-[0.24em] text-[var(--muted)]">
-                    Identity
-                  </th>
-                  <th className="px-6 py-6 text-[10px] font-black uppercase tracking-[0.24em] text-[var(--muted)]">
-                    Primary Channel
-                  </th>
-                  <th className="px-6 py-6 text-center text-[10px] font-black uppercase tracking-[0.24em] text-[var(--muted)]">
-                    Interactions
-                  </th>
-                  <th className="px-6 py-6 text-[10px] font-black uppercase tracking-[0.24em] text-[var(--muted)]">
-                    Last Pulse
-                  </th>
-                  <th className="px-6 py-6 text-[10px] font-black uppercase tracking-[0.24em] text-[var(--muted)]">
-                    Connectivity
-                  </th>
-                  <th className="px-6 py-5 text-right text-[10px] font-black uppercase tracking-[0.24em] text-[var(--muted)]">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {shouldShowInitialSkeleton ? (
-                  <ContactsTableSkeleton rows={4} />
-                ) : filteredContacts.length > 0 ? (
-                  filteredContacts.map((contact) => {
-                    const active = selectedContact?.id === contact.id;
-                    const channel = getContactChannelMeta(contact);
-                    const interactionMetric = getContactInteractionMetric(contact);
-                    const relativePulse = formatRelativePulse(contact.lastMessageAt);
-                    const connectivity = getContactConnectivity(contact, selectedSession?.status);
-
-                    return (
-                      <tr
-                        key={`${contact.sessionId}:${contact.id}`}
-                        className={`cursor-pointer border-b border-white/5 transition last:border-b-0 ${
-                          active ? 'bg-white/[0.04]' : 'hover:bg-white/[0.02]'
-                        }`}
-                        onClick={() => setSelectedContactId(contact.id)}
-                      >
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-4">
-                            <div className="relative">
-                              <AvatarBadge label={contact.contact} src={contact.avatarUrl} />
-                              {connectivity.active ? (
-                                <div className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-2 border-[var(--background)] bg-[var(--secondary)] shadow-[0_0_8px_rgba(93,253,138,0.5)]" />
-                              ) : null}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="font-headline text-xl font-semibold text-white">
-                                {contact.contact}
-                              </div>
-                              <div className="truncate text-sm text-[var(--muted)]">
-                                {isVerifiedContact(contact)
-                                  ? `@${slugifyContact(contact.contact)}`
-                                  : toContactEmail(contact.contact)}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <span className={`inline-flex w-fit items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold ${channel.tone}`}>
-                            <channel.icon className="h-4 w-4" strokeWidth={2.1} />
-                            {channel.label}
-                          </span>
-                        </td>
-                        <td className="px-6 py-5 text-center">
-                          <div className="font-mono text-4xl font-bold text-white">
-                            {interactionMetric.value}
-                          </div>
-                          <div className={`mt-1 text-[11px] font-bold ${interactionMetric.tone}`}>
-                            {interactionMetric.label}
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="text-base text-white">{relativePulse.primary}</div>
-                          <div className="text-[11px] text-[var(--muted)]">{relativePulse.secondary}</div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-2">
-                            <div className={`h-2.5 w-2.5 rounded-full ${connectivity.dot}`} />
-                            <span className={`text-sm font-medium ${connectivity.tone}`}>
-                              {connectivity.label}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              className="rounded-full bg-white/5 px-4 py-2 text-xs font-semibold text-[var(--muted)] transition hover:text-white"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setSelectedSessionId(contact.sessionId);
-                                setSelectedConversationId(contact.id);
-                                navigateToView('conversations');
-                              }}
-                              type="button"
-                            >
-                              Open
-                            </button>
-                            <button
-                              className="grid h-10 w-10 place-items-center rounded-full text-[var(--muted)] transition hover:bg-white/5 hover:text-white"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void navigator.clipboard?.writeText(contact.participantId);
-                              }}
-                              type="button"
-                            >
-                              <MoreVertical className="h-4 w-4" strokeWidth={2.1} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td className="px-6 py-10" colSpan={6}>
-                      <EmptyStateCard
-                        actionLabel="Limpar filtros"
-                        description="Ajuste a busca ou remova os filtros para voltar a ver seus contatos sincronizados."
-                        onAction={resetContactsView}
-                        title="Nenhum contato encontrado"
-                      />
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/5 bg-[var(--surface-low)]/60 px-6 py-3">
-            <div className="text-xs font-medium text-[var(--muted)]">
-              Showing {filteredContacts.length === 0 ? 0 : 1}-{filteredContacts.length} of {contacts.length} contacts
-            </div>
-            <div className="flex items-center gap-2">
-              <button className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--surface-highest)] text-white transition hover:bg-white/10" type="button">
-                <ChevronLeft className="h-4 w-4" strokeWidth={2.1} />
-              </button>
-              <button className="h-10 rounded-xl bg-[var(--primary)] px-4 text-sm font-bold text-black" type="button">
-                1
-              </button>
-              <button className="h-10 rounded-xl px-4 text-sm font-bold text-[var(--muted)] transition hover:text-white" type="button">
-                2
-              </button>
-              <button className="h-10 rounded-xl px-4 text-sm font-bold text-[var(--muted)] transition hover:text-white" type="button">
-                3
-              </button>
-              <button className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--surface-highest)] text-white transition hover:bg-white/10" type="button">
-                <ChevronRight className="h-4 w-4" strokeWidth={2.1} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
-          <div className="rounded-[1.5rem] bg-[var(--surface-low)] p-5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--muted)]">
-                Channel Health
-              </span>
-              <BarChart3 className="h-5 w-5 text-[var(--secondary)]" strokeWidth={2.1} />
-            </div>
-            <div className="mt-6 space-y-5">
-              {contactChannelHealth(contacts).map((item) => (
-                <div key={item.label} className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-white">{item.label}</span>
-                    <span className="text-[var(--muted)]">{item.value}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-[var(--surface-highest)]">
-                    <div className={`h-2 rounded-full ${item.bar}`} style={{ width: `${item.value}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="relative overflow-hidden rounded-[1.5rem] border border-[var(--primary)]/20 bg-[linear-gradient(135deg,rgba(127,175,255,0.12),rgba(14,14,14,1))] p-5">
-            <div className="relative z-10 max-w-xl">
-              <h3 className="font-headline text-4xl font-bold text-white">Sync Real-time CRM</h3>
-              <p className="mt-3 text-base leading-8 text-[var(--muted)]">
-                Your meta-connections are automatically synced every 30 seconds. Click here to force a deep refresh of all metadata and customer tags.
-              </p>
               <button
-                className="mt-6 inline-flex items-center gap-3 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-6 py-3 text-sm font-bold text-black shadow-[0_0_20px_rgba(127,175,255,0.35)] transition hover:scale-[1.01]"
-                onClick={() => runAction(loadOverview)}
+                className="inline-flex items-center justify-center gap-2 rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+                onClick={() => setShowAdvancedContactsFilters((current) => !current)}
                 type="button"
               >
-                <RefreshCw className="h-4 w-4" strokeWidth={2.2} />
-                Run Deep Sync
+                <SlidersHorizontal className="h-4 w-4" strokeWidth={2.1} />
+                Filtros
               </button>
             </div>
-            <div className="pointer-events-none absolute -bottom-8 right-4 text-[12rem] font-black leading-none text-white/5">
-              ↻
-            </div>
+
+            {showAdvancedContactsFilters ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {contactFilterOptions.map((option) => {
+                  const active = contactsFilter === option.id;
+
+                  return (
+                    <button
+                      key={option.id}
+                      className={`rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
+                        active
+                          ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-[var(--primary)]'
+                          : 'border-white/8 bg-white/5 text-[var(--muted)] hover:text-white'
+                      }`}
+                      onClick={() => setContactsFilter(option.id)}
+                      type="button"
+                    >
+                      {option.label} · {option.count}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="min-h-0 overflow-x-auto overflow-y-hidden px-4 pb-4 pt-4 md:px-5">
+            {shouldShowInitialSkeleton ? (
+              <div className="flex gap-4">
+                {Array.from({ length: 4 }, (_, index) => (
+                  <div key={index} className="w-[19rem] shrink-0 rounded-[28px] border border-white/6 bg-white/[0.025] p-4">
+                    <StackSkeleton rows={4} />
+                  </div>
+                ))}
+              </div>
+            ) : filteredContacts.length === 0 ? (
+              <EmptyStateCard
+                actionLabel="Limpar filtros"
+                description="Ajuste busca, canais ou boards para repovoar o pipeline e voltar a arrastar os contatos entre as etapas."
+                onAction={resetContactsView}
+                title="Nenhum contato disponivel no board"
+              />
+            ) : (
+              <div className="flex min-h-full items-start gap-4 pb-2">
+                {kanbanColumns.map((column) => (
+                  <div
+                    key={column.id}
+                    className={`flex min-h-[calc(100vh-19rem)] w-[19rem] shrink-0 flex-col rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-3 transition ${dragOverStage === column.id ? 'border-[var(--primary)]/35 shadow-[0_0_0_1px_rgba(127,175,255,0.12)]' : ''}`}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDragOverStage(column.id);
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverStage === column.id) {
+                        setDragOverStage(null);
+                      }
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (!draggedContactKey) {
+                        return;
+                      }
+
+                      const droppedContact = filteredContacts.find(
+                        (contact) => buildContactKanbanKey(contact) === draggedContactKey,
+                      );
+
+                      if (droppedContact) {
+                        moveContactToStage(droppedContact, column.id);
+                      }
+
+                      setDraggedContactKey(null);
+                      setDragOverStage(null);
+                    }}
+                  >
+                    <div className={`rounded-[22px] border border-white/6 bg-gradient-to-br ${column.surface} px-4 py-4`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />
+                          <div>
+                            <p className="text-sm font-semibold text-white">{column.label}</p>
+                            <p className="mt-1 text-[11px] text-zinc-500">{column.contacts.length} contatos</p>
+                          </div>
+                        </div>
+                        <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold text-zinc-300">
+                          {column.contacts.length}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex-1 space-y-3 overflow-y-auto pr-1">
+                      {column.contacts.map((contact) => (
+                        <ContactKanbanCard
+                          key={buildContactKanbanKey(contact)}
+                          contact={contact}
+                          onCopyId={() => void navigator.clipboard?.writeText(contact.participantId)}
+                          onDragEnd={() => {
+                            setDraggedContactKey(null);
+                            setDragOverStage(null);
+                          }}
+                          onDragStart={() => setDraggedContactKey(buildContactKanbanKey(contact))}
+                          onOpenConversation={() => {
+                            setSelectedContactId(contact.id);
+                            setSelectedSessionId(contact.sessionId);
+                            setSelectedConversationId(contact.id);
+                            navigateToView('conversations');
+                          }}
+                          onSelect={() => setSelectedContactId(contact.id)}
+                          selected={selectedContact?.id === contact.id}
+                        />
+                      ))}
+
+                      {column.contacts.length === 0 ? (
+                        <div className="rounded-[22px] border border-dashed border-white/8 bg-white/[0.02] px-4 py-6 text-center text-sm text-zinc-500">
+                          Solte um contato aqui.
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
+
+        <aside className="min-h-0 overflow-y-auto rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(12,12,14,0.98))] p-4 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)]">
+          {selectedContact ? (
+            <ContactKanbanDetailPanel
+              contact={selectedContact}
+              onCopyId={() => void navigator.clipboard?.writeText(selectedContact.participantId)}
+              onMoveStage={moveContactToStage}
+              onOpenConversation={() => {
+                setSelectedSessionId(selectedContact.sessionId);
+                setSelectedConversationId(selectedContact.id);
+                navigateToView('conversations');
+              }}
+              stage={resolveContactKanbanStage(selectedContact, contactKanbanStageMap)}
+            />
+          ) : (
+            <EmptyStateCard
+              description="Selecione um card no board para ver contexto, mover de etapa e abrir a conversa rapidamente."
+              title="Nenhum contato selecionado"
+            />
+          )}
+        </aside>
       </div>
     </section>
   );
@@ -3317,34 +3427,6 @@ function StackSkeleton({ rows = 3 }: { rows?: number }) {
   );
 }
 
-function ContactsTableSkeleton({ rows = 4 }: { rows?: number }) {
-  return (
-    <>
-      {Array.from({ length: rows }, (_, index) => (
-        <tr key={index} className="border-b border-white/5 last:border-b-0">
-          <td className="px-6 py-4">
-            <div className="flex items-center gap-4">
-              <SkeletonBlock className="h-12 w-12 rounded-2xl" />
-              <div className="space-y-2">
-                <SkeletonBlock className="h-4 w-40" />
-                <SkeletonBlock className="h-3 w-32" />
-              </div>
-            </div>
-          </td>
-          <td className="px-6 py-4"><SkeletonBlock className="h-8 w-28 rounded-full" /></td>
-          <td className="px-6 py-4"><SkeletonBlock className="mx-auto h-10 w-16" /></td>
-          <td className="px-6 py-4">
-            <SkeletonBlock className="h-4 w-20" />
-            <SkeletonBlock className="mt-2 h-3 w-28" />
-          </td>
-          <td className="px-6 py-4"><SkeletonBlock className="h-4 w-24" /></td>
-          <td className="px-6 py-4"><SkeletonBlock className="ml-auto h-10 w-24" /></td>
-        </tr>
-      ))}
-    </>
-  );
-}
-
 function ConversationTimelineSkeleton() {
   return (
     <div className="space-y-4">
@@ -3386,6 +3468,223 @@ function AnalyticsLoadingState() {
           {Array.from({ length: 5 }, (_, index) => (
             <SkeletonBlock key={index} className="h-10 w-full" />
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContactKanbanCard({
+  contact,
+  selected,
+  onSelect,
+  onOpenConversation,
+  onCopyId,
+  onDragStart,
+  onDragEnd,
+}: {
+  contact: ConversationRecord;
+  selected: boolean;
+  onSelect: () => void;
+  onOpenConversation: () => void;
+  onCopyId: () => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+}) {
+  const channel = getContactChannelMeta(contact);
+  const relativePulse = formatRelativePulse(contact.lastMessageAt);
+
+  return (
+    <article
+      className={`rounded-[22px] border p-3 transition ${
+        selected
+          ? 'border-[var(--primary)]/25 bg-[var(--primary)]/8 shadow-[0_0_0_1px_rgba(127,175,255,0.08)]'
+          : 'border-white/6 bg-white/[0.03] hover:border-white/10 hover:bg-white/[0.045]'
+      }`}
+      draggable
+      onClick={onSelect}
+      onDragEnd={onDragEnd}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', contact.id);
+        onDragStart();
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <AvatarBadge label={contact.contact} src={contact.avatarUrl} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="line-clamp-2 text-sm font-semibold text-white">{contact.contact}</p>
+              <p className="mt-1 truncate text-xs text-zinc-500">
+                {isVerifiedContact(contact)
+                  ? `@${slugifyContact(contact.contact)}`
+                  : toContactEmail(contact.contact)}
+              </p>
+            </div>
+            {contact.unread > 0 ? (
+              <span className="rounded-full bg-[var(--secondary)]/16 px-2 py-1 text-[10px] font-semibold text-[var(--secondary)]">
+                {contact.unread}
+              </span>
+            ) : null}
+          </div>
+
+          <p className="mt-3 line-clamp-2 text-sm leading-6 text-zinc-300">
+            {contact.preview || 'Sem preview recente.'}
+          </p>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${channel.tone}`}>
+              <channel.icon className="h-3.5 w-3.5" strokeWidth={2.1} />
+              {channel.label}
+            </span>
+            <span className="rounded-full bg-white/6 px-2.5 py-1 text-[10px] font-semibold text-zinc-400">
+              {relativePulse.primary}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/6 pt-3">
+        <button
+          className="rounded-full bg-white/6 px-3 py-1.5 text-[11px] font-semibold text-zinc-300 transition hover:bg-white/10 hover:text-white"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenConversation();
+          }}
+          type="button"
+        >
+          Abrir
+        </button>
+        <button
+          className="rounded-full bg-white/6 px-3 py-1.5 text-[11px] font-semibold text-zinc-400 transition hover:bg-white/10 hover:text-white"
+          onClick={(event) => {
+            event.stopPropagation();
+            onCopyId();
+          }}
+          type="button"
+        >
+          Copiar ID
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function ContactKanbanDetailPanel({
+  contact,
+  stage,
+  onMoveStage,
+  onOpenConversation,
+  onCopyId,
+}: {
+  contact: ConversationRecord;
+  stage: ContactKanbanStageId;
+  onMoveStage: (contact: ConversationRecord, stage: ContactKanbanStageId) => void;
+  onOpenConversation: () => void;
+  onCopyId: () => void;
+}) {
+  const channel = getContactChannelMeta(contact);
+  const interactionMetric = getContactInteractionMetric(contact);
+  const relativePulse = formatRelativePulse(contact.lastMessageAt);
+  const connectivity = getContactConnectivity(contact);
+
+  return (
+    <div className="space-y-5">
+      <div className="rounded-[26px] border border-white/6 bg-white/[0.03] p-5">
+        <div className="flex items-start gap-4">
+          <AvatarBadge className="h-16 w-16 text-lg" label={contact.contact} src={contact.avatarUrl} />
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
+              Contato ativo
+            </p>
+            <h3 className="mt-2 text-xl font-semibold text-white">{contact.contact}</h3>
+            <p className="mt-1 text-sm text-zinc-400">{contact.owner} · {contact.channelName}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${channel.tone}`}>
+            <channel.icon className="h-4 w-4" strokeWidth={2.1} />
+            {channel.label}
+          </span>
+          <span className="rounded-full bg-white/6 px-3 py-1.5 text-xs font-semibold text-zinc-300">
+            {contactsKanbanStages.find((item) => item.id === stage)?.label}
+          </span>
+        </div>
+      </div>
+
+      <div className="rounded-[26px] border border-white/6 bg-white/[0.03] p-5">
+        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
+          Mover etapa
+        </p>
+        <div className="mt-4 grid gap-2">
+          {contactsKanbanStages.map((item) => (
+            <button
+              key={item.id}
+              className={`flex items-center justify-between rounded-2xl border px-3 py-3 text-left transition ${
+                item.id === stage
+                  ? 'border-[var(--primary)]/30 bg-[var(--primary)]/10'
+                  : 'border-white/6 bg-white/[0.02] hover:bg-white/[0.04]'
+              }`}
+              onClick={() => onMoveStage(contact, item.id)}
+              type="button"
+            >
+              <span className="text-sm font-medium text-white">{item.label}</span>
+              <span className={`h-2.5 w-2.5 rounded-full ${item.accent}`} />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-[26px] border border-white/6 bg-white/[0.03] p-5">
+        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
+          Sinais do contato
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-white/[0.03] p-3">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Interacoes</p>
+            <p className="mt-2 text-2xl font-semibold text-white">{interactionMetric.value}</p>
+            <p className={`mt-1 text-[11px] font-semibold ${interactionMetric.tone}`}>{interactionMetric.label}</p>
+          </div>
+          <div className="rounded-2xl bg-white/[0.03] p-3">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Pulse</p>
+            <p className="mt-2 text-base font-semibold text-white">{relativePulse.primary}</p>
+            <p className="mt-1 text-[11px] text-zinc-400">{relativePulse.secondary}</p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl bg-white/[0.03] p-3">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Ultima mensagem</p>
+          <p className="mt-2 text-sm leading-6 text-zinc-300">{contact.preview || 'Sem texto recente sincronizado.'}</p>
+          <div className="mt-3 flex items-center gap-2 text-xs">
+            <span className={`h-2.5 w-2.5 rounded-full ${connectivity.dot}`} />
+            <span className={connectivity.tone}>{connectivity.label}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-[26px] border border-white/6 bg-white/[0.03] p-5">
+        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
+          Acoes rapidas
+        </p>
+        <div className="mt-4 grid gap-2">
+          <button
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
+            onClick={onOpenConversation}
+            type="button"
+          >
+            <MessageCircle className="h-4 w-4" strokeWidth={2.1} />
+            Abrir conversa
+          </button>
+          <button
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+            onClick={onCopyId}
+            type="button"
+          >
+            <MoreVertical className="h-4 w-4" strokeWidth={2.1} />
+            Copiar identificador
+          </button>
         </div>
       </div>
     </div>
@@ -4221,34 +4520,54 @@ function getContactConnectivity(
   };
 }
 
-function contactChannelHealth(conversations: ConversationRecord[]) {
-  const total = Math.max(conversations.length, 1);
-  const counts = conversations.reduce(
-    (accumulator, conversation) => {
-      const key = getContactChannelKey(conversation);
-      accumulator[key] += 1;
-      return accumulator;
-    },
-    { whatsapp: 0, instagram: 0, facebook: 0 },
-  );
+function filterContactsBoard(
+  contacts: ConversationRecord[],
+  boardId: ContactsBoardId,
+) {
+  switch (boardId) {
+    case 'unread':
+      return contacts.filter((contact) => contact.unread > 0);
+    case 'verified':
+      return contacts.filter((contact) => isVerifiedContact(contact));
+    case 'groups':
+      return contacts.filter((contact) => isGroupConversation(contact));
+    default:
+      return contacts;
+  }
+}
 
-  return [
-    {
-      label: 'WhatsApp',
-      value: Math.round((counts.whatsapp / total) * 100),
-      bar: 'bg-[var(--secondary)]',
-    },
-    {
-      label: 'Instagram',
-      value: Math.round((counts.instagram / total) * 100),
-      bar: 'bg-[var(--tertiary)]',
-    },
-    {
-      label: 'Messenger',
-      value: Math.round((counts.facebook / total) * 100),
-      bar: 'bg-[var(--primary)]',
-    },
-  ];
+function buildContactKanbanKey(contact: ConversationRecord) {
+  return `${contact.sessionId}:${contact.id}`;
+}
+
+function resolveContactKanbanStage(
+  contact: ConversationRecord,
+  stageMap: Record<string, ContactKanbanStageId>,
+) {
+  return stageMap[buildContactKanbanKey(contact)] ?? inferContactKanbanStage(contact);
+}
+
+function inferContactKanbanStage(contact: ConversationRecord): ContactKanbanStageId {
+  const normalizedStatus = contact.status.toLowerCase();
+  const waiting = contact.waitingTime.toLowerCase();
+
+  if (normalizedStatus.includes('closed') || normalizedStatus.includes('resolved')) {
+    return 'won';
+  }
+
+  if (contact.unread >= 3) {
+    return 'new';
+  }
+
+  if (contact.unread > 0 || waiting.includes('novo')) {
+    return 'qualified';
+  }
+
+  if (normalizedStatus.includes('follow') || waiting.includes('ontem')) {
+    return 'followup';
+  }
+
+  return 'active';
 }
 
 function resolveAvatarSrc(src?: string | null) {
