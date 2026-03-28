@@ -131,6 +131,12 @@ type ToastItem = {
   description?: string;
 };
 
+type ComposerAttachment = {
+  file: File;
+  previewUrl: string | null;
+  sticker: boolean;
+};
+
 export function DashboardClient({ initialOverview }: Props) {
   const router = useRouter();
   const [overview, setOverview] = useState(() => sanitizeOverview(initialOverview));
@@ -186,6 +192,8 @@ export function DashboardClient({ initialOverview }: Props) {
   const toastTimersRef = useRef(new Map<number, number>());
   const toastIdRef = useRef(0);
   const currentView = viewTransition ?? activeView;
+  const hasWorkspaceData = overview.sessions.length > 0 || overview.conversations.length > 0;
+  const shouldShowInitialSkeleton = isPending && !hasWorkspaceData && !errorMessage;
   const deferredContactsSearch = useDeferredValue(contactsSearch);
   const isConversationSwitching = pendingConversationId !== null;
   const isDashboardView = activeView === 'dashboard';
@@ -574,6 +582,19 @@ export function DashboardClient({ initialOverview }: Props) {
     },
     [dismissToast, toasts],
   );
+
+  const resetContactsView = useCallback(() => {
+    setContactsSearch('');
+    setContactsFilter('all');
+    setContactsAudienceFilter('all');
+    setContactsChannelFilter('all');
+    setShowAdvancedContactsFilters(false);
+  }, []);
+
+  const resetConversationView = useCallback(() => {
+    setGlobalSearch('');
+    setConversationFilter('all');
+  }, []);
 
   const navigateToView = useCallback(
     (nextView: WorkspaceView) => {
@@ -1198,30 +1219,38 @@ export function DashboardClient({ initialOverview }: Props) {
     shouldStickToBottomRef.current = distanceFromBottom <= 96;
   }, []);
 
-  const runAction = useCallback((handler: () => Promise<void>, options?: { successMessage?: string }) => {
-    setErrorMessage(null);
+  const executeAction = useCallback(
+    async (handler: () => Promise<void>, options?: { successMessage?: string }) => {
+      setErrorMessage(null);
 
-    startTransition(() => {
-      void handler()
-        .then(() => {
-          if (options?.successMessage) {
-            pushToast({
-              tone: 'success',
-              title: options.successMessage,
-            });
-          }
-        })
-        .catch((error: unknown) => {
-          const message = error instanceof Error ? error.message : 'Falha inesperada.';
-          setErrorMessage(message);
+      try {
+        await handler();
+        if (options?.successMessage) {
           pushToast({
-            tone: 'error',
-            title: 'Action failed',
-            description: message,
+            tone: 'success',
+            title: options.successMessage,
           });
+        }
+        return true;
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Falha inesperada.';
+        setErrorMessage(message);
+        pushToast({
+          tone: 'error',
+          title: 'Action failed',
+          description: message,
         });
+        return false;
+      }
+    },
+    [pushToast],
+  );
+
+  const runAction = useCallback((handler: () => Promise<void>, options?: { successMessage?: string }) => {
+    startTransition(() => {
+      void executeAction(handler, options);
     });
-  }, [pushToast]);
+  }, [executeAction]);
 
   const createSession = () => {
     runAction(async () => {
@@ -1280,7 +1309,7 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     const payload = text.trim();
-    runAction(async () => {
+    return executeAction(async () => {
       const response = await fetch(
         `${apiUrl}/whatsapp/sessions/${selectedSession.id}/conversations/${selectedConversation.id}/messages`,
         {
@@ -1297,24 +1326,23 @@ export function DashboardClient({ initialOverview }: Props) {
       await loadMessages(selectedSession.id, selectedConversation.id);
       await loadOverview();
     });
-    return Promise.resolve(true);
-  }, [loadMessages, loadOverview, runAction, selectedConversation, selectedSession]);
+  }, [executeAction, loadMessages, loadOverview, selectedConversation, selectedSession]);
 
   const sendMedia = useCallback(
-    (file: File, options?: { sticker?: boolean }) => {
+    (file: File, options?: { sticker?: boolean; caption?: string }) => {
       if (!selectedSession || !selectedConversation) {
         return Promise.resolve(false);
       }
 
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('caption', '');
+      formData.append('caption', options?.sticker ? '' : options?.caption ?? '');
       if (options?.sticker) {
         formData.append('sticker', 'true');
         formData.append('kind', 'sticker');
       }
 
-      runAction(async () => {
+      return executeAction(async () => {
         const response = await fetch(
           `${apiUrl}/whatsapp/sessions/${selectedSession.id}/conversations/${selectedConversation.id}/media`,
           {
@@ -1330,10 +1358,8 @@ export function DashboardClient({ initialOverview }: Props) {
         await loadMessages(selectedSession.id, selectedConversation.id);
         await loadOverview();
       });
-
-      return Promise.resolve(true);
     },
-    [loadMessages, loadOverview, runAction, selectedConversation, selectedSession],
+    [executeAction, loadMessages, loadOverview, selectedConversation, selectedSession],
   );
 
   if (!isAuthReady) {
@@ -1460,7 +1486,9 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
 
             <div className="space-y-3">
-              {dashboardConversations.length > 0 ? (
+              {shouldShowInitialSkeleton ? (
+                <ListSkeleton rows={3} />
+              ) : dashboardConversations.length > 0 ? (
                 dashboardConversations.map((conversation, index) => (
                   <DashboardLiveStreamCard
                     key={conversation.id}
@@ -1474,9 +1502,12 @@ export function DashboardClient({ initialOverview }: Props) {
                   />
                 ))
               ) : (
-                <GhostPanel>
-                  Nenhuma mensagem recente ainda. Conecte uma sessao e abra conversas reais para alimentar o feed.
-                </GhostPanel>
+                <EmptyStateCard
+                  actionLabel="Abrir configuracoes"
+                  description="Conecte uma sessao do WhatsApp e troque mensagens reais para alimentar o feed operacional ao vivo."
+                  onAction={() => navigateToView('settings')}
+                  title="Ainda nao ha atividade recente"
+                />
               )}
             </div>
           </div>
@@ -1486,12 +1517,17 @@ export function DashboardClient({ initialOverview }: Props) {
               Top Performers
             </h3>
             <div className="space-y-6">
-              {dashboardLeaderboard.length > 0 ? (
+              {shouldShowInitialSkeleton ? (
+                <StackSkeleton rows={3} />
+              ) : dashboardLeaderboard.length > 0 ? (
                 dashboardLeaderboard.map((agent) => (
                   <DashboardPerformerItem key={agent.id} performer={agent} />
                 ))
               ) : (
-                <GhostPanel>A leaderboard vai aparecer quando a operacao tiver conversas sincronizadas.</GhostPanel>
+                <EmptyStateCard
+                  description="Assim que houver conversas suficientes, os melhores resultados da operacao aparecem aqui automaticamente."
+                  title="Leaderboard aguardando dados"
+                />
               )}
             </div>
             <button
@@ -1659,7 +1695,9 @@ export function DashboardClient({ initialOverview }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {filteredContacts.length > 0 ? (
+                {shouldShowInitialSkeleton ? (
+                  <ContactsTableSkeleton rows={4} />
+                ) : filteredContacts.length > 0 ? (
                   filteredContacts.map((contact) => {
                     const active = selectedContact?.id === contact.id;
                     const channel = getContactChannelMeta(contact);
@@ -1753,9 +1791,12 @@ export function DashboardClient({ initialOverview }: Props) {
                 ) : (
                   <tr>
                     <td className="px-6 py-10" colSpan={6}>
-                      <GhostPanel>
-                        Nenhum contato encontrado com os filtros atuais. Ajuste a busca ou sincronize mais conversas.
-                      </GhostPanel>
+                      <EmptyStateCard
+                        actionLabel="Limpar filtros"
+                        description="Ajuste a busca ou remova os filtros para voltar a ver seus contatos sincronizados."
+                        onAction={resetContactsView}
+                        title="Nenhum contato encontrado"
+                      />
                     </td>
                   </tr>
                 )}
@@ -1862,7 +1903,16 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
         </div>
 
-        {analyticsModel ? (
+        {shouldShowInitialSkeleton ? (
+          <AnalyticsLoadingState />
+        ) : analyticsModel && overview.conversations.length === 0 ? (
+          <EmptyStateCard
+            actionLabel="Abrir conversas"
+            description="Quando a operacao receber conversas reais, esta area passa a exibir volume, CSAT e horarios de pico automaticamente."
+            onAction={() => navigateToView('conversations')}
+            title="Analytics aguardando sinal operacional"
+          />
+        ) : analyticsModel ? (
           <div className="grid grid-cols-12 gap-6">
             <div className="col-span-12 overflow-hidden rounded-[1.25rem] bg-[var(--surface-low)] p-5 lg:col-span-4">
               <div className="relative">
@@ -2118,7 +2168,9 @@ export function DashboardClient({ initialOverview }: Props) {
                 Session stack
               </p>
               <div className="mt-5 space-y-3">
-                {overview.sessions.length > 0 ? (
+                {shouldShowInitialSkeleton ? (
+                  <StackSkeleton rows={3} />
+                ) : overview.sessions.length > 0 ? (
                   overview.sessions.map((session) => {
                     const active = session.id === selectedSession?.id;
 
@@ -2146,10 +2198,10 @@ export function DashboardClient({ initialOverview }: Props) {
                     );
                   })
                 ) : (
-                  <GhostPanel>
-                    Nenhuma sessao criada ainda. Preencha os campos acima para conectar o
-                    primeiro numero.
-                  </GhostPanel>
+                  <EmptyStateCard
+                    description="Preencha os dados acima para provisionar o primeiro numero operacional deste workspace."
+                    title="Nenhuma sessao criada ainda"
+                  />
                 )}
               </div>
             </div>
@@ -2243,23 +2295,22 @@ export function DashboardClient({ initialOverview }: Props) {
                         />
                       </div>
                     ) : (
-                      <GhostPanel>
-                        Gere ou reconecte a sessao para exibir o QR code aqui. Se existir
-                        autenticacao persistida, a sessao pode voltar sem novo QR.
-                      </GhostPanel>
+                      <EmptyStateCard
+                        actionLabel="Gerar QR / conectar"
+                        description="Gere um novo QR para autenticar esta sessao. Se ja houver login persistido, a conexao pode voltar sem novo codigo."
+                        onAction={() => connectSession(selectedSession.id)}
+                        title="QR aguardando conexao"
+                      />
                     )}
                   </div>
                 </div>
               </>
             ) : (
-              <GhostPanel>
-                Selecione uma sessao para abrir as configuracoes, gerar QR code e conectar
-                seu WhatsApp.
-              </GhostPanel>
+              <EmptyStateCard
+                description="Escolha uma sessao existente ou crie uma nova para abrir os controles, gerar QR e acompanhar a autenticacao."
+                title="Selecione uma sessao para continuar"
+              />
             )}
-
-            {errorMessage ? <GhostPanel>{errorMessage}</GhostPanel> : null}
-            {isPending ? <GhostPanel>Syncing operation...</GhostPanel> : null}
           </div>
         </div>
       </div>
@@ -2331,7 +2382,8 @@ export function DashboardClient({ initialOverview }: Props) {
         </div>
 
         <div className="h-[calc(100vh-11.5rem)] space-y-1.5 overflow-y-auto pr-1">
-          {visibleSessionConversations.map((conversation) => {
+          {shouldShowInitialSkeleton ? <ListSkeleton rows={6} /> : null}
+          {!shouldShowInitialSkeleton ? visibleSessionConversations.map((conversation) => {
             const active = (pendingConversationId ?? selectedConversation?.id) === conversation.id;
 
             return (
@@ -2398,14 +2450,19 @@ export function DashboardClient({ initialOverview }: Props) {
                 </div>
               </button>
             );
-          })}
+          }) : null}
 
-          {selectedSession && visibleSessionConversations.length === 0 ? (
-            <GhostPanel>
-              {conversationSearchTerm
-                ? 'No conversations match the active search. Refine the term or clear the search field.'
-                : 'Nenhuma conversa encontrada para esse filtro. Troque o filtro ou atualize a fila.'}
-            </GhostPanel>
+          {selectedSession && !shouldShowInitialSkeleton && visibleSessionConversations.length === 0 ? (
+            <EmptyStateCard
+              actionLabel={conversationSearchTerm || conversationFilter !== 'all' ? 'Limpar busca e filtros' : 'Atualizar fila'}
+              description={conversationSearchTerm
+                ? 'Nenhuma conversa combina com a busca atual. Limpe o termo ou ajuste os filtros para continuar navegando.'
+                : 'A sessao atual ainda nao trouxe conversas para esta fila. Atualize a sincronizacao ou aguarde novas mensagens.'}
+              onAction={conversationSearchTerm || conversationFilter !== 'all'
+                ? resetConversationView
+                : () => runAction(loadOverview)}
+              title="Nenhuma conversa disponivel"
+            />
           ) : null}
         </div>
       </section>
@@ -2450,7 +2507,7 @@ export function DashboardClient({ initialOverview }: Props) {
               ) : (
                 <div className="mx-auto flex max-w-none flex-col gap-4">
                   {isLoadingMessages && messages.length === 0 ? (
-                    <GhostPanel>Loading conversation history...</GhostPanel>
+                    <ConversationTimelineSkeleton />
                   ) : null}
 
                   {messages.map((message, index) => (
@@ -2490,8 +2547,11 @@ export function DashboardClient({ initialOverview }: Props) {
                     </div>
                   ) : null}
 
-                  {messages.length === 0 ? (
-                    <GhostPanel>Open a real chat thread to load the message timeline here.</GhostPanel>
+                  {messages.length === 0 && !isLoadingMessages ? (
+                    <EmptyStateCard
+                      description="Quando esta conversa tiver historico sincronizado, a timeline completa aparece aqui com mensagens e midias."
+                      title="Timeline aguardando mensagens"
+                    />
                   ) : null}
                 </div>
               )}
@@ -2510,14 +2570,12 @@ export function DashboardClient({ initialOverview }: Props) {
         ) : (
           <div className="grid flex-1 place-items-center p-6">
             <div className="space-y-4 text-center">
-              <GhostPanel>Create or restore a WhatsApp session to begin.</GhostPanel>
-              <button
-                className="rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-5 py-3 text-sm font-semibold text-black"
-                onClick={() => navigateToView('settings')}
-                type="button"
-              >
-                Abrir configuracoes
-              </button>
+              <EmptyStateCard
+                actionLabel="Abrir configuracoes"
+                description="Crie ou restaure uma sessao do WhatsApp para liberar a lista de conversas e a timeline operacional."
+                onAction={() => navigateToView('settings')}
+                title="Nenhuma sessao ativa para conversar"
+              />
             </div>
           </div>
         )}
@@ -2614,11 +2672,12 @@ export function DashboardClient({ initialOverview }: Props) {
               </ProfileSection>
             ) : null}
 
-            {errorMessage ? <GhostPanel>{errorMessage}</GhostPanel> : null}
-            {isPending ? <GhostPanel>Syncing operation...</GhostPanel> : null}
           </div>
         ) : (
-          <GhostPanel>Select a contact to reveal the profile rail.</GhostPanel>
+          <EmptyStateCard
+            description="Abra uma conversa para revelar os dados do contato, tags e atalhos de sessao nesta coluna lateral."
+            title="Selecione uma conversa para ver o perfil"
+          />
         )}
       </aside>
     </div>
@@ -2741,6 +2800,24 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
             </div>
           </header>
+
+          {errorMessage ? (
+            <div className="px-4 pt-4 md:px-6">
+              <WorkspaceStatusBanner
+                description={errorMessage}
+                title="Nao foi possivel concluir a ultima acao"
+                tone="error"
+              />
+            </div>
+          ) : isPending ? (
+            <div className="px-4 pt-4 md:px-6">
+              <WorkspaceStatusBanner
+                description="Atualizando sessoes, conversas e indicadores sem interromper o fluxo da tela."
+                title="Sincronizando workspace"
+                tone="info"
+              />
+            </div>
+          ) : null}
 
           {viewTransition ? (
             <WorkspaceLoadingScreen targetView={viewTransition} />
@@ -3133,6 +3210,173 @@ function ConversationLoadingState({ contact }: { contact?: string }) {
   );
 }
 
+function WorkspaceStatusBanner({
+  title,
+  description,
+  tone,
+}: {
+  title: string;
+  description: string;
+  tone: 'info' | 'error';
+}) {
+  const toneClass =
+    tone === 'error'
+      ? 'border-rose-500/20 bg-rose-500/10 text-rose-100'
+      : 'border-sky-400/20 bg-sky-400/10 text-sky-100';
+
+  return (
+    <div className={`rounded-[24px] border px-4 py-3 ${toneClass}`}>
+      <p className="text-sm font-semibold text-white">{title}</p>
+      <p className="mt-1 text-xs leading-5 text-white/70">{description}</p>
+    </div>
+  );
+}
+
+function EmptyStateCard({
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  description: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="rounded-[28px] border border-dashed border-white/10 bg-white/[0.03] px-5 py-6 text-center">
+      <p className="text-sm font-semibold text-white">{title}</p>
+      <p className="mt-2 text-sm leading-7 text-[var(--muted)]">{description}</p>
+      {actionLabel && onAction ? (
+        <button
+          className="mt-4 rounded-full bg-white/6 px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:bg-white/10"
+          onClick={onAction}
+          type="button"
+        >
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function SkeletonBlock({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse rounded-2xl bg-white/6 ${className}`} />;
+}
+
+function ListSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="space-y-2.5">
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} className="rounded-[18px] border border-white/5 bg-white/[0.025] p-3">
+          <div className="flex gap-3">
+            <SkeletonBlock className="h-12 w-12 rounded-2xl" />
+            <div className="flex-1 space-y-2.5 py-1">
+              <div className="flex items-center justify-between gap-3">
+                <SkeletonBlock className="h-4 w-32" />
+                <SkeletonBlock className="h-3 w-12 rounded-full" />
+              </div>
+              <SkeletonBlock className="h-3 w-3/4" />
+              <div className="flex gap-2">
+                <SkeletonBlock className="h-6 w-20 rounded-full" />
+                <SkeletonBlock className="h-6 w-16 rounded-full" />
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StackSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} className="rounded-[24px] border border-white/5 bg-white/[0.025] p-4">
+          <SkeletonBlock className="h-4 w-32" />
+          <SkeletonBlock className="mt-3 h-3 w-44" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ContactsTableSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }, (_, index) => (
+        <tr key={index} className="border-b border-white/5 last:border-b-0">
+          <td className="px-6 py-4">
+            <div className="flex items-center gap-4">
+              <SkeletonBlock className="h-12 w-12 rounded-2xl" />
+              <div className="space-y-2">
+                <SkeletonBlock className="h-4 w-40" />
+                <SkeletonBlock className="h-3 w-32" />
+              </div>
+            </div>
+          </td>
+          <td className="px-6 py-4"><SkeletonBlock className="h-8 w-28 rounded-full" /></td>
+          <td className="px-6 py-4"><SkeletonBlock className="mx-auto h-10 w-16" /></td>
+          <td className="px-6 py-4">
+            <SkeletonBlock className="h-4 w-20" />
+            <SkeletonBlock className="mt-2 h-3 w-28" />
+          </td>
+          <td className="px-6 py-4"><SkeletonBlock className="h-4 w-24" /></td>
+          <td className="px-6 py-4"><SkeletonBlock className="ml-auto h-10 w-24" /></td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function ConversationTimelineSkeleton() {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: 5 }, (_, index) => (
+        <div key={index} className={`flex ${index % 2 === 0 ? 'justify-start' : 'justify-end'}`}>
+          <div className="max-w-[80%] space-y-2">
+            <SkeletonBlock className="h-16 w-72 rounded-[26px]" />
+            <SkeletonBlock className="h-3 w-16" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AnalyticsLoadingState() {
+  return (
+    <div className="grid grid-cols-12 gap-6">
+      <div className="col-span-12 rounded-[1.25rem] bg-[var(--surface-low)] p-5 lg:col-span-4">
+        <SkeletonBlock className="h-4 w-36" />
+        <SkeletonBlock className="mx-auto mt-8 h-48 w-48 rounded-full" />
+        <div className="mt-8 grid grid-cols-2 gap-8">
+          <SkeletonBlock className="h-16 w-full" />
+          <SkeletonBlock className="h-16 w-full" />
+        </div>
+      </div>
+      <div className="col-span-12 rounded-[1.25rem] bg-[var(--surface-low)] p-5 lg:col-span-8">
+        <SkeletonBlock className="h-4 w-44" />
+        <SkeletonBlock className="mt-3 h-10 w-36" />
+        <div className="mt-10 flex h-48 items-end gap-4">
+          {Array.from({ length: 7 }, (_, index) => (
+            <SkeletonBlock key={index} className="h-full flex-1 rounded-t-lg" />
+          ))}
+        </div>
+      </div>
+      <div className="col-span-12 rounded-[1.25rem] bg-[var(--surface-low)] p-5">
+        <SkeletonBlock className="h-4 w-40" />
+        <div className="mt-6 grid gap-2">
+          {Array.from({ length: 5 }, (_, index) => (
+            <SkeletonBlock key={index} className="h-10 w-full" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AvatarBadge({
   label,
   small = false,
@@ -3183,17 +3427,74 @@ function ConversationComposer({
 }: {
   disabled: boolean;
   onSend: (text: string) => Promise<boolean>;
-  onSendMedia: (file: File, options?: { sticker?: boolean }) => Promise<boolean>;
+  onSendMedia: (file: File, options?: { sticker?: boolean; caption?: string }) => Promise<boolean>;
   quickReplies: string[];
 }) {
   const [draft, setDraft] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [selectedAttachment, setSelectedAttachment] = useState<ComposerAttachment | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isSendingText, setIsSendingText] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
   const stickerInputRef = useRef<HTMLInputElement | null>(null);
 
+  const composerBusy = disabled || isSendingText || isUploading;
+
+  const clearAttachment = useCallback(() => {
+    setSelectedAttachment((current) => {
+      if (current?.previewUrl) {
+        URL.revokeObjectURL(current.previewUrl);
+      }
+      return null;
+    });
+  }, []);
+
+  const queueAttachment = useCallback((file: File, options?: { sticker?: boolean }) => {
+    const sticker = options?.sticker ?? false;
+    const previewUrl =
+      file.type.startsWith('image/') || file.type.startsWith('video/') ? URL.createObjectURL(file) : null;
+
+    setSelectedAttachment((current) => {
+      if (current?.previewUrl) {
+        URL.revokeObjectURL(current.previewUrl);
+      }
+
+      return {
+        file,
+        previewUrl,
+        sticker,
+      };
+    });
+
+    setShowAttachmentMenu(false);
+    setShowEmojiPicker(false);
+  }, []);
+
+  useEffect(() => () => {
+    if (selectedAttachment?.previewUrl) {
+      URL.revokeObjectURL(selectedAttachment.previewUrl);
+    }
+  }, [selectedAttachment]);
+
   const submit = useCallback(async () => {
-    if (disabled) {
+    if (composerBusy) {
+      return;
+    }
+
+    if (selectedAttachment) {
+      setIsUploading(true);
+      const sent = await onSendMedia(selectedAttachment.file, {
+        sticker: selectedAttachment.sticker,
+        caption: selectedAttachment.sticker ? '' : draft.trim(),
+      });
+      setIsUploading(false);
+
+      if (sent) {
+        clearAttachment();
+        setDraft('');
+      }
       return;
     }
 
@@ -3202,14 +3503,48 @@ function ConversationComposer({
       return;
     }
 
+    setIsSendingText(true);
     const sent = await onSend(payload);
+    setIsSendingText(false);
     if (sent) {
       setDraft('');
     }
-  }, [disabled, draft, onSend]);
+  }, [clearAttachment, composerBusy, draft, onSend, onSendMedia, selectedAttachment]);
 
   return (
-    <>
+    <div
+      className={`rounded-[34px] transition ${isDragging ? 'bg-[var(--primary)]/8 p-2 ring-1 ring-[var(--primary)]/30' : ''}`}
+      onDragEnter={(event) => {
+        event.preventDefault();
+        if (!disabled) {
+          setIsDragging(true);
+        }
+      }}
+      onDragLeave={(event) => {
+        event.preventDefault();
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setIsDragging(false);
+        }
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setIsDragging(false);
+
+        if (disabled) {
+          return;
+        }
+
+        const file = event.dataTransfer.files?.[0];
+        if (!file) {
+          return;
+        }
+
+        queueAttachment(file, { sticker: file.type === 'image/webp' });
+      }}
+    >
       <input
         ref={mediaInputRef}
         accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,application/*"
@@ -3217,7 +3552,7 @@ function ConversationComposer({
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) {
-            void onSendMedia(file);
+            queueAttachment(file);
           }
           event.currentTarget.value = '';
         }}
@@ -3230,7 +3565,7 @@ function ConversationComposer({
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) {
-            void onSendMedia(file, { sticker: true });
+            queueAttachment(file, { sticker: true });
           }
           event.currentTarget.value = '';
         }}
@@ -3249,13 +3584,75 @@ function ConversationComposer({
         ))}
       </div>
 
+      {selectedAttachment ? (
+        <div className="mb-3 overflow-hidden rounded-[26px] border border-white/10 bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.9)]">
+          <div className="flex items-start gap-3">
+            {selectedAttachment.previewUrl ? (
+              selectedAttachment.file.type.startsWith('video/') ? (
+                <video
+                  className="h-20 w-20 rounded-2xl object-cover"
+                  muted
+                  preload="metadata"
+                  src={selectedAttachment.previewUrl}
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  alt={selectedAttachment.file.name}
+                  className="h-20 w-20 rounded-2xl object-cover"
+                  src={selectedAttachment.previewUrl}
+                />
+              )
+            ) : (
+              <div className="grid h-20 w-20 place-items-center rounded-2xl bg-white/5 text-[var(--muted)]">
+                {selectedAttachment.sticker ? (
+                  <Smile className="h-6 w-6" strokeWidth={2.1} />
+                ) : selectedAttachment.file.type.startsWith('audio/') ? (
+                  <Mic className="h-6 w-6" strokeWidth={2.1} />
+                ) : (
+                  <Paperclip className="h-6 w-6" strokeWidth={2.1} />
+                )}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="truncate text-sm font-semibold text-white">
+                    {selectedAttachment.file.name}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">
+                    {selectedAttachment.sticker ? 'Figurinha' : getAttachmentLabel(selectedAttachment.file)} · {formatFileSize(selectedAttachment.file.size)}
+                  </p>
+                </div>
+                <button
+                  aria-label="Remover anexo"
+                  className="grid h-8 w-8 place-items-center rounded-full bg-white/5 text-[var(--muted)] transition hover:bg-white/10 hover:text-white"
+                  disabled={composerBusy}
+                  onClick={clearAttachment}
+                  type="button"
+                >
+                  <X className="h-4 w-4" strokeWidth={2.1} />
+                </button>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-zinc-400">
+                {selectedAttachment.sticker
+                  ? 'Pronta para enviar como figurinha.'
+                  : draft.trim()
+                    ? 'A mensagem digitada sera enviada como legenda do anexo.'
+                    : 'Adicione uma legenda opcional ou envie direto.'}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {showEmojiPicker ? (
         <div className="mb-3 flex flex-wrap gap-2 rounded-[26px] border border-white/10 bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.9)]">
           {composerEmojis.map((emoji) => (
             <button
               key={emoji}
               className="grid h-10 w-10 place-items-center rounded-2xl bg-white/5 text-lg transition hover:bg-white/10"
-              disabled={disabled}
+              disabled={composerBusy}
               onClick={() => {
                 setDraft((current) => `${current}${emoji}`);
                 setShowAttachmentMenu(false);
@@ -3268,12 +3665,18 @@ function ConversationComposer({
         </div>
       ) : null}
 
+      {isDragging ? (
+        <div className="mb-3 rounded-[26px] border border-dashed border-[var(--primary)]/35 bg-[var(--primary)]/10 px-4 py-4 text-center text-sm text-[var(--primary)]">
+          Solte o arquivo aqui para anexar a conversa.
+        </div>
+      ) : null}
+
       <div className="flex items-center gap-3 rounded-[30px] bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-18px_rgba(0,0,0,0.9)]">
         <div className="relative">
           <button
             aria-label="Abrir anexos"
             className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]"
-            disabled={disabled}
+            disabled={composerBusy}
             onClick={() => {
               setShowAttachmentMenu((current) => !current);
               setShowEmojiPicker(false);
@@ -3312,7 +3715,7 @@ function ConversationComposer({
         <button
           aria-label="Abrir emojis"
           className={`grid h-11 w-11 place-items-center rounded-full text-[var(--muted)] transition ${showEmojiPicker ? 'bg-[var(--primary)]/12 text-[var(--primary)]' : 'bg-white/5'}`}
-          disabled={disabled}
+          disabled={composerBusy}
           onClick={() => {
             setShowEmojiPicker((current) => !current);
             setShowAttachmentMenu(false);
@@ -3323,7 +3726,7 @@ function ConversationComposer({
         </button>
         <input
           className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
-          disabled={disabled}
+          disabled={composerBusy}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
@@ -3333,22 +3736,30 @@ function ConversationComposer({
             event.preventDefault();
             void submit();
           }}
-          placeholder={disabled ? 'Selecione uma conversa...' : 'Type a message...'}
+          placeholder={disabled ? 'Selecione uma conversa...' : selectedAttachment ? 'Adicione uma legenda opcional...' : 'Type a message...'}
           value={draft}
         />
-        <button className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]">
+        <button
+          className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]"
+          disabled
+          type="button"
+        >
           <Mic className="h-5 w-5" strokeWidth={2.1} />
         </button>
         <button
           className="grid h-12 w-12 place-items-center rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] text-black shadow-[0_0_22px_rgba(127,175,255,0.32)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={disabled || !draft.trim()}
+          disabled={composerBusy || (!draft.trim() && !selectedAttachment)}
           onClick={() => void submit()}
           type="button"
         >
-          <Send className="h-5 w-5" strokeWidth={2.2} />
+          {isSendingText || isUploading ? (
+            <RefreshCw className="h-5 w-5 animate-spin" strokeWidth={2.2} />
+          ) : (
+            <Send className="h-5 w-5" strokeWidth={2.2} />
+          )}
         </button>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -3566,14 +3977,6 @@ function Field({
       placeholder={placeholder}
       value={value}
     />
-  );
-}
-
-function GhostPanel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="glass-panel rounded-[26px] px-5 py-4 text-sm leading-7 text-[var(--muted)]">
-      {children}
-    </div>
   );
 }
 
@@ -4011,6 +4414,34 @@ function buildConversationCacheKey(sessionId: string, conversationId: string) {
 
 function buildToastKey(toast: Pick<ToastItem, 'tone' | 'title' | 'description'>) {
   return [toast.tone, toast.title, toast.description ?? ''].join('::');
+}
+
+function getAttachmentLabel(file: File) {
+  if (file.type.startsWith('image/')) {
+    return 'Imagem';
+  }
+
+  if (file.type.startsWith('video/')) {
+    return 'Video';
+  }
+
+  if (file.type.startsWith('audio/')) {
+    return 'Audio';
+  }
+
+  return 'Arquivo';
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) {
+    return `${size} B`;
+  }
+
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function isTypingTarget(target: EventTarget | null) {
