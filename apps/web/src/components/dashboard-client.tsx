@@ -35,11 +35,10 @@ import {
   SlidersHorizontal,
   Smile,
   Sparkles,
-  Video,
-  WalletCards,
   Wifi,
 } from 'lucide-react';
 import {
+  Fragment,
   memo,
   useCallback,
   useEffect,
@@ -124,6 +123,13 @@ type RealtimeSocketEvent = {
   occurredAt?: string;
 };
 
+type ToastItem = {
+  id: number;
+  tone: 'success' | 'error' | 'info';
+  title: string;
+  description?: string;
+};
+
 export function DashboardClient({ initialOverview }: Props) {
   const router = useRouter();
   const [overview, setOverview] = useState(() => sanitizeOverview(initialOverview));
@@ -164,10 +170,21 @@ export function DashboardClient({ initialOverview }: Props) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const globalSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const messageCacheRef = useRef(new Map<string, MessageRecord[]>());
+  const messagePrefetchRef = useRef(new Set<string>());
   const shouldStickToBottomRef = useRef(true);
   const lastConversationAnchorRef = useRef<string | null>(null);
   const viewTransitionTimerRef = useRef<number | null>(null);
   const [viewTransition, setViewTransition] = useState<WorkspaceView | null>(null);
+  const [openedUnreadMarker, setOpenedUnreadMarker] = useState<{
+    conversationId: string;
+    unreadCount: number;
+  } | null>(null);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastTimersRef = useRef(new Map<number, number>());
+  const toastIdRef = useRef(0);
+  const hasConnectedRealtimeRef = useRef(false);
   const currentView = viewTransition ?? activeView;
   const deferredContactsSearch = useDeferredValue(contactsSearch);
   const isConversationSwitching = pendingConversationId !== null;
@@ -201,6 +218,34 @@ export function DashboardClient({ initialOverview }: Props) {
     [allSessionConversations, conversationFilter],
   );
 
+  const conversationSearchTerm = globalSearch.trim().toLowerCase();
+
+  const visibleSessionConversations = useMemo(
+    () => {
+      if (!isConversationsView) {
+        return [] as ConversationRecord[];
+      }
+
+      if (!conversationSearchTerm) {
+        return sessionConversations;
+      }
+
+      return sessionConversations.filter((conversation) =>
+        [
+          conversation.contact,
+          conversation.participantId,
+          conversation.channelName,
+          conversation.owner,
+          conversation.preview,
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(conversationSearchTerm),
+      );
+    },
+    [conversationSearchTerm, isConversationsView, sessionConversations],
+  );
+
   const selectedConversation = useMemo(
     () => {
       if (!isConversationsView) {
@@ -208,12 +253,12 @@ export function DashboardClient({ initialOverview }: Props) {
       }
 
       return (
-        sessionConversations.find(
+        visibleSessionConversations.find(
           (conversation) => conversation.id === selectedConversationId,
-        ) ?? sessionConversations[0]
+        ) ?? visibleSessionConversations[0]
       );
     },
-    [isConversationsView, selectedConversationId, sessionConversations],
+    [isConversationsView, selectedConversationId, visibleSessionConversations],
   );
 
   const contacts = useMemo(
@@ -339,6 +384,19 @@ export function DashboardClient({ initialOverview }: Props) {
   const activeSessionId = selectedSession?.id ?? null;
   const activeSessionStatus = selectedSession?.status ?? null;
   const activeConversationId = selectedConversation?.id ?? null;
+
+  const unreadSeparatorIndex = useMemo(() => {
+    if (!activeConversationId || openedUnreadMarker?.conversationId !== activeConversationId) {
+      return -1;
+    }
+
+    const unreadCount = Math.min(openedUnreadMarker.unreadCount, messages.length);
+    if (unreadCount <= 0) {
+      return -1;
+    }
+
+    return Math.max(messages.length - unreadCount, 0);
+  }, [activeConversationId, messages.length, openedUnreadMarker]);
 
   const dashboardConversations = useMemo(
     () => (isDashboardView ? overview.conversations.slice(0, 3) : []),
@@ -478,6 +536,31 @@ export function DashboardClient({ initialOverview }: Props) {
     router.push('/login');
   }, [router]);
 
+  const dismissToast = useCallback((toastId: number) => {
+    const timer = toastTimersRef.current.get(toastId);
+    if (timer) {
+      window.clearTimeout(timer);
+      toastTimersRef.current.delete(toastId);
+    }
+
+    setToasts((current) => current.filter((toast) => toast.id !== toastId));
+  }, []);
+
+  const pushToast = useCallback(
+    (toast: Omit<ToastItem, 'id'>) => {
+      const id = toastIdRef.current + 1;
+      toastIdRef.current = id;
+
+      setToasts((current) => [...current.slice(-2), { ...toast, id }]);
+
+      const timer = window.setTimeout(() => {
+        dismissToast(id);
+      }, 3600);
+      toastTimersRef.current.set(id, timer);
+    },
+    [dismissToast],
+  );
+
   const navigateToView = useCallback(
     (nextView: WorkspaceView) => {
       if (nextView === activeView && viewTransition === null) {
@@ -519,10 +602,17 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [router]);
 
   useEffect(() => {
+    const toastTimers = toastTimersRef.current;
+
     return () => {
       if (viewTransitionTimerRef.current) {
         window.clearTimeout(viewTransitionTimerRef.current);
       }
+
+      for (const timer of toastTimers.values()) {
+        window.clearTimeout(timer);
+      }
+      toastTimers.clear();
     };
   }, []);
 
@@ -542,6 +632,19 @@ export function DashboardClient({ initialOverview }: Props) {
     );
   }, []);
 
+  const fetchConversationMessages = useCallback(async (sessionId: string, conversationId: string) => {
+    const response = await fetch(
+      `${apiUrl}/whatsapp/sessions/${sessionId}/conversations/${conversationId}/messages`,
+      { cache: 'no-store' },
+    );
+
+    if (!response.ok) {
+      throw new Error('Nao foi possivel carregar as mensagens.');
+    }
+
+    return (await response.json()) as MessageRecord[];
+  }, []);
+
   const loadMessages = useCallback(
     async (
       sessionId: string,
@@ -553,16 +656,8 @@ export function DashboardClient({ initialOverview }: Props) {
       }
 
       try {
-        const response = await fetch(
-          `${apiUrl}/whatsapp/sessions/${sessionId}/conversations/${conversationId}/messages`,
-          { cache: 'no-store' },
-        );
-
-        if (!response.ok) {
-          throw new Error('Nao foi possivel carregar as mensagens.');
-        }
-
-        const data = (await response.json()) as MessageRecord[];
+        const data = await fetchConversationMessages(sessionId, conversationId);
+        messageCacheRef.current.set(buildConversationCacheKey(sessionId, conversationId), data);
         setMessages((current) =>
           areMessageListsEquivalent(current, data) ? current : data,
         );
@@ -603,7 +698,27 @@ export function DashboardClient({ initialOverview }: Props) {
         }
       }
     },
-    [],
+    [fetchConversationMessages],
+  );
+
+  const prefetchConversation = useCallback(
+    async (sessionId: string, conversationId: string) => {
+      const cacheKey = buildConversationCacheKey(sessionId, conversationId);
+      if (messageCacheRef.current.has(cacheKey) || messagePrefetchRef.current.has(cacheKey)) {
+        return;
+      }
+
+      messagePrefetchRef.current.add(cacheKey);
+      try {
+        const data = await fetchConversationMessages(sessionId, conversationId);
+        messageCacheRef.current.set(cacheKey, data);
+      } catch {
+        return;
+      } finally {
+        messagePrefetchRef.current.delete(cacheKey);
+      }
+    },
+    [fetchConversationMessages],
   );
 
   const markConversationAsRead = useCallback(
@@ -661,14 +776,135 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
-    const currentConversationExists = sessionConversations.some(
+    const currentConversationExists = visibleSessionConversations.some(
       (conversation) => conversation.id === selectedConversationId,
     );
 
     if (!currentConversationExists) {
-      setSelectedConversationId(sessionConversations[0]?.id ?? '');
+      setSelectedConversationId(visibleSessionConversations[0]?.id ?? '');
     }
-  }, [isConversationsView, selectedConversationId, selectedSession, sessionConversations]);
+  }, [
+    isConversationsView,
+    selectedConversationId,
+    selectedSession,
+    visibleSessionConversations,
+  ]);
+
+  useEffect(() => {
+    if (!isConversationsView || !activeConversationId) {
+      return;
+    }
+
+    const currentConversation = visibleSessionConversations.find(
+      (conversation) => conversation.id === activeConversationId,
+    );
+
+    if (!currentConversation) {
+      return;
+    }
+
+    setOpenedUnreadMarker((current) => {
+      if (current?.conversationId === activeConversationId) {
+        return current;
+      }
+
+      return {
+        conversationId: activeConversationId,
+        unreadCount: currentConversation.unread,
+      };
+    });
+  }, [activeConversationId, isConversationsView, visibleSessionConversations]);
+
+  useEffect(() => {
+    if (!isConversationsView || !selectedSession || visibleSessionConversations.length < 2) {
+      return;
+    }
+
+    const currentIndex = visibleSessionConversations.findIndex(
+      (conversation) => conversation.id === activeConversationId,
+    );
+
+    const likelyTargets = [
+      visibleSessionConversations[currentIndex + 1]?.id,
+      visibleSessionConversations[currentIndex - 1]?.id,
+    ].filter((value): value is string => Boolean(value));
+
+    for (const conversationId of likelyTargets) {
+      void prefetchConversation(selectedSession.id, conversationId);
+    }
+  }, [
+    activeConversationId,
+    isConversationsView,
+    prefetchConversation,
+    selectedSession,
+    visibleSessionConversations,
+  ]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        globalSearchInputRef.current?.focus();
+        globalSearchInputRef.current?.select();
+        return;
+      }
+
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+
+      if (
+        event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        ['1', '2', '3', '4', '5'].includes(event.key)
+      ) {
+        event.preventDefault();
+        const nextView = navigationItems[Number(event.key) - 1]?.id;
+        if (nextView) {
+          navigateToView(nextView);
+        }
+        return;
+      }
+
+      if (
+        !isConversationsView ||
+        !event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') ||
+        visibleSessionConversations.length === 0
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      const currentIndex = visibleSessionConversations.findIndex(
+        (conversation) => conversation.id === selectedConversation?.id,
+      );
+      const direction = event.key === 'ArrowDown' ? 1 : -1;
+      const nextIndex =
+        currentIndex === -1
+          ? 0
+          : Math.min(
+              Math.max(currentIndex + direction, 0),
+              visibleSessionConversations.length - 1,
+            );
+
+      if (nextIndex !== currentIndex) {
+        openConversation(visibleSessionConversations[nextIndex].id);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    isConversationsView,
+    navigateToView,
+    openConversation,
+    selectedConversation?.id,
+    visibleSessionConversations,
+  ]);
 
   useEffect(() => {
     if (!isContactsView) {
@@ -713,7 +949,7 @@ export function DashboardClient({ initialOverview }: Props) {
     }, intervalMs);
 
     return () => window.clearInterval(interval);
-  }, [isAuthReady, loadOverview, selectedSession]);
+  }, [isAuthReady, isConversationsView, loadOverview, selectedSession]);
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -792,6 +1028,18 @@ export function DashboardClient({ initialOverview }: Props) {
 
       socket = new WebSocket(getWebSocketUrl(`${apiUrl}/ws`));
 
+      socket.onopen = () => {
+        if (hasConnectedRealtimeRef.current) {
+          pushToast({
+            tone: 'success',
+            title: 'Realtime restored',
+            description: 'Live updates are back in sync.',
+          });
+        }
+
+        hasConnectedRealtimeRef.current = true;
+      };
+
       socket.onmessage = (event) => {
         let payload: RealtimeSocketEvent;
 
@@ -835,6 +1083,14 @@ export function DashboardClient({ initialOverview }: Props) {
           return;
         }
 
+        if (hasConnectedRealtimeRef.current) {
+          pushToast({
+            tone: 'info',
+            title: 'Realtime reconnecting',
+            description: 'The dashboard is retrying the live connection.',
+          });
+        }
+
         reconnectTimer = window.setTimeout(connect, 1500);
       };
     };
@@ -851,7 +1107,15 @@ export function DashboardClient({ initialOverview }: Props) {
       }
       socket?.close();
     };
-  }, [activeConversationId, activeSessionId, isAuthReady, isConversationsView, loadMessages, loadOverview]);
+  }, [
+    activeConversationId,
+    activeSessionId,
+    isAuthReady,
+    isConversationsView,
+    loadMessages,
+    loadOverview,
+    pushToast,
+  ]);
 
   useEffect(() => {
     if (!isConversationsView) {
@@ -898,15 +1162,30 @@ export function DashboardClient({ initialOverview }: Props) {
     shouldStickToBottomRef.current = distanceFromBottom <= 96;
   }, []);
 
-  const runAction = (handler: () => Promise<void>) => {
+  const runAction = useCallback((handler: () => Promise<void>, options?: { successMessage?: string }) => {
     setErrorMessage(null);
 
     startTransition(() => {
-      void handler().catch((error: unknown) => {
-        setErrorMessage(error instanceof Error ? error.message : 'Falha inesperada.');
-      });
+      void handler()
+        .then(() => {
+          if (options?.successMessage) {
+            pushToast({
+              tone: 'success',
+              title: options.successMessage,
+            });
+          }
+        })
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : 'Falha inesperada.';
+          setErrorMessage(message);
+          pushToast({
+            tone: 'error',
+            title: 'Action failed',
+            description: message,
+          });
+        });
     });
-  };
+  }, [pushToast]);
 
   const createSession = () => {
     runAction(async () => {
@@ -926,7 +1205,7 @@ export function DashboardClient({ initialOverview }: Props) {
       await loadOverview();
       setSelectedSessionId(createdSession.id);
       navigateToView('settings');
-    });
+    }, { successMessage: 'Session created' });
   };
 
   const connectSession = (sessionId: string) => {
@@ -941,7 +1220,7 @@ export function DashboardClient({ initialOverview }: Props) {
       }
 
       await loadOverview();
-    });
+    }, { successMessage: 'Connection started' });
   };
 
   const disconnectSession = (sessionId: string) => {
@@ -956,7 +1235,7 @@ export function DashboardClient({ initialOverview }: Props) {
       }
 
       await loadOverview();
-    });
+    }, { successMessage: 'Session disconnected' });
   };
 
   const sendMessage = useCallback((text: string) => {
@@ -983,7 +1262,7 @@ export function DashboardClient({ initialOverview }: Props) {
       await loadOverview();
     });
     return Promise.resolve(true);
-  }, [loadMessages, loadOverview, selectedConversation, selectedSession]);
+  }, [loadMessages, loadOverview, runAction, selectedConversation, selectedSession]);
 
   const sendMedia = useCallback(
     (file: File, options?: { sticker?: boolean }) => {
@@ -1018,7 +1297,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
       return Promise.resolve(true);
     },
-    [loadMessages, loadOverview, selectedConversation, selectedSession],
+    [loadMessages, loadOverview, runAction, selectedConversation, selectedSession],
   );
 
   const openConversation = useCallback((conversationId: string) => {
@@ -1026,11 +1305,30 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
-    setPendingConversationId(conversationId);
+    const targetConversation = visibleSessionConversations.find(
+      (conversation) => conversation.id === conversationId,
+    );
+
+    setOpenedUnreadMarker({
+      conversationId,
+      unreadCount: targetConversation?.unread ?? 0,
+    });
+
+    const cacheKey = selectedSession
+      ? buildConversationCacheKey(selectedSession.id, conversationId)
+      : null;
+    const cachedMessages = cacheKey ? messageCacheRef.current.get(cacheKey) : undefined;
+
+    setPendingConversationId(cachedMessages ? null : conversationId);
     setTypingConversationId(null);
-    setIsLoadingMessages(true);
+    setIsLoadingMessages(!cachedMessages);
+    if (cachedMessages) {
+      setMessages((current) =>
+        areMessageListsEquivalent(current, cachedMessages) ? current : cachedMessages,
+      );
+    }
     setSelectedConversationId(conversationId);
-  }, [selectedConversationId]);
+  }, [selectedConversationId, selectedSession, visibleSessionConversations]);
 
   if (!isAuthReady) {
     return (
@@ -2012,8 +2310,22 @@ export function DashboardClient({ initialOverview }: Props) {
           })}
         </div>
 
+        <div className="mb-3 flex flex-wrap items-center gap-2 px-1">
+          <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+            Ctrl/Cmd+K Search
+          </span>
+          <span className="rounded-full border border-white/8 bg-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+            Alt+Up/Down Switch
+          </span>
+          {conversationSearchTerm ? (
+            <span className="rounded-full border border-[var(--primary)]/20 bg-[var(--primary)]/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">
+              {visibleSessionConversations.length} match{visibleSessionConversations.length === 1 ? '' : 'es'}
+            </span>
+          ) : null}
+        </div>
+
         <div className="h-[calc(100vh-11.5rem)] space-y-1.5 overflow-y-auto pr-1">
-          {sessionConversations.map((conversation) => {
+          {visibleSessionConversations.map((conversation) => {
             const active = (pendingConversationId ?? selectedConversation?.id) === conversation.id;
 
             return (
@@ -2024,6 +2336,16 @@ export function DashboardClient({ initialOverview }: Props) {
                     ? 'bg-[var(--surface-highest)] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]'
                     : 'hover:bg-white/5'
                 }`}
+                onFocus={() => {
+                  if (selectedSession) {
+                    void prefetchConversation(selectedSession.id, conversation.id);
+                  }
+                }}
+                onMouseEnter={() => {
+                  if (selectedSession) {
+                    void prefetchConversation(selectedSession.id, conversation.id);
+                  }
+                }}
                 onClick={() => openConversation(conversation.id)}
                 type="button"
               >
@@ -2045,7 +2367,13 @@ export function DashboardClient({ initialOverview }: Props) {
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-1 truncate text-[13px] text-[var(--primary)]">
+                    <p
+                      className={`mt-1 truncate text-[13px] ${
+                        conversation.unread > 0
+                          ? 'font-semibold text-white'
+                          : 'text-[var(--primary)]'
+                      }`}
+                    >
                       {conversation.preview || 'No preview yet'}
                     </p>
                      <div className="mt-2 flex flex-wrap gap-1.5">
@@ -2066,9 +2394,11 @@ export function DashboardClient({ initialOverview }: Props) {
             );
           })}
 
-          {selectedSession && sessionConversations.length === 0 ? (
+          {selectedSession && visibleSessionConversations.length === 0 ? (
             <GhostPanel>
-              Nenhuma conversa encontrada para esse filtro. Troque o filtro ou atualize a fila.
+              {conversationSearchTerm
+                ? 'No conversations match the active search. Refine the term or clear the search field.'
+                : 'Nenhuma conversa encontrada para esse filtro. Troque o filtro ou atualize a fila.'}
             </GhostPanel>
           ) : null}
         </div>
@@ -2117,12 +2447,21 @@ export function DashboardClient({ initialOverview }: Props) {
                     <GhostPanel>Loading conversation history...</GhostPanel>
                   ) : null}
 
-                  {messages.map((message) => (
-                    <MessageBubble
-                      key={message.id}
-                      avatarUrl={selectedConversation?.avatarUrl}
-                      message={message}
-                    />
+                  {messages.map((message, index) => (
+                    <Fragment key={message.id}>
+                      {index === unreadSeparatorIndex ? (
+                        <NewMessagesDivider unreadCount={openedUnreadMarker?.unreadCount ?? 0} />
+                      ) : null}
+                      <MessageBubble
+                        avatarUrl={selectedConversation?.avatarUrl}
+                        isUnread={
+                          unreadSeparatorIndex !== -1 &&
+                          index >= unreadSeparatorIndex &&
+                          message.direction === 'incoming'
+                        }
+                        message={message}
+                      />
+                    </Fragment>
                   ))}
 
                   {typingConversationId === selectedConversation?.id ? (
@@ -2281,6 +2620,11 @@ export function DashboardClient({ initialOverview }: Props) {
 
   return (
     <main className="h-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
+      <div className="pointer-events-none fixed right-4 top-4 z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2">
+        {toasts.map((toast) => (
+          <ToastCard key={toast.id} toast={toast} onDismiss={dismissToast} />
+        ))}
+      </div>
       <div className="flex h-full overflow-hidden">
         <aside className="hidden h-full w-[4.5rem] flex-col overflow-hidden border-r border-white/5 bg-zinc-950/80 px-2 py-4 backdrop-blur-xl md:flex">
           <div className="mb-6 flex justify-center">
@@ -2290,19 +2634,22 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
 
           <nav className="flex-1 space-y-1">
-            {navigationItems.map(({ id, label, icon: Icon }) => (
+            {navigationItems.map(({ id, label, icon: Icon }, index) => (
               <button
                 key={id}
                 aria-label={label}
-                className={`flex w-full items-center justify-center rounded-xl px-3 py-3 text-left transition-all ${
+                className={`relative flex w-full items-center justify-center rounded-xl px-3 py-3 text-left transition-all ${
                   currentView === id
                     ? 'bg-blue-600/10 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.22)]'
                     : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
                 }`}
                 onClick={() => navigateToView(id)}
-                title={label}
+                title={`${label} (Alt+${index + 1})`}
                 type="button"
               >
+                {currentView === id ? (
+                  <span className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-[var(--primary)]" />
+                ) : null}
                 <Icon className="h-5 w-5" strokeWidth={currentView === id ? 2.4 : 2.1} />
               </button>
             ))}
@@ -2348,11 +2695,15 @@ export function DashboardClient({ initialOverview }: Props) {
               <div className="hidden items-center gap-3 rounded-full border border-white/5 bg-white/5 px-4 py-1.5 transition-all duration-300 focus-within:border-[var(--primary)]/50 lg:flex">
                 <Search className="h-4 w-4 text-zinc-400" strokeWidth={2.1} />
                 <input
+                  ref={globalSearchInputRef}
                   className="w-80 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
                   onChange={(event) => setGlobalSearch(event.target.value)}
                   placeholder="Search interactions..."
                   value={globalSearch}
                 />
+                <span className="rounded-full border border-white/8 bg-black/20 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
+                  Ctrl/Cmd+K
+                </span>
               </div>
             </div>
 
@@ -2998,9 +3349,11 @@ function ConversationComposer({
 const MessageBubble = memo(function MessageBubble({
   message,
   avatarUrl,
+  isUnread = false,
 }: {
   message: MessageRecord;
   avatarUrl?: string | null;
+  isUnread?: boolean;
 }) {
   const incoming = message.direction !== 'outgoing';
 
@@ -3008,7 +3361,11 @@ const MessageBubble = memo(function MessageBubble({
     return (
       <div className="flex max-w-[80%] gap-4">
         <AvatarBadge label={message.author} small src={avatarUrl} />
-        <div className="glass-panel rounded-[26px] rounded-tl-none px-5 py-4">
+        <div
+          className={`glass-panel rounded-[26px] rounded-tl-none px-5 py-4 ${
+            isUnread ? 'ring-1 ring-[var(--secondary)]/35 shadow-[0_0_0_1px_rgba(93,253,138,0.08)]' : ''
+          }`}
+        >
           <MessageContent message={message} />
           <span className="mt-3 block text-xs text-zinc-500">
             {formatClock(message.timestamp)}
@@ -3030,6 +3387,18 @@ const MessageBubble = memo(function MessageBubble({
     </div>
   );
 });
+
+function NewMessagesDivider({ unreadCount }: { unreadCount: number }) {
+  return (
+    <div className="flex items-center gap-3 py-2">
+      <div className="h-px flex-1 bg-[var(--secondary)]/18" />
+      <span className="rounded-full border border-[var(--secondary)]/20 bg-[var(--secondary)]/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--secondary)]">
+        {unreadCount} new {unreadCount === 1 ? 'message' : 'messages'}
+      </span>
+      <div className="h-px flex-1 bg-[var(--secondary)]/18" />
+    </div>
+  );
+}
 
 function MessageContent({ message }: { message: MessageRecord }) {
   const mediaSrc = resolveApiAsset(message.mediaUrl);
@@ -3198,6 +3567,43 @@ function GhostPanel({ children }: { children: React.ReactNode }) {
   return (
     <div className="glass-panel rounded-[26px] px-5 py-4 text-sm leading-7 text-[var(--muted)]">
       {children}
+    </div>
+  );
+}
+
+function ToastCard({
+  toast,
+  onDismiss,
+}: {
+  toast: ToastItem;
+  onDismiss: (toastId: number) => void;
+}) {
+  const toneClass =
+    toast.tone === 'success'
+      ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
+      : toast.tone === 'error'
+        ? 'border-rose-400/20 bg-rose-400/10 text-rose-100'
+        : 'border-sky-400/20 bg-sky-400/10 text-sky-100';
+
+  return (
+    <div
+      className={`pointer-events-auto rounded-[24px] border px-4 py-3 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.85)] backdrop-blur-xl ${toneClass}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-white">{toast.title}</p>
+          {toast.description ? (
+            <p className="mt-1 text-xs text-white/70">{toast.description}</p>
+          ) : null}
+        </div>
+        <button
+          className="rounded-full bg-black/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70 transition hover:bg-black/20 hover:text-white"
+          onClick={() => onDismiss(toast.id)}
+          type="button"
+        >
+          Close
+        </button>
+      </div>
     </div>
   );
 }
@@ -3590,4 +3996,20 @@ function isGroupConversation(conversation: ConversationRecord) {
 
 function normalizeConversationKey(value: string) {
   return value.trim().toLowerCase();
+}
+
+function buildConversationCacheKey(sessionId: string, conversationId: string) {
+  return `${sessionId}:${conversationId}`;
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
 }
