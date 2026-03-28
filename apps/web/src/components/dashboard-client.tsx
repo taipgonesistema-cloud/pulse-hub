@@ -785,6 +785,8 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
+    shouldStickToBottomRef.current = true;
+
     const targetConversation = visibleSessionConversations.find(
       (conversation) => conversation.id === conversationId,
     );
@@ -1153,6 +1155,10 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
+    if (isConversationSwitching) {
+      return;
+    }
+
     if (!messagesRef.current) {
       return;
     }
@@ -1170,7 +1176,14 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
-  }, [activeConversationId, activeSessionId, isConversationsView, messages, typingConversationId]);
+  }, [
+    activeConversationId,
+    activeSessionId,
+    isConversationSwitching,
+    isConversationsView,
+    messages,
+    typingConversationId,
+  ]);
 
   const handleMessagesScroll = useCallback(() => {
     const container = messagesRef.current;
