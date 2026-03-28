@@ -766,6 +766,36 @@ export function DashboardClient({ initialOverview }: Props) {
     [loadOverview],
   );
 
+  const openConversation = useCallback((conversationId: string) => {
+    if (!conversationId || conversationId === selectedConversationId) {
+      return;
+    }
+
+    const targetConversation = visibleSessionConversations.find(
+      (conversation) => conversation.id === conversationId,
+    );
+
+    setOpenedUnreadMarker({
+      conversationId,
+      unreadCount: targetConversation?.unread ?? 0,
+    });
+
+    const cacheKey = selectedSession
+      ? buildConversationCacheKey(selectedSession.id, conversationId)
+      : null;
+    const cachedMessages = cacheKey ? messageCacheRef.current.get(cacheKey) : undefined;
+
+    setPendingConversationId(cachedMessages ? null : conversationId);
+    setTypingConversationId(null);
+    setIsLoadingMessages(!cachedMessages);
+    if (cachedMessages) {
+      setMessages((current) =>
+        areMessageListsEquivalent(current, cachedMessages) ? current : cachedMessages,
+      );
+    }
+    setSelectedConversationId(conversationId);
+  }, [selectedConversationId, selectedSession, visibleSessionConversations]);
+
   useEffect(() => {
     if (!isConversationsView) {
       return;
@@ -1299,36 +1329,6 @@ export function DashboardClient({ initialOverview }: Props) {
     },
     [loadMessages, loadOverview, runAction, selectedConversation, selectedSession],
   );
-
-  const openConversation = useCallback((conversationId: string) => {
-    if (!conversationId || conversationId === selectedConversationId) {
-      return;
-    }
-
-    const targetConversation = visibleSessionConversations.find(
-      (conversation) => conversation.id === conversationId,
-    );
-
-    setOpenedUnreadMarker({
-      conversationId,
-      unreadCount: targetConversation?.unread ?? 0,
-    });
-
-    const cacheKey = selectedSession
-      ? buildConversationCacheKey(selectedSession.id, conversationId)
-      : null;
-    const cachedMessages = cacheKey ? messageCacheRef.current.get(cacheKey) : undefined;
-
-    setPendingConversationId(cachedMessages ? null : conversationId);
-    setTypingConversationId(null);
-    setIsLoadingMessages(!cachedMessages);
-    if (cachedMessages) {
-      setMessages((current) =>
-        areMessageListsEquivalent(current, cachedMessages) ? current : cachedMessages,
-      );
-    }
-    setSelectedConversationId(conversationId);
-  }, [selectedConversationId, selectedSession, visibleSessionConversations]);
 
   if (!isAuthReady) {
     return (
