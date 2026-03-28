@@ -150,6 +150,7 @@ const contactsBoards = [
 ];
 
 const contactsKanbanBoardStorageKey = 'pulse-hub.contacts-kanban-board';
+const contactsCustomBoardsStorageKey = 'pulse-hub.contacts-custom-boards';
 
 const navigationItems: Array<{
   id: WorkspaceView;
@@ -197,7 +198,18 @@ type ComposerAttachment = {
   sticker: boolean;
 };
 
-type ContactsBoardId = 'contacts' | 'unread' | 'verified' | 'groups';
+type SystemContactsBoardId = 'contacts' | 'unread' | 'verified' | 'groups';
+
+type ContactsBoardId = SystemContactsBoardId | `custom:${string}`;
+
+type CustomContactsBoard = {
+  id: `custom:${string}`;
+  label: string;
+  description: string;
+  contactsFilter: ConversationFilter;
+  contactsAudienceFilter: 'all' | 'verified';
+  contactsChannelFilter: 'all' | 'whatsapp' | 'instagram' | 'facebook';
+};
 
 type ContactKanbanStageId = 'new' | 'qualified' | 'active' | 'followup' | 'won';
 
@@ -235,12 +247,18 @@ export function DashboardClient({ initialOverview }: Props) {
   const [showAdvancedContactsFilters, setShowAdvancedContactsFilters] = useState(false);
   const [contactsSearch, setContactsSearch] = useState('');
   const [activeContactsBoard, setActiveContactsBoard] = useState<ContactsBoardId>('contacts');
+  const [customContactsBoards, setCustomContactsBoards] = useState<CustomContactsBoard[]>([]);
+  const [showCreateBoardModal, setShowCreateBoardModal] = useState(false);
+  const [newBoardForm, setNewBoardForm] = useState({ label: '', description: '' });
   const [contactKanbanStageMap, setContactKanbanStageMap] = useState<
     Record<string, ContactKanbanStageId>
   >({});
   const [isLoadingContactKanban, setIsLoadingContactKanban] = useState(true);
   const [draggedContactKey, setDraggedContactKey] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<ContactKanbanStageId | null>(null);
+  const [showCreateContactModal, setShowCreateContactModal] = useState(false);
+  const [createContactStage, setCreateContactStage] = useState<ContactKanbanStageId>('new');
+  const [newContactForm, setNewContactForm] = useState({ name: '', phone: '' });
   const [globalSearch, setGlobalSearch] = useState('');
   const [selectedContactId, setSelectedContactId] = useState(
     initialOverview.conversations[0]?.id ?? '',
@@ -359,29 +377,11 @@ export function DashboardClient({ initialOverview }: Props) {
       return [] as ConversationRecord[];
     }
 
-    const baseContacts = filterConversations(contacts, contactsFilter);
-    const searchFiltered = baseContacts.filter((contact) => {
-      const term = deferredContactsSearch.trim().toLowerCase();
-      if (!term) {
-        return true;
-      }
-
-      return [contact.contact, contact.participantId, contact.channelName, contact.owner]
-        .join(' ')
-        .toLowerCase()
-        .includes(term);
-    });
-
-    return searchFiltered.filter((contact) => {
-      if (contactsAudienceFilter === 'verified' && !isVerifiedContact(contact)) {
-        return false;
-      }
-
-      if (contactsChannelFilter !== 'all' && getContactChannelKey(contact) !== contactsChannelFilter) {
-        return false;
-      }
-
-      return true;
+    return applyContactsWorkspaceFilters(contacts, {
+      contactsFilter,
+      contactsAudienceFilter,
+      contactsChannelFilter,
+      searchTerm: deferredContactsSearch,
     });
   }, [
     contacts,
@@ -392,18 +392,50 @@ export function DashboardClient({ initialOverview }: Props) {
     isContactsView,
   ]);
 
-  const filteredContacts = useMemo(
-    () => filterContactsBoard(contactsBase, activeContactsBoard),
-    [activeContactsBoard, contactsBase],
+  const activeCustomContactsBoard = useMemo(
+    () => customContactsBoards.find((board) => board.id === activeContactsBoard),
+    [activeContactsBoard, customContactsBoards],
   );
 
+  const filteredContacts = useMemo(() => {
+    if (activeCustomContactsBoard) {
+      return applyContactsWorkspaceFilters(contacts, {
+        contactsFilter: activeCustomContactsBoard.contactsFilter,
+        contactsAudienceFilter: activeCustomContactsBoard.contactsAudienceFilter,
+        contactsChannelFilter: activeCustomContactsBoard.contactsChannelFilter,
+        searchTerm: deferredContactsSearch,
+      });
+    }
+
+    return filterContactsBoard(contactsBase, activeContactsBoard);
+  }, [
+    activeContactsBoard,
+    activeCustomContactsBoard,
+    contacts,
+    contactsBase,
+    deferredContactsSearch,
+  ]);
+
   const contactsBoardOptions = useMemo(
-    () =>
-      contactsBoards.map((board) => ({
+    () => [
+      ...contactsBoards.map((board) => ({
         ...board,
         count: filterContactsBoard(contactsBase, board.id).length,
+        isCustom: false,
       })),
-    [contactsBase],
+      ...customContactsBoards.map((board) => ({
+        ...board,
+        icon: LayoutGrid,
+        count: applyContactsWorkspaceFilters(contacts, {
+          contactsFilter: board.contactsFilter,
+          contactsAudienceFilter: board.contactsAudienceFilter,
+          contactsChannelFilter: board.contactsChannelFilter,
+          searchTerm: deferredContactsSearch,
+        }).length,
+        isCustom: true,
+      })),
+    ],
+    [contacts, contactsBase, customContactsBoards, deferredContactsSearch],
   );
 
   const kanbanColumns = useMemo(() => {
@@ -765,10 +797,19 @@ export function DashboardClient({ initialOverview }: Props) {
   }, []);
 
   useEffect(() => {
+    const rawCustomBoards = window.localStorage.getItem(contactsCustomBoardsStorageKey);
+    if (rawCustomBoards) {
+      try {
+        setCustomContactsBoards(JSON.parse(rawCustomBoards) as CustomContactsBoard[]);
+      } catch {
+        window.localStorage.removeItem(contactsCustomBoardsStorageKey);
+      }
+    }
+
     const rawBoard = window.localStorage.getItem(contactsKanbanBoardStorageKey);
     if (
       rawBoard &&
-      contactsBoards.some((board) => board.id === rawBoard)
+      (contactsBoards.some((board) => board.id === rawBoard) || rawBoard.startsWith('custom:'))
     ) {
       setActiveContactsBoard(rawBoard as ContactsBoardId);
     }
@@ -777,6 +818,22 @@ export function DashboardClient({ initialOverview }: Props) {
   useEffect(() => {
     window.localStorage.setItem(contactsKanbanBoardStorageKey, activeContactsBoard);
   }, [activeContactsBoard]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      contactsCustomBoardsStorageKey,
+      JSON.stringify(customContactsBoards),
+    );
+  }, [customContactsBoards]);
+
+  useEffect(() => {
+    if (
+      activeContactsBoard.startsWith('custom:') &&
+      !customContactsBoards.some((board) => board.id === activeContactsBoard)
+    ) {
+      setActiveContactsBoard('contacts');
+    }
+  }, [activeContactsBoard, customContactsBoards]);
 
   const loadOverview = useCallback(async () => {
     const response = await fetch(`${apiUrl}/dashboard/overview`, {
@@ -1457,6 +1514,124 @@ export function DashboardClient({ initialOverview }: Props) {
     [authUser?.email, authUser?.name, contactKanbanStageMap, executeAction],
   );
 
+  const activateContactsBoard = useCallback(
+    (boardId: ContactsBoardId) => {
+      setActiveContactsBoard(boardId);
+
+      const customBoard = customContactsBoards.find((board) => board.id === boardId);
+      if (customBoard) {
+        setContactsFilter(customBoard.contactsFilter);
+        setContactsAudienceFilter(customBoard.contactsAudienceFilter);
+        setContactsChannelFilter(customBoard.contactsChannelFilter);
+      }
+    },
+    [customContactsBoards],
+  );
+
+  const createContactsBoard = useCallback(() => {
+    const label = newBoardForm.label.trim();
+    const description = newBoardForm.description.trim() || 'Board personalizado do CRM';
+    if (!label) {
+      pushToast({
+        tone: 'error',
+        title: 'Nome do board obrigatorio',
+        description: 'Defina um nome curto para criar o board.',
+      });
+      return;
+    }
+
+    const boardId = `custom:${slugifyContact(label)}-${Date.now()}` as const;
+    const nextBoard: CustomContactsBoard = {
+      id: boardId,
+      label,
+      description,
+      contactsFilter,
+      contactsAudienceFilter,
+      contactsChannelFilter,
+    };
+
+    setCustomContactsBoards((current) => [...current, nextBoard]);
+    setNewBoardForm({ label: '', description: '' });
+    setShowCreateBoardModal(false);
+    activateContactsBoard(nextBoard.id);
+    pushToast({
+      tone: 'success',
+      title: 'Board criado',
+      description: 'O novo board foi salvo com os filtros atuais.',
+    });
+  }, [
+    activateContactsBoard,
+    contactsAudienceFilter,
+    contactsChannelFilter,
+    contactsFilter,
+    newBoardForm.description,
+    newBoardForm.label,
+    pushToast,
+  ]);
+
+  const removeContactsBoard = useCallback(
+    (boardId: ContactsBoardId) => {
+      setCustomContactsBoards((current) => current.filter((board) => board.id !== boardId));
+      if (activeContactsBoard === boardId) {
+        setActiveContactsBoard('contacts');
+      }
+    },
+    [activeContactsBoard],
+  );
+
+  const createManualContact = useCallback(async () => {
+    const name = newContactForm.name.trim();
+    const phone = newContactForm.phone.trim();
+    const sessionId = selectedSession?.id ?? overview.sessions[0]?.id ?? 'default';
+
+    if (!name || !phone) {
+      pushToast({
+        tone: 'error',
+        title: 'Dados incompletos',
+        description: 'Preencha nome e telefone para adicionar o contato.',
+      });
+      return;
+    }
+
+    const created = await executeAction(async () => {
+      const response = await fetch(`${apiUrl}/whatsapp/contacts/manual`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          name,
+          phone,
+          stage: createContactStage,
+          updatedBy: authUser?.name || authUser?.email || 'Operador',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Nao foi possivel criar o contato no CRM.');
+      }
+
+      await loadOverview();
+      await loadContactKanbanStages();
+    }, { successMessage: 'Contato criado' });
+
+    if (created) {
+      setNewContactForm({ name: '', phone: '' });
+      setShowCreateContactModal(false);
+    }
+  }, [
+    authUser?.email,
+    authUser?.name,
+    createContactStage,
+    executeAction,
+    loadContactKanbanStages,
+    loadOverview,
+    newContactForm.name,
+    newContactForm.phone,
+    overview.sessions,
+    pushToast,
+    selectedSession?.id,
+  ]);
+
   const createSession = () => {
     runAction(async () => {
       const response = await fetch(`${apiUrl}/whatsapp/sessions`, {
@@ -1768,7 +1943,7 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
             <button
               className="grid h-10 w-10 place-items-center rounded-full bg-[var(--primary)] text-black shadow-[0_0_20px_rgba(127,175,255,0.24)]"
-              onClick={resetContactsView}
+              onClick={() => setShowCreateBoardModal(true)}
               type="button"
             >
               <Plus className="h-4 w-4" strokeWidth={2.6} />
@@ -1777,31 +1952,45 @@ export function DashboardClient({ initialOverview }: Props) {
 
           <div className="mt-5 space-y-2">
             {contactsBoardOptions.map((board) => (
-              <button
+              <div
                 key={board.id}
-                className={`w-full rounded-[20px] border px-3 py-3 text-left transition ${
+                className={`w-full rounded-[20px] border px-3 py-3 transition ${
                   activeContactsBoard === board.id
                     ? 'border-white/10 bg-white/[0.07] shadow-[0_0_0_1px_rgba(255,255,255,0.04)]'
                     : 'border-transparent bg-transparent hover:border-white/6 hover:bg-white/[0.03]'
                 }`}
-                onClick={() => setActiveContactsBoard(board.id)}
-                type="button"
               >
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
+                  <button
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    onClick={() => activateContactsBoard(board.id)}
+                    type="button"
+                  >
                     <div className={`grid h-9 w-9 place-items-center rounded-2xl ${activeContactsBoard === board.id ? 'bg-[var(--primary)]/18 text-[var(--primary)]' : 'bg-white/5 text-zinc-400'}`}>
                       <board.icon className="h-4 w-4" strokeWidth={2.1} />
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-white">{board.label}</p>
-                      <p className="mt-0.5 text-[11px] text-zinc-500">{board.description}</p>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">{board.label}</p>
+                      <p className="mt-0.5 truncate text-[11px] text-zinc-500">{board.description}</p>
                     </div>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${activeContactsBoard === board.id ? 'bg-[var(--primary)]/14 text-[var(--primary)]' : 'bg-white/5 text-zinc-400'}`}>
+                      {board.count}
+                    </span>
+                    {board.isCustom ? (
+                      <button
+                        aria-label={`Remover board ${board.label}`}
+                        className="grid h-7 w-7 place-items-center rounded-full bg-white/5 text-zinc-500 transition hover:bg-white/10 hover:text-white"
+                        onClick={() => removeContactsBoard(board.id)}
+                        type="button"
+                      >
+                        <X className="h-3.5 w-3.5" strokeWidth={2.1} />
+                      </button>
+                    ) : null}
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${activeContactsBoard === board.id ? 'bg-[var(--primary)]/14 text-[var(--primary)]' : 'bg-white/5 text-zinc-400'}`}>
-                    {board.count}
-                  </span>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
 
@@ -1828,6 +2017,17 @@ export function DashboardClient({ initialOverview }: Props) {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
+                <button
+                  className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+                  onClick={() => {
+                    setCreateContactStage('new');
+                    setShowCreateContactModal(true);
+                  }}
+                  type="button"
+                >
+                  <Plus className="h-4 w-4" strokeWidth={2.1} />
+                  Novo contato
+                </button>
                 <button
                   className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
                   onClick={() => setContactsAudienceFilter((current) => (current === 'verified' ? 'all' : 'verified'))}
@@ -2010,6 +2210,18 @@ export function DashboardClient({ initialOverview }: Props) {
                           Solte um contato aqui.
                         </div>
                       ) : null}
+
+                      <button
+                        className="flex w-full items-center justify-center gap-2 rounded-[20px] border border-dashed border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-zinc-400 transition hover:border-white/12 hover:bg-white/[0.05] hover:text-white"
+                        onClick={() => {
+                          setCreateContactStage(column.id);
+                          setShowCreateContactModal(true);
+                        }}
+                        type="button"
+                      >
+                        <Plus className="h-4 w-4" strokeWidth={2.1} />
+                        Adicionar contato
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -2869,6 +3081,97 @@ export function DashboardClient({ initialOverview }: Props) {
           <ToastCard key={toast.id} toast={toast} onDismiss={dismissToast} />
         ))}
       </div>
+      {showCreateBoardModal ? (
+        <KanbanModal
+          description="Salve os filtros atuais como um novo board para acessar esse recorte do CRM com um clique."
+          onClose={() => setShowCreateBoardModal(false)}
+          title="Criar board"
+        >
+          <div className="space-y-3">
+            <input
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
+              onChange={(event) => setNewBoardForm((current) => ({ ...current, label: event.target.value }))}
+              placeholder="Nome do board"
+              value={newBoardForm.label}
+            />
+            <input
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
+              onChange={(event) => setNewBoardForm((current) => ({ ...current, description: event.target.value }))}
+              placeholder="Descricao curta"
+              value={newBoardForm.description}
+            />
+            <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-xs leading-6 text-zinc-400">
+              O board sera criado com os filtros atuais: fila <strong className="text-white">{contactsFilter}</strong>, audiencia <strong className="text-white">{contactsAudienceFilter}</strong> e canal <strong className="text-white">{contactsChannelFilter}</strong>.
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                className="rounded-full bg-white/6 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                onClick={() => setShowCreateBoardModal(false)}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
+                onClick={createContactsBoard}
+                type="button"
+              >
+                Criar board
+              </button>
+            </div>
+          </div>
+        </KanbanModal>
+      ) : null}
+      {showCreateContactModal ? (
+        <KanbanModal
+          description="Adicione um contato manualmente ao pipeline para iniciar prospeccao, follow-up ou atendimento." 
+          onClose={() => setShowCreateContactModal(false)}
+          title="Adicionar contato"
+        >
+          <div className="space-y-3">
+            <input
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
+              onChange={(event) => setNewContactForm((current) => ({ ...current, name: event.target.value }))}
+              placeholder="Nome do contato"
+              value={newContactForm.name}
+            />
+            <input
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
+              onChange={(event) => setNewContactForm((current) => ({ ...current, phone: event.target.value }))}
+              placeholder="Telefone com DDD ou JID"
+              value={newContactForm.phone}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              {contactsKanbanStages.map((stage) => (
+                <button
+                  key={stage.id}
+                  className={`rounded-2xl border px-3 py-3 text-left text-sm transition ${createContactStage === stage.id ? 'border-[var(--primary)]/30 bg-[var(--primary)]/10 text-white' : 'border-white/8 bg-white/[0.03] text-zinc-400 hover:bg-white/[0.05]'}`}
+                  onClick={() => setCreateContactStage(stage.id)}
+                  type="button"
+                >
+                  {stage.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                className="rounded-full bg-white/6 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                onClick={() => setShowCreateContactModal(false)}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
+                onClick={() => void createManualContact()}
+                type="button"
+              >
+                Adicionar contato
+              </button>
+            </div>
+          </div>
+        </KanbanModal>
+      ) : null}
       <div className="flex h-full overflow-hidden">
         <aside className="hidden h-full w-[4.5rem] flex-col overflow-hidden border-r border-white/5 bg-zinc-950/80 px-2 py-4 backdrop-blur-xl md:flex">
           <div className="mb-6 flex justify-center">
@@ -3438,6 +3741,41 @@ function EmptyStateCard({
           {actionLabel}
         </button>
       ) : null}
+    </div>
+  );
+}
+
+function KanbanModal({
+  title,
+  description,
+  onClose,
+  children,
+}: {
+  title: string;
+  description: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 grid place-items-center bg-black/70 px-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(12,12,14,0.98))] p-6 shadow-[0_32px_80px_-30px_rgba(0,0,0,0.85)]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">CRM</p>
+            <h3 className="mt-2 text-2xl font-semibold text-white">{title}</h3>
+            <p className="mt-2 text-sm leading-6 text-zinc-400">{description}</p>
+          </div>
+          <button
+            className="grid h-10 w-10 place-items-center rounded-full bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+            onClick={onClose}
+            type="button"
+          >
+            <X className="h-4 w-4" strokeWidth={2.1} />
+          </button>
+        </div>
+
+        <div className="mt-5">{children}</div>
+      </div>
     </div>
   );
 }
@@ -4593,6 +4931,45 @@ function filterContactsBoard(
     default:
       return contacts;
   }
+}
+
+function applyContactsWorkspaceFilters(
+  contacts: ConversationRecord[],
+  options: {
+    contactsFilter: ConversationFilter;
+    contactsAudienceFilter: 'all' | 'verified';
+    contactsChannelFilter: 'all' | 'whatsapp' | 'instagram' | 'facebook';
+    searchTerm: string;
+  },
+) {
+  const baseContacts = filterConversations(contacts, options.contactsFilter);
+  const term = options.searchTerm.trim().toLowerCase();
+
+  const searchFiltered = baseContacts.filter((contact) => {
+    if (!term) {
+      return true;
+    }
+
+    return [contact.contact, contact.participantId, contact.channelName, contact.owner]
+      .join(' ')
+      .toLowerCase()
+      .includes(term);
+  });
+
+  return searchFiltered.filter((contact) => {
+    if (options.contactsAudienceFilter === 'verified' && !isVerifiedContact(contact)) {
+      return false;
+    }
+
+    if (
+      options.contactsChannelFilter !== 'all' &&
+      getContactChannelKey(contact) !== options.contactsChannelFilter
+    ) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 function buildContactKanbanKey(contact: ConversationRecord) {

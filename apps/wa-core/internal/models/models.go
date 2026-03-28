@@ -237,6 +237,14 @@ type UpdateContactKanbanStageRequest struct {
 	UpdatedBy      string `json:"updatedBy,omitempty"`
 }
 
+type CreateManualContactRequest struct {
+	SessionID string `json:"sessionId"`
+	Name      string `json:"name"`
+	Phone     string `json:"phone"`
+	Stage     string `json:"stage,omitempty"`
+	UpdatedBy string `json:"updatedBy,omitempty"`
+}
+
 func NowString() string {
 	return time.Now().UTC().Format(time.RFC3339)
 }

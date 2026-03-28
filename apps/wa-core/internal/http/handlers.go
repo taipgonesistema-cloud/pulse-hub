@@ -70,6 +70,7 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 	r.Get("/dashboard/overview", api.handleDashboardOverview)
 	r.Route("/whatsapp", func(r chi.Router) {
 		r.Get("/contacts/kanban", api.handleListContactKanbanStages)
+		r.Post("/contacts/manual", api.handleCreateManualContact)
 		r.Put("/contacts/kanban", api.handleUpdateContactKanbanStage)
 		r.Get("/sessions", api.handleListSessions)
 		r.Post("/sessions", api.handleCreateSession)
@@ -570,6 +571,104 @@ func (a *API) handleUpdateContactKanbanStage(w http.ResponseWriter, r *http.Requ
 	respondJSON(w, http.StatusOK, record)
 }
 
+func (a *API) handleCreateManualContact(w http.ResponseWriter, r *http.Request) {
+	var request models.CreateManualContactRequest
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	request.SessionID = strings.TrimSpace(request.SessionID)
+	request.Name = strings.TrimSpace(request.Name)
+	request.Phone = strings.TrimSpace(request.Phone)
+	request.Stage = strings.TrimSpace(strings.ToLower(request.Stage))
+	request.UpdatedBy = strings.TrimSpace(request.UpdatedBy)
+
+	if request.SessionID == "" {
+		request.SessionID = models.DefaultSessionID
+	}
+
+	if request.Name == "" || request.Phone == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "name e phone sao obrigatorios."})
+		return
+	}
+
+	if request.Stage != "" && !isValidContactKanbanStage(request.Stage) {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Etapa do kanban invalida."})
+		return
+	}
+
+	jid, phone, err := normalizeManualContactPhone(request.Phone)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": err.Error()})
+		return
+	}
+
+	now := models.NowString()
+	contact := models.Contact{
+		JID:         jid,
+		Phone:       phone,
+		FirstName:   firstToken(request.Name),
+		FullName:    request.Name,
+		PushName:    request.Name,
+		DisplayName: request.Name,
+		UpdatedAt:   now,
+	}
+	if err := a.store.UpsertContact(r.Context(), contact); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if _, err := a.store.UpsertChat(r.Context(), models.Chat{
+		JID:             jid,
+		Name:            request.Name,
+		ContactJID:      jid,
+		IsGroup:         false,
+		UnreadCount:     0,
+		LastMessageText: "Contato criado manualmente.",
+		LastMessageAt:   now,
+		UpdatedAt:       now,
+	}); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if request.Stage != "" {
+		if err := a.store.SaveContactKanbanStage(r.Context(), models.ContactKanbanStageRecord{
+			SessionID:      request.SessionID,
+			ConversationID: jid,
+			Stage:          request.Stage,
+			UpdatedBy:      request.UpdatedBy,
+			UpdatedAt:      now,
+		}); err != nil {
+			respondError(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
+
+	a.hub.Broadcast(models.RealtimeEvent{
+		Kind:       "chat.new",
+		SessionID:  request.SessionID,
+		ChatJID:    jid,
+		OccurredAt: now,
+	})
+	if request.Stage != "" {
+		a.hub.Broadcast(models.RealtimeEvent{
+			Kind:       "kanban.stage.updated",
+			SessionID:  request.SessionID,
+			ChatJID:    jid,
+			Text:       request.Stage,
+			OccurredAt: now,
+		})
+	}
+
+	respondJSON(w, http.StatusCreated, map[string]any{
+		"jid":   jid,
+		"phone": phone,
+		"name":  request.Name,
+	})
+}
+
 func (a *API) handleSessionStream(w http.ResponseWriter, r *http.Request) {
 	if !a.isDefaultSession(chi.URLParam(r, "id")) {
 		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
@@ -960,6 +1059,48 @@ func isValidContactKanbanStage(value string) bool {
 	default:
 		return false
 	}
+}
+
+func normalizeManualContactPhone(value string) (string, string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", "", errors.New("telefone obrigatorio")
+	}
+
+	if strings.Contains(trimmed, "@") {
+		jid := trimmed
+		phone := strings.TrimSuffix(strings.TrimSuffix(jid, "@s.whatsapp.net"), "@c.us")
+		phone = digitsOnly(phone)
+		if phone == "" {
+			phone = jid
+		}
+		return jid, phone, nil
+	}
+
+	phone := digitsOnly(trimmed)
+	if len(phone) < 8 {
+		return "", "", errors.New("telefone invalido")
+	}
+
+	return phone + "@s.whatsapp.net", phone, nil
+}
+
+func digitsOnly(value string) string {
+	var builder strings.Builder
+	for _, char := range value {
+		if char >= '0' && char <= '9' {
+			builder.WriteRune(char)
+		}
+	}
+	return builder.String()
+}
+
+func firstToken(value string) string {
+	parts := strings.Fields(strings.TrimSpace(value))
+	if len(parts) == 0 {
+		return ""
+	}
+	return parts[0]
 }
 
 func isVisibleConversationJID(jid string) bool {
