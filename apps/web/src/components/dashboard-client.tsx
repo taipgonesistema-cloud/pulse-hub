@@ -3851,7 +3851,9 @@ function MessageContent({ message }: { message: MessageRecord }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img alt={message.fileName || message.body} className="max-h-[22rem] rounded-2xl object-cover" src={mediaSrc} />
           ) : null}
-          {message.body && message.body !== '[imagem]' ? <p className="text-lg leading-8 text-white/95">{message.body}</p> : null}
+          {message.body && message.body !== '[imagem]' ? (
+            <FormattedMessageText className="text-lg leading-8 text-white/95" value={message.body} />
+          ) : null}
         </div>
       );
     case 'sticker':
@@ -3859,7 +3861,7 @@ function MessageContent({ message }: { message: MessageRecord }) {
         // eslint-disable-next-line @next/next/no-img-element
         <img alt={message.fileName || 'Sticker'} className="h-36 w-36 rounded-2xl object-contain" src={mediaSrc} />
       ) : (
-        <p className="text-lg leading-9 text-white/95">{message.body}</p>
+        <FormattedMessageText className="text-lg leading-9 text-white/95" value={message.body} />
       );
     case 'video':
       return (
@@ -3867,14 +3869,16 @@ function MessageContent({ message }: { message: MessageRecord }) {
           {mediaSrc ? (
             <video className="max-h-[22rem] rounded-2xl" controls playsInline src={mediaSrc} />
           ) : null}
-          {message.body && message.body !== '[video]' ? <p className="text-lg leading-8 text-white/95">{message.body}</p> : null}
+          {message.body && message.body !== '[video]' ? (
+            <FormattedMessageText className="text-lg leading-8 text-white/95" value={message.body} />
+          ) : null}
         </div>
       );
     case 'audio':
       return (
         <div className="space-y-3">
           {mediaSrc ? <audio className="w-full min-w-[16rem]" controls src={mediaSrc} /> : null}
-          <p className="text-base leading-8 text-white/90">{message.body || '[audio]'}</p>
+          <FormattedMessageText className="text-base leading-8 text-white/90" value={message.body || '[audio]'} />
         </div>
       );
     case 'document':
@@ -3891,12 +3895,29 @@ function MessageContent({ message }: { message: MessageRecord }) {
           <div>
             <p className="text-base font-semibold text-white">{message.fileName || 'Documento'}</p>
             <p className="text-sm text-[var(--muted)]">{message.mimeType || 'Arquivo anexado'}</p>
+            {message.body && message.body !== '[documento]' ? (
+              <FormattedMessageText className="mt-2 text-sm leading-6 text-white/85" value={message.body} />
+            ) : null}
           </div>
         </a>
       );
     default:
-      return <p className="text-lg leading-9 text-white/95">{message.body}</p>;
+      return <FormattedMessageText className="text-lg leading-9 text-white/95" value={message.body} />;
   }
+}
+
+function FormattedMessageText({
+  value,
+  className,
+}: {
+  value: string;
+  className?: string;
+}) {
+  return (
+    <p className={`whitespace-pre-wrap ${className ?? ''}`}>
+      {renderWhatsAppFormattedText(value)}
+    </p>
+  );
 }
 
 function ProfileSection({
@@ -4437,6 +4458,51 @@ function buildConversationCacheKey(sessionId: string, conversationId: string) {
 
 function buildToastKey(toast: Pick<ToastItem, 'tone' | 'title' | 'description'>) {
   return [toast.tone, toast.title, toast.description ?? ''].join('::');
+}
+
+function renderWhatsAppFormattedText(value: string) {
+  const lines = value.split('\n');
+
+  return lines.map((line, lineIndex) => (
+    <Fragment key={`${lineIndex}-${line}`}>
+      {renderBoldSegments(line, lineIndex)}
+      {lineIndex < lines.length - 1 ? <br /> : null}
+    </Fragment>
+  ));
+}
+
+function renderBoldSegments(line: string, lineIndex: number) {
+  const segments: React.ReactNode[] = [];
+  const pattern = /\*([^*\n]+)\*/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let matchIndex = 0;
+
+  while ((match = pattern.exec(line)) !== null) {
+    const boldText = match[1];
+    if (!boldText.trim()) {
+      continue;
+    }
+
+    if (match.index > lastIndex) {
+      segments.push(line.slice(lastIndex, match.index));
+    }
+
+    segments.push(
+      <strong key={`${lineIndex}-${matchIndex}`} className="font-semibold text-white">
+        {boldText}
+      </strong>,
+    );
+
+    lastIndex = match.index + match[0].length;
+    matchIndex += 1;
+  }
+
+  if (lastIndex < line.length) {
+    segments.push(line.slice(lastIndex));
+  }
+
+  return segments.length > 0 ? segments : line;
 }
 
 function shouldShowGroupMessageAuthor(
