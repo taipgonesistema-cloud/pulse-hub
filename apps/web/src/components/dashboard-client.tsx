@@ -2528,6 +2528,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       ) : null}
                       <MessageBubble
                         avatarUrl={selectedConversation?.avatarUrl}
+                        conversation={selectedConversation}
                         isUnread={
                           unreadSeparatorIndex !== -1 &&
                           index >= unreadSeparatorIndex &&
@@ -3780,23 +3781,31 @@ function ConversationComposer({
 const MessageBubble = memo(function MessageBubble({
   message,
   avatarUrl,
+  conversation,
   isUnread = false,
 }: {
   message: MessageRecord;
   avatarUrl?: string | null;
+  conversation?: ConversationRecord;
   isUnread?: boolean;
 }) {
   const incoming = message.direction !== 'outgoing';
+  const showGroupAuthor = shouldShowGroupMessageAuthor(message, conversation);
 
   if (incoming) {
     return (
       <div className="flex max-w-[80%] gap-4">
-        <AvatarBadge label={message.author} small src={avatarUrl} />
+        <AvatarBadge label={message.author} small src={showGroupAuthor ? null : avatarUrl} />
         <div
           className={`glass-panel rounded-[26px] rounded-tl-none px-5 py-4 ${
             isUnread ? 'ring-1 ring-[var(--secondary)]/35 shadow-[0_0_0_1px_rgba(93,253,138,0.08)]' : ''
           }`}
         >
+          {showGroupAuthor ? (
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--secondary)]">
+              {message.author}
+            </p>
+          ) : null}
           <MessageContent message={message} />
           <span className="mt-3 block text-xs text-zinc-500">
             {formatClock(message.timestamp)}
@@ -4428,6 +4437,25 @@ function buildConversationCacheKey(sessionId: string, conversationId: string) {
 
 function buildToastKey(toast: Pick<ToastItem, 'tone' | 'title' | 'description'>) {
   return [toast.tone, toast.title, toast.description ?? ''].join('::');
+}
+
+function shouldShowGroupMessageAuthor(
+  message: MessageRecord,
+  conversation?: ConversationRecord,
+) {
+  if (!conversation || !isGroupConversation(conversation) || message.direction !== 'incoming') {
+    return false;
+  }
+
+  const author = message.author.trim();
+  if (!author) {
+    return false;
+  }
+
+  const normalizedAuthor = author.toLowerCase();
+  const normalizedConversation = conversation.contact.trim().toLowerCase();
+
+  return normalizedAuthor !== normalizedConversation && normalizedAuthor !== 'operador';
 }
 
 function getAttachmentLabel(file: File) {
