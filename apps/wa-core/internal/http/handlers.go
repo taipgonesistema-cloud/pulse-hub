@@ -1211,6 +1211,7 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 	}
 
 	conversationsByID := make(map[string]models.ConversationRecord, len(chats))
+	latestMessageByConversation := make(map[string]models.Message, len(chats))
 	for _, chat := range chats {
 		canonicalJID, err := a.manager.CanonicalConversationJID(ctx, chat.JID)
 		if err != nil {
@@ -1232,6 +1233,22 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 			name = chat.JID
 		}
 
+		latestMessage, ok := latestMessageByConversation[canonicalJID]
+		if !ok {
+			messages, err := a.manager.ListMessages(ctx, chat.JID)
+			if err == nil && len(messages) > 0 {
+				latestMessage = messages[len(messages)-1]
+				latestMessageByConversation[canonicalJID] = latestMessage
+			}
+		}
+
+		preview := fallbackText(chat.LastMessageText, "Conversa sincronizada.")
+		lastMessageAt := fallbackText(chat.LastMessageAt, session.UpdatedAt)
+		if latestMessage.ID != "" {
+			preview = fallbackText(latestMessage.Text, preview)
+			lastMessageAt = fallbackText(latestMessage.Timestamp, lastMessageAt)
+		}
+
 		candidate := models.ConversationRecord{
 			ID:            canonicalJID,
 			SessionID:     session.ID,
@@ -1244,8 +1261,8 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 			ChannelName:   session.ChannelName,
 			WaitingTime:   waitingLabel(chat.LastMessageAt),
 			Unread:        chat.UnreadCount,
-			Preview:       fallbackText(chat.LastMessageText, "Conversa sincronizada."),
-			LastMessageAt: fallbackText(chat.LastMessageAt, session.UpdatedAt),
+			Preview:       preview,
+			LastMessageAt: lastMessageAt,
 			Messages:      []models.MessageRecord{},
 		}
 
