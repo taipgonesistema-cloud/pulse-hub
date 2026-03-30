@@ -572,6 +572,25 @@ export function DashboardClient({ initialOverview }: Props) {
   const activeSessionStatus = selectedSession?.status ?? null;
   const activeConversationId = selectedConversation?.id ?? null;
 
+  const isConversationActivelyViewed = useCallback(
+    (sessionId: string, conversationId: string) => {
+      if (!isConversationsView) {
+        return false;
+      }
+
+      if (activeSessionId !== sessionId || activeConversationId !== conversationId) {
+        return false;
+      }
+
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return false;
+      }
+
+      return true;
+    },
+    [activeConversationId, activeSessionId, isConversationsView],
+  );
+
   const unreadSeparatorIndex = useMemo(() => {
     if (!activeConversationId || openedUnreadMarker?.conversationId !== activeConversationId) {
       return -1;
@@ -879,10 +898,22 @@ export function DashboardClient({ initialOverview }: Props) {
 
     const data = (await response.json()) as DashboardOverview;
     const nextOverview = sanitizeOverview(data);
+    const smoothedOverview =
+      activeSessionId && activeConversationId && isConversationActivelyViewed(activeSessionId, activeConversationId)
+        ? {
+            ...nextOverview,
+            conversations: nextOverview.conversations.map((conversation) =>
+              conversation.sessionId === activeSessionId && conversation.id === activeConversationId
+                ? { ...conversation, unread: 0 }
+                : conversation,
+            ),
+          }
+        : nextOverview;
+
     setOverview((current) =>
-      areOverviewsEquivalent(current, nextOverview) ? current : nextOverview,
+      areOverviewsEquivalent(current, smoothedOverview) ? current : smoothedOverview,
     );
-  }, []);
+  }, [activeConversationId, activeSessionId, isConversationActivelyViewed]);
 
   const loadContactKanbanStages = useCallback(async () => {
     const response = await fetch(`${apiUrl}/whatsapp/contacts/kanban`, {
@@ -1346,6 +1377,31 @@ export function DashboardClient({ initialOverview }: Props) {
   ]);
 
   useEffect(() => {
+    if (!isConversationsView || !activeSessionId || !activeConversationId) {
+      return;
+    }
+
+    const handleVisibilityChange = () => {
+      if (!isConversationActivelyViewed(activeSessionId, activeConversationId)) {
+        return;
+      }
+
+      void markConversationAsRead(activeSessionId, activeConversationId).catch(() => undefined);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    handleVisibilityChange();
+
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [
+    activeConversationId,
+    activeSessionId,
+    isConversationActivelyViewed,
+    isConversationsView,
+    markConversationAsRead,
+  ]);
+
+  useEffect(() => {
     if (!isConversationsView) {
       return;
     }
@@ -1453,7 +1509,11 @@ export function DashboardClient({ initialOverview }: Props) {
           payload.kind === 'message.new' &&
           payload.chatJid === activeConversationId
         ) {
-          const delay = payload.direction === 'incoming' ? 700 : 0;
+          if (payload.direction === 'incoming' && isConversationActivelyViewed(activeSessionId, activeConversationId)) {
+            void markConversationAsRead(activeSessionId, activeConversationId).catch(() => undefined);
+          }
+
+          const delay = payload.direction === 'incoming' ? 300 : 0;
           window.setTimeout(() => {
             void loadMessages(activeSessionId, activeConversationId, {
               showLoading: false,
@@ -1491,12 +1551,14 @@ export function DashboardClient({ initialOverview }: Props) {
     activeConversationId,
     activeSessionId,
     isAuthReady,
+    isConversationActivelyViewed,
     isConversationsView,
     loadContactBoards,
     loadContactCRMProfiles,
     loadContactKanbanStages,
     loadMessages,
     loadOverview,
+    markConversationAsRead,
   ]);
 
   useEffect(() => {
