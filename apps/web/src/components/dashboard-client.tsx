@@ -5487,6 +5487,9 @@ function normalizeResponseVelocityAnalytics(
 }
 
 function areOverviewsEquivalent(left: DashboardOverview, right: DashboardOverview) {
+  const leftResponseVelocity = normalizeResponseVelocityAnalytics(left.analytics?.responseVelocity);
+  const rightResponseVelocity = normalizeResponseVelocityAnalytics(right.analytics?.responseVelocity);
+
   if (
     left.product !== right.product ||
     left.phase !== right.phase ||
@@ -5494,10 +5497,10 @@ function areOverviewsEquivalent(left: DashboardOverview, right: DashboardOvervie
     left.metrics.activeSessions !== right.metrics.activeSessions ||
     left.metrics.onlineUsers !== right.metrics.onlineUsers ||
     left.metrics.waitingConversations !== right.metrics.waitingConversations ||
-    left.analytics.responseVelocity.averageSeconds !== right.analytics.responseVelocity.averageSeconds ||
-    left.analytics.responseVelocity.deltaSeconds !== right.analytics.responseVelocity.deltaSeconds ||
-    left.analytics.responseVelocity.targetSeconds !== right.analytics.responseVelocity.targetSeconds ||
-    left.analytics.responseVelocity.peakLabel !== right.analytics.responseVelocity.peakLabel
+    leftResponseVelocity.averageSeconds !== rightResponseVelocity.averageSeconds ||
+    leftResponseVelocity.deltaSeconds !== rightResponseVelocity.deltaSeconds ||
+    leftResponseVelocity.targetSeconds !== rightResponseVelocity.targetSeconds ||
+    leftResponseVelocity.peakLabel !== rightResponseVelocity.peakLabel
   ) {
     return false;
   }
@@ -5563,13 +5566,13 @@ function areOverviewsEquivalent(left: DashboardOverview, right: DashboardOvervie
     }
   }
 
-  if (left.analytics.responseVelocity.points.length !== right.analytics.responseVelocity.points.length) {
+  if (leftResponseVelocity.points.length !== rightResponseVelocity.points.length) {
     return false;
   }
 
-  for (let index = 0; index < left.analytics.responseVelocity.points.length; index += 1) {
-    const current = left.analytics.responseVelocity.points[index];
-    const next = right.analytics.responseVelocity.points[index];
+  for (let index = 0; index < leftResponseVelocity.points.length; index += 1) {
+    const current = leftResponseVelocity.points[index];
+    const next = rightResponseVelocity.points[index];
     if (current.label !== next.label || current.averageSeconds !== next.averageSeconds) {
       return false;
     }
