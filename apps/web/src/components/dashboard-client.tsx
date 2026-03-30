@@ -1513,8 +1513,15 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     const conversationAnchor = `${activeSessionId ?? ''}:${activeConversationId ?? ''}`;
-    if (lastConversationAnchorRef.current !== conversationAnchor) {
+    const conversationChanged =
+      lastConversationAnchorRef.current !== conversationAnchor;
+
+    if (conversationChanged) {
       lastConversationAnchorRef.current = conversationAnchor;
+    }
+
+    if (!conversationChanged && !shouldStickToBottomRef.current) {
+      return;
     }
 
     messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
@@ -1526,6 +1533,19 @@ export function DashboardClient({ initialOverview }: Props) {
     messages,
     typingConversationId,
   ]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const container = messagesRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+
+    shouldStickToBottomRef.current = distanceFromBottom <= 96;
+  }, []);
 
   const executeAction = useCallback(
     async (handler: () => Promise<void>, options?: { successMessage?: string }) => {
@@ -3106,6 +3126,7 @@ export function DashboardClient({ initialOverview }: Props) {
             <div
               ref={messagesRef}
               className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-4"
+              onScroll={handleMessagesScroll}
             >
               {isConversationSwitching ? (
                 <ConversationLoadingState contact={selectedConversation?.contact} />
