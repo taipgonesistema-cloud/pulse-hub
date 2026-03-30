@@ -618,6 +618,7 @@ export function DashboardClient({ initialOverview }: Props) {
       return null;
     }
 
+    const responseVelocity = normalizeResponseVelocityAnalytics(overview.analytics?.responseVelocity);
     const conversations = overview.conversations;
     const totalConversations = conversations.length;
     const unreadVolume = conversations.reduce((sum, conversation) => sum + conversation.unread, 0);
@@ -626,7 +627,7 @@ export function DashboardClient({ initialOverview }: Props) {
       ? 94.2
       : Number((Math.max(totalConversations - unreadVolume, 0) / totalConversations * 100).toFixed(1));
     const csat = Math.min(4.9, Math.max(4.2, 4.5 + resolvedRate / 200));
-    const responseSeconds = Math.max(overview.analytics.responseVelocity.averageSeconds || 0, 0);
+    const responseSeconds = Math.max(responseVelocity.averageSeconds || 0, 0);
     const responseMinutes = Number((responseSeconds / 60).toFixed(1));
 
     const channelTotals = {
@@ -676,9 +677,9 @@ export function DashboardClient({ initialOverview }: Props) {
       weeklyChannelSeries,
       heatmapRows,
       resolvedTickets,
-      responseVelocity: overview.analytics.responseVelocity,
+      responseVelocity,
     };
-  }, [isAnalyticsView, overview.analytics.responseVelocity, overview.conversations, overview.sessions]);
+  }, [isAnalyticsView, overview.analytics, overview.conversations, overview.sessions]);
 
   const queueLabel = useMemo(() => {
     if (!isConversationsView) {
@@ -5466,16 +5467,22 @@ function getWebSocketUrl(baseUrl: string) {
 function sanitizeOverview(overview: DashboardOverview): DashboardOverview {
   return {
     ...overview,
-    analytics: overview.analytics ?? {
-      responseVelocity: {
-        averageSeconds: 102,
-        deltaSeconds: 0,
-        targetSeconds: 120,
-        peakLabel: 'No data',
-        points: [],
-      },
+    analytics: {
+      responseVelocity: normalizeResponseVelocityAnalytics(overview.analytics?.responseVelocity),
     },
     conversations: dedupeConversations(overview.conversations),
+  };
+}
+
+function normalizeResponseVelocityAnalytics(
+  responseVelocity?: DashboardOverview['analytics']['responseVelocity'] | null,
+) {
+  return {
+    averageSeconds: responseVelocity?.averageSeconds ?? 102,
+    deltaSeconds: responseVelocity?.deltaSeconds ?? 0,
+    targetSeconds: responseVelocity?.targetSeconds ?? 120,
+    peakLabel: responseVelocity?.peakLabel ?? 'No data',
+    points: Array.isArray(responseVelocity?.points) ? responseVelocity.points : [],
   };
 }
 
