@@ -6240,11 +6240,40 @@ function resolveApiAsset(src?: string | null) {
   if (!src) {
     return undefined;
   }
-  if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:')) {
+  if (src.startsWith('data:')) {
+    return src;
+  }
+
+  const token = getStoredAuthToken();
+  const appendToken = (value: string) => {
+    if (!token) {
+      return value;
+    }
+
+    try {
+      const url = new URL(value);
+      url.searchParams.set('token', token);
+      return url.toString();
+    } catch {
+      return value;
+    }
+  };
+
+  if (src.startsWith('http://') || src.startsWith('https://')) {
+    try {
+      const assetUrl = new URL(src);
+      const backendUrl = new URL(apiUrl);
+      if (assetUrl.origin === backendUrl.origin) {
+        return appendToken(src);
+      }
+    } catch {
+      return src;
+    }
+
     return src;
   }
   if (src.startsWith('/')) {
-    return `${apiUrl}${src}`;
+    return appendToken(`${apiUrl}${src}`);
   }
   return src;
 }
