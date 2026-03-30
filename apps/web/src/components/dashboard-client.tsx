@@ -1063,6 +1063,14 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
+    void loadOverview().catch(() => undefined);
+  }, [isAuthReady, loadOverview]);
+
+  useEffect(() => {
+    if (!isAuthReady) {
+      return;
+    }
+
     setIsLoadingContactKanban(true);
     void loadContactKanbanStages()
       .catch(() => undefined)
