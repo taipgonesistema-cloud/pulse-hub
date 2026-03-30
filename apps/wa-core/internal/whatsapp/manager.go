@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"go.mau.fi/whatsmeow"
+	waCommon "go.mau.fi/whatsmeow/proto/waCommon"
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	waHistorySync "go.mau.fi/whatsmeow/proto/waHistorySync"
 	wmstore "go.mau.fi/whatsmeow/store"
@@ -511,11 +512,18 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 		return nil, err
 	}
 
+	contextInfo, err := m.buildReplyContext(ctx, normalizedJID.String(), req.ReplyToMessageID)
+	if err != nil {
+		return nil, err
+	}
+
+	messageProto := buildTextMessageProto(text, contextInfo)
+
 	messageID := types.MessageID(client.GenerateMessageID())
 	resp, err := client.SendMessage(
 		ctx,
 		normalizedJID,
-		&waE2E.Message{Conversation: proto.String(text)},
+		messageProto,
 		whatsmeow.SendRequestExtra{ID: messageID},
 	)
 	if err != nil {
@@ -532,6 +540,7 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 		AckStatus: "sent",
 		Kind:      "text",
 		Text:      text,
+		RawJSON:   marshalProto(messageProto),
 		Timestamp: resp.Timestamp.UTC().Format(time.RFC3339),
 	}
 
@@ -589,6 +598,12 @@ func (m *Manager) SendMedia(ctx context.Context, req models.SendMediaRequest) (*
 		return nil, err
 	}
 
+	contextInfo, err := m.buildReplyContext(ctx, normalizedJID.String(), req.ReplyToMessageID)
+	if err != nil {
+		return nil, err
+	}
+	applyContextInfoToMessage(messageProto, contextInfo)
+
 	messageID := types.MessageID(client.GenerateMessageID())
 	resp, err := client.SendMessage(
 		ctx,
@@ -634,6 +649,234 @@ func (m *Manager) SendMedia(ctx context.Context, req models.SendMediaRequest) (*
 	}
 
 	return &message, nil
+}
+
+func (m *Manager) SendReaction(ctx context.Context, req models.SendReactionRequest) (*models.Message, error) {
+	emoji := strings.TrimSpace(req.Emoji)
+	if emoji == "" {
+		return nil, errors.New("reaction emoji is required")
+	}
+
+	parsedJID, err := types.ParseJID(strings.TrimSpace(req.JID))
+	if err != nil {
+		return nil, fmt.Errorf("invalid jid: %w", err)
+	}
+	parsedJID = parsedJID.ToNonAD()
+	if err := validateSendableJID(parsedJID); err != nil {
+		return nil, err
+	}
+
+	m.mu.RLock()
+	client := m.client
+	connected := client != nil && client.IsConnected()
+	m.mu.RUnlock()
+	if !connected {
+		return nil, errors.New("session is not connected")
+	}
+
+	normalizedJID, err := normalizeSendJID(ctx, client, parsedJID)
+	if err != nil {
+		return nil, err
+	}
+
+	targetMessageID := strings.TrimSpace(req.MessageID)
+	if targetMessageID == "" {
+		return nil, errors.New("reaction target message is required")
+	}
+
+	target, err := m.store.GetMessageByID(ctx, targetMessageID)
+	if err != nil {
+		return nil, err
+	}
+	if target == nil {
+		return nil, errors.New("reaction target message not found")
+	}
+	if target.ChatJID != normalizedJID.String() {
+		return nil, errors.New("reaction target does not belong to this conversation")
+	}
+
+	messageProto := &waE2E.Message{ReactionMessage: &waE2E.ReactionMessage{
+		Key:               buildReactionMessageKey(*target),
+		Text:              proto.String(emoji),
+		SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
+	}}
+
+	messageID := types.MessageID(client.GenerateMessageID())
+	resp, err := client.SendMessage(
+		ctx,
+		normalizedJID,
+		messageProto,
+		whatsmeow.SendRequestExtra{ID: messageID},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("send reaction: %w", err)
+	}
+
+	author := strings.TrimSpace(req.Author)
+	if author == "" {
+		author = "Operador"
+	}
+
+	message := models.Message{
+		ID:        string(resp.ID),
+		ChatJID:   normalizedJID.String(),
+		SenderJID: ownDeviceJID(client),
+		Author:    author,
+		FromMe:    true,
+		AckStatus: "sent",
+		Kind:      "reaction",
+		Text:      emoji,
+		RawJSON:   marshalProto(messageProto),
+		Timestamp: resp.Timestamp.UTC().Format(time.RFC3339),
+	}
+
+	created, err := m.store.SaveMessage(ctx, message)
+	if err != nil {
+		return nil, err
+	}
+	if created {
+		m.broadcast(models.RealtimeEvent{
+			Kind:       "message.new",
+			ChatJID:    message.ChatJID,
+			MessageID:  message.ID,
+			Direction:  "outgoing",
+			Text:       message.Text,
+			OccurredAt: message.Timestamp,
+		})
+	}
+
+	return &message, nil
+}
+
+func buildTextMessageProto(text string, contextInfo *waE2E.ContextInfo) *waE2E.Message {
+	if contextInfo == nil {
+		return &waE2E.Message{Conversation: proto.String(text)}
+	}
+
+	return &waE2E.Message{ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+		Text:        proto.String(text),
+		ContextInfo: contextInfo,
+	}}
+}
+
+func (m *Manager) buildReplyContext(ctx context.Context, chatJID, replyToMessageID string) (*waE2E.ContextInfo, error) {
+	replyToMessageID = strings.TrimSpace(replyToMessageID)
+	if replyToMessageID == "" {
+		return nil, nil
+	}
+
+	target, err := m.store.GetMessageByID(ctx, replyToMessageID)
+	if err != nil {
+		return nil, err
+	}
+	if target == nil {
+		return nil, errors.New("reply target message not found")
+	}
+	if target.ChatJID != chatJID {
+		return nil, errors.New("reply target does not belong to this conversation")
+	}
+
+	contextInfo := &waE2E.ContextInfo{
+		StanzaID:      proto.String(target.ID),
+		RemoteJID:     proto.String(target.ChatJID),
+		QuotedMessage: buildQuotedMessageProto(*target),
+	}
+
+	if participant := quotedMessageParticipant(*target); participant != "" {
+		contextInfo.Participant = proto.String(participant)
+	}
+
+	return contextInfo, nil
+}
+
+func buildQuotedMessageProto(message models.Message) *waE2E.Message {
+	if parsed := parseStoredMessageProto(message.RawJSON); parsed != nil {
+		return parsed
+	}
+
+	switch message.Kind {
+	case "image":
+		return &waE2E.Message{ImageMessage: &waE2E.ImageMessage{Caption: proto.String(message.Text)}}
+	case "video":
+		return &waE2E.Message{VideoMessage: &waE2E.VideoMessage{Caption: proto.String(message.Text)}}
+	case "audio":
+		return &waE2E.Message{AudioMessage: &waE2E.AudioMessage{PTT: proto.Bool(strings.EqualFold(strings.TrimSpace(message.Text), "[voice note]"))}}
+	case "document":
+		return &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{
+			Caption:  proto.String(message.Text),
+			FileName: proto.String(message.FileName),
+		}}
+	case "sticker":
+		return &waE2E.Message{StickerMessage: &waE2E.StickerMessage{}}
+	default:
+		return &waE2E.Message{Conversation: proto.String(message.Text)}
+	}
+}
+
+func parseStoredMessageProto(raw string) *waE2E.Message {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	var message waE2E.Message
+	if err := waProto.Unmarshal([]byte(raw), &message); err != nil {
+		return nil
+	}
+
+	return unwrapMessageProto(&message)
+}
+
+func quotedMessageParticipant(message models.Message) string {
+	if !strings.HasSuffix(message.ChatJID, "@g.us") {
+		return ""
+	}
+
+	return strings.TrimSpace(message.SenderJID)
+}
+
+func applyContextInfoToMessage(message *waE2E.Message, contextInfo *waE2E.ContextInfo) {
+	if message == nil || contextInfo == nil {
+		return
+	}
+
+	if text := strings.TrimSpace(message.GetConversation()); text != "" {
+		message.Conversation = nil
+		message.ExtendedTextMessage = &waE2E.ExtendedTextMessage{
+			Text:        proto.String(text),
+			ContextInfo: contextInfo,
+		}
+		return
+	}
+
+	switch {
+	case message.GetExtendedTextMessage() != nil:
+		message.GetExtendedTextMessage().ContextInfo = contextInfo
+	case message.GetImageMessage() != nil:
+		message.GetImageMessage().ContextInfo = contextInfo
+	case message.GetVideoMessage() != nil:
+		message.GetVideoMessage().ContextInfo = contextInfo
+	case message.GetDocumentMessage() != nil:
+		message.GetDocumentMessage().ContextInfo = contextInfo
+	case message.GetAudioMessage() != nil:
+		message.GetAudioMessage().ContextInfo = contextInfo
+	case message.GetStickerMessage() != nil:
+		message.GetStickerMessage().ContextInfo = contextInfo
+	}
+}
+
+func buildReactionMessageKey(message models.Message) *waCommon.MessageKey {
+	key := &waCommon.MessageKey{
+		RemoteJID: proto.String(message.ChatJID),
+		FromMe:    proto.Bool(message.FromMe),
+		ID:        proto.String(message.ID),
+	}
+
+	if participant := quotedMessageParticipant(message); participant != "" {
+		key.Participant = proto.String(participant)
+	}
+
+	return key
 }
 
 func (m *Manager) GetMessageMedia(ctx context.Context, messageID string) ([]byte, string, string, error) {
@@ -1454,9 +1697,10 @@ func extractMessagePayload(message *waE2E.Message) (string, string, string, stri
 		message.GetLocationMessage() != nil,
 		message.GetLiveLocationMessage() != nil:
 		return "[midia]", "media", "", "", true
+	case message.GetReactionMessage() != nil:
+		return strings.TrimSpace(message.GetReactionMessage().GetText()), "reaction", "", "", true
 	case message.GetProtocolMessage() != nil,
 		message.GetSenderKeyDistributionMessage() != nil,
-		message.GetReactionMessage() != nil,
 		message.GetPlaceholderMessage() != nil:
 		return "", "", "", "", false
 	default:

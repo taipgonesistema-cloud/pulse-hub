@@ -15,17 +15,32 @@ export type SessionStatus =
   | 'disconnected'
   | 'error';
 
+export type MessageReplyRecord = {
+  messageId: string;
+  author?: string;
+  body?: string;
+  kind?: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'media' | 'reaction';
+};
+
+export type MessageReactionSummary = {
+  emoji: string;
+  count: number;
+  fromMe?: boolean;
+};
+
 export type MessageRecord = {
   id: string;
   conversationId: string;
   direction: 'incoming' | 'outgoing' | 'internal';
-  kind?: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'media';
+  kind?: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'media' | 'reaction';
   body: string;
   mediaUrl?: string;
   mimeType?: string;
   fileName?: string;
   timestamp: string;
   author: string;
+  replyTo?: MessageReplyRecord;
+  reactions?: MessageReactionSummary[];
 };
 
 export type ConversationRecord = {

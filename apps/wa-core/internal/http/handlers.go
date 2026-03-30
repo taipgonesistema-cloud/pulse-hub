@@ -17,6 +17,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
+	waProto "google.golang.org/protobuf/encoding/protojson"
 
 	"pulsehub/wa-core/internal/models"
 	appstore "pulsehub/wa-core/internal/store"
@@ -87,6 +89,7 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 		r.Get("/sessions/{id}/conversations/{jid}/messages", api.handleConversationMessages)
 		r.Post("/sessions/{id}/conversations/{jid}/messages", api.handleConversationSend)
 		r.Post("/sessions/{id}/conversations/{jid}/media", api.handleConversationSendMedia)
+		r.Post("/sessions/{id}/conversations/{jid}/reactions", api.handleConversationReaction)
 		r.Post("/sessions/{id}/conversations/{jid}/read", api.handleConversationRead)
 		r.Get("/sessions/{id}/stream", api.handleSessionStream)
 	})
@@ -457,15 +460,56 @@ func (a *API) handleConversationSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request struct {
-		Body   string `json:"body"`
-		Author string `json:"author"`
+		Body             string `json:"body"`
+		Author           string `json:"author"`
+		ReplyToMessageID string `json:"replyToMessageId"`
 	}
 	if err := decodeJSON(r, &request); err != nil {
 		respondError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	message, err := a.manager.SendText(r.Context(), models.SendTextRequest{JID: jid, Text: request.Body})
+	message, err := a.manager.SendText(r.Context(), models.SendTextRequest{
+		JID:              jid,
+		Text:             request.Body,
+		ReplyToMessageID: request.ReplyToMessageID,
+	})
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, toMessageRecord(*message, jid))
+}
+
+func (a *API) handleConversationReaction(w http.ResponseWriter, r *http.Request) {
+	if !a.isDefaultSession(chi.URLParam(r, "id")) {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	jid, err := pathJID(chi.URLParam(r, "jid"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var request struct {
+		MessageID string `json:"messageId"`
+		Emoji     string `json:"emoji"`
+		Author    string `json:"author"`
+	}
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	message, err := a.manager.SendReaction(r.Context(), models.SendReactionRequest{
+		JID:       jid,
+		MessageID: request.MessageID,
+		Emoji:     request.Emoji,
+		Author:    request.Author,
+	})
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
 		return
@@ -1024,6 +1068,9 @@ type responseSample struct {
 func collectResponseSamples(messages []models.Message) []responseSample {
 	samples := make([]responseSample, 0)
 	for index, message := range messages {
+		if message.Kind == "reaction" {
+			continue
+		}
 		if message.FromMe {
 			continue
 		}
@@ -1035,6 +1082,9 @@ func collectResponseSamples(messages []models.Message) []responseSample {
 
 		for nextIndex := index + 1; nextIndex < len(messages); nextIndex++ {
 			next := messages[nextIndex]
+			if next.Kind == "reaction" {
+				continue
+			}
 			if !next.FromMe {
 				continue
 			}
@@ -1064,6 +1114,17 @@ func collectResponseSamples(messages []models.Message) []responseSample {
 		}
 	}
 	return samples
+}
+
+func latestPreviewMessage(messages []models.Message) models.Message {
+	for index := len(messages) - 1; index >= 0; index-- {
+		if messages[index].Kind == "reaction" {
+			continue
+		}
+		return messages[index]
+	}
+
+	return models.Message{}
 }
 
 func isBusinessHoursResponseWindow(incomingAt, outgoingAt time.Time) bool {
@@ -1237,7 +1298,7 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 		if !ok {
 			messages, err := a.manager.ListMessages(ctx, chat.JID)
 			if err == nil && len(messages) > 0 {
-				latestMessage = messages[len(messages)-1]
+				latestMessage = latestPreviewMessage(messages)
 				latestMessageByConversation[canonicalJID] = latestMessage
 			}
 		}
@@ -1291,9 +1352,20 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 }
 
 func toMessageRecords(messages []models.Message, conversationID string) []models.MessageRecord {
+	reactionsByMessageID := buildMessageReactionSummary(messages)
 	items := make([]models.MessageRecord, 0, len(messages))
 	for _, message := range messages {
-		items = append(items, toMessageRecord(message, conversationID))
+		if message.Kind == "reaction" {
+			continue
+		}
+
+		record := toMessageRecord(message, conversationID)
+		record.ReplyTo = buildMessageReplyRecord(message)
+		if len(reactionsByMessageID[message.ID]) > 0 {
+			record.Reactions = reactionsByMessageID[message.ID]
+		}
+
+		items = append(items, record)
 	}
 	return items
 }
@@ -1318,6 +1390,232 @@ func toMessageRecord(message models.Message, conversationID string) models.Messa
 		FileName:       message.FileName,
 		Timestamp:      message.Timestamp,
 		Author:         fallbackText(message.Author, "Contato"),
+	}
+}
+
+func buildMessageReplyRecord(message models.Message) *models.MessageReplyRecord {
+	parsed := parseStoredMessageProto(message.RawJSON)
+	if parsed == nil {
+		return nil
+	}
+
+	contextInfo := messageContextInfo(parsed)
+	if contextInfo == nil || strings.TrimSpace(contextInfo.GetStanzaID()) == "" {
+		return nil
+	}
+
+	body, kind, ok := extractQuotedMessagePreview(contextInfo.GetQuotedMessage())
+	if !ok {
+		body = "[mensagem]"
+	}
+
+	reply := &models.MessageReplyRecord{
+		MessageID: strings.TrimSpace(contextInfo.GetStanzaID()),
+		Body:      body,
+		Kind:      kind,
+	}
+
+	if participant := strings.TrimSpace(contextInfo.GetParticipant()); participant != "" {
+		reply.Author = participant
+	}
+
+	return reply
+}
+
+func buildMessageReactionSummary(messages []models.Message) map[string][]models.MessageReactionSummary {
+	actorReactionsByTarget := make(map[string]map[string]string)
+
+	for _, message := range messages {
+		if message.Kind != "reaction" {
+			continue
+		}
+
+		targetMessageID, ok := reactionTargetMessageID(message)
+		if !ok {
+			continue
+		}
+
+		reactionsByActor, exists := actorReactionsByTarget[targetMessageID]
+		if !exists {
+			reactionsByActor = make(map[string]string)
+			actorReactionsByTarget[targetMessageID] = reactionsByActor
+		}
+
+		actorKey := reactionActorKey(message)
+		emoji := strings.TrimSpace(message.Text)
+		if emoji == "" {
+			delete(reactionsByActor, actorKey)
+			continue
+		}
+
+		reactionsByActor[actorKey] = emoji
+	}
+
+	reactionsByTarget := make(map[string][]models.MessageReactionSummary, len(actorReactionsByTarget))
+	for targetMessageID, reactionsByActor := range actorReactionsByTarget {
+		counts := make(map[string]int)
+		fromMe := make(map[string]bool)
+
+		for actorKey, emoji := range reactionsByActor {
+			counts[emoji]++
+			if strings.HasPrefix(actorKey, "me:") {
+				fromMe[emoji] = true
+			}
+		}
+
+		reactions := make([]models.MessageReactionSummary, 0, len(counts))
+		for emoji, count := range counts {
+			reactions = append(reactions, models.MessageReactionSummary{
+				Emoji:  emoji,
+				Count:  count,
+				FromMe: fromMe[emoji],
+			})
+		}
+
+		sort.Slice(reactions, func(i, j int) bool {
+			if reactions[i].FromMe != reactions[j].FromMe {
+				return reactions[i].FromMe
+			}
+			if reactions[i].Count != reactions[j].Count {
+				return reactions[i].Count > reactions[j].Count
+			}
+			return reactions[i].Emoji < reactions[j].Emoji
+		})
+
+		reactionsByTarget[targetMessageID] = reactions
+	}
+
+	return reactionsByTarget
+}
+
+func reactionTargetMessageID(message models.Message) (string, bool) {
+	parsed := parseStoredMessageProto(message.RawJSON)
+	if parsed == nil || parsed.GetReactionMessage() == nil || parsed.GetReactionMessage().GetKey() == nil {
+		return "", false
+	}
+
+	targetMessageID := strings.TrimSpace(parsed.GetReactionMessage().GetKey().GetID())
+	if targetMessageID == "" {
+		return "", false
+	}
+
+	return targetMessageID, true
+}
+
+func reactionActorKey(message models.Message) string {
+	if message.FromMe {
+		return "me:" + fallbackText(message.SenderJID, fallbackText(message.Author, message.ID))
+	}
+	if sender := strings.TrimSpace(message.SenderJID); sender != "" {
+		return "sender:" + sender
+	}
+	return "author:" + fallbackText(message.Author, message.ID)
+}
+
+func parseStoredMessageProto(raw string) *waE2E.Message {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	var message waE2E.Message
+	if err := waProto.Unmarshal([]byte(raw), &message); err != nil {
+		return nil
+	}
+
+	return unwrapStoredMessageProto(&message)
+}
+
+func unwrapStoredMessageProto(message *waE2E.Message) *waE2E.Message {
+	if message == nil {
+		return nil
+	}
+
+	for {
+		switch {
+		case message.GetDeviceSentMessage().GetMessage() != nil:
+			message = message.GetDeviceSentMessage().GetMessage()
+		case message.GetEphemeralMessage().GetMessage() != nil:
+			message = message.GetEphemeralMessage().GetMessage()
+		case message.GetViewOnceMessage().GetMessage() != nil:
+			message = message.GetViewOnceMessage().GetMessage()
+		case message.GetViewOnceMessageV2().GetMessage() != nil:
+			message = message.GetViewOnceMessageV2().GetMessage()
+		case message.GetViewOnceMessageV2Extension().GetMessage() != nil:
+			message = message.GetViewOnceMessageV2Extension().GetMessage()
+		case message.GetEditedMessage().GetMessage() != nil:
+			message = message.GetEditedMessage().GetMessage()
+		default:
+			return message
+		}
+	}
+}
+
+func messageContextInfo(message *waE2E.Message) *waE2E.ContextInfo {
+	message = unwrapStoredMessageProto(message)
+	if message == nil {
+		return nil
+	}
+
+	switch {
+	case message.GetExtendedTextMessage() != nil:
+		return message.GetExtendedTextMessage().GetContextInfo()
+	case message.GetImageMessage() != nil:
+		return message.GetImageMessage().GetContextInfo()
+	case message.GetVideoMessage() != nil:
+		return message.GetVideoMessage().GetContextInfo()
+	case message.GetDocumentMessage() != nil:
+		return message.GetDocumentMessage().GetContextInfo()
+	case message.GetAudioMessage() != nil:
+		return message.GetAudioMessage().GetContextInfo()
+	case message.GetStickerMessage() != nil:
+		return message.GetStickerMessage().GetContextInfo()
+	default:
+		return nil
+	}
+}
+
+func extractQuotedMessagePreview(message *waE2E.Message) (string, string, bool) {
+	message = unwrapStoredMessageProto(message)
+	if message == nil {
+		return "", "", false
+	}
+
+	switch {
+	case strings.TrimSpace(message.GetConversation()) != "":
+		return strings.TrimSpace(message.GetConversation()), "text", true
+	case strings.TrimSpace(message.GetExtendedTextMessage().GetText()) != "":
+		return strings.TrimSpace(message.GetExtendedTextMessage().GetText()), "text", true
+	case message.GetImageMessage() != nil:
+		caption := strings.TrimSpace(message.GetImageMessage().GetCaption())
+		if caption == "" {
+			caption = "[imagem]"
+		}
+		return caption, "image", true
+	case message.GetVideoMessage() != nil:
+		caption := strings.TrimSpace(message.GetVideoMessage().GetCaption())
+		if caption == "" {
+			caption = "[video]"
+		}
+		return caption, "video", true
+	case message.GetDocumentMessage() != nil:
+		caption := strings.TrimSpace(message.GetDocumentMessage().GetCaption())
+		if caption == "" {
+			caption = strings.TrimSpace(message.GetDocumentMessage().GetFileName())
+		}
+		if caption == "" {
+			caption = "[documento]"
+		}
+		return caption, "document", true
+	case message.GetAudioMessage() != nil:
+		if message.GetAudioMessage().GetPTT() {
+			return "[voice note]", "audio", true
+		}
+		return "[audio]", "audio", true
+	case message.GetStickerMessage() != nil:
+		return "[figurinha]", "sticker", true
+	default:
+		return "", "", false
 	}
 }
 
@@ -1600,12 +1898,13 @@ func parseMediaUpload(r *http.Request, fallbackJID string) (models.SendMediaRequ
 	sticker := strings.EqualFold(strings.TrimSpace(r.FormValue("sticker")), "true") || strings.TrimSpace(r.FormValue("kind")) == "sticker"
 
 	return models.SendMediaRequest{
-		JID:      jid,
-		Caption:  strings.TrimSpace(r.FormValue("caption")),
-		FileName: header.Filename,
-		MimeType: mimeType,
-		Data:     data,
-		Sticker:  sticker,
+		JID:              jid,
+		Caption:          strings.TrimSpace(r.FormValue("caption")),
+		FileName:         header.Filename,
+		MimeType:         mimeType,
+		Data:             data,
+		Sticker:          sticker,
+		ReplyToMessageID: strings.TrimSpace(r.FormValue("replyToMessageId")),
 	}, nil
 }
 
