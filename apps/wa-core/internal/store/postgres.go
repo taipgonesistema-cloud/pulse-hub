@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -126,6 +127,31 @@ func (s *Store) migrate(ctx context.Context) error {
 		PRIMARY KEY (session_id, conversation_id)
 	);
 
+	CREATE TABLE IF NOT EXISTS contact_kanban_board (
+		id TEXT PRIMARY KEY,
+		label TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		contacts_filter TEXT NOT NULL DEFAULT 'all',
+		contacts_audience_filter TEXT NOT NULL DEFAULT 'all',
+		contacts_channel_filter TEXT NOT NULL DEFAULT 'all',
+		created_by TEXT NOT NULL DEFAULT '',
+		updated_by TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS contact_crm_profile (
+		session_id TEXT NOT NULL,
+		conversation_id TEXT NOT NULL,
+		assignee TEXT NOT NULL DEFAULT '',
+		priority TEXT NOT NULL DEFAULT '',
+		notes TEXT NOT NULL DEFAULT '',
+		tags_json TEXT NOT NULL DEFAULT '[]',
+		updated_by TEXT NOT NULL DEFAULT '',
+		updated_at TEXT NOT NULL,
+		PRIMARY KEY (session_id, conversation_id)
+	);
+
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'text';
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT '';
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT NOT NULL DEFAULT '';
@@ -134,6 +160,8 @@ func (s *Store) migrate(ctx context.Context) error {
 	CREATE INDEX IF NOT EXISTS idx_chats_last_message_at ON chats(last_message_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp ON messages(chat_jid, timestamp ASC);
 	CREATE INDEX IF NOT EXISTS idx_contact_kanban_stage_updated_at ON contact_kanban_stage(updated_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_contact_kanban_board_updated_at ON contact_kanban_board(updated_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_contact_crm_profile_updated_at ON contact_crm_profile(updated_at DESC);
 	`
 
 	if _, err := s.db.ExecContext(ctx, query); err != nil {
@@ -734,6 +762,154 @@ func (s *Store) SaveContactKanbanStage(ctx context.Context, item models.ContactK
 	`, item.SessionID, item.ConversationID, item.Stage, item.UpdatedBy, item.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("save contact kanban stage: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ListContactKanbanBoards(ctx context.Context) ([]models.ContactKanbanBoardRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, label, description, contacts_filter, contacts_audience_filter, contacts_channel_filter,
+			created_by, updated_by, created_at, updated_at
+		FROM contact_kanban_board
+		ORDER BY updated_at DESC, label ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list contact kanban boards: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]models.ContactKanbanBoardRecord, 0)
+	for rows.Next() {
+		var item models.ContactKanbanBoardRecord
+		if err := rows.Scan(
+			&item.ID,
+			&item.Label,
+			&item.Description,
+			&item.ContactsFilter,
+			&item.ContactsAudienceFilter,
+			&item.ContactsChannelFilter,
+			&item.CreatedBy,
+			&item.UpdatedBy,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan contact kanban board: %w", err)
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate contact kanban boards: %w", err)
+	}
+
+	return items, nil
+}
+
+func (s *Store) SaveContactKanbanBoard(ctx context.Context, item models.ContactKanbanBoardRecord) error {
+	if item.CreatedAt == "" {
+		item.CreatedAt = models.NowString()
+	}
+	if item.UpdatedAt == "" {
+		item.UpdatedAt = models.NowString()
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO contact_kanban_board (
+			id, label, description, contacts_filter, contacts_audience_filter, contacts_channel_filter,
+			created_by, updated_by, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (id) DO UPDATE SET
+			label = excluded.label,
+			description = excluded.description,
+			contacts_filter = excluded.contacts_filter,
+			contacts_audience_filter = excluded.contacts_audience_filter,
+			contacts_channel_filter = excluded.contacts_channel_filter,
+			updated_by = excluded.updated_by,
+			updated_at = excluded.updated_at
+	`, item.ID, item.Label, item.Description, item.ContactsFilter, item.ContactsAudienceFilter, item.ContactsChannelFilter, item.CreatedBy, item.UpdatedBy, item.CreatedAt, item.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("save contact kanban board: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) DeleteContactKanbanBoard(ctx context.Context, boardID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM contact_kanban_board WHERE id = $1`, boardID)
+	if err != nil {
+		return fmt.Errorf("delete contact kanban board: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ListContactCRMProfiles(ctx context.Context) ([]models.ContactCRMProfileRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT session_id, conversation_id, assignee, priority, notes, tags_json, updated_by, updated_at
+		FROM contact_crm_profile
+		ORDER BY updated_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list contact crm profiles: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]models.ContactCRMProfileRecord, 0)
+	for rows.Next() {
+		var item models.ContactCRMProfileRecord
+		var tagsJSON string
+		if err := rows.Scan(
+			&item.SessionID,
+			&item.ConversationID,
+			&item.Assignee,
+			&item.Priority,
+			&item.Notes,
+			&tagsJSON,
+			&item.UpdatedBy,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan contact crm profile: %w", err)
+		}
+		if err := json.Unmarshal([]byte(tagsJSON), &item.Tags); err != nil {
+			item.Tags = []string{}
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate contact crm profiles: %w", err)
+	}
+
+	return items, nil
+}
+
+func (s *Store) SaveContactCRMProfile(ctx context.Context, item models.ContactCRMProfileRecord) error {
+	if item.UpdatedAt == "" {
+		item.UpdatedAt = models.NowString()
+	}
+
+	tagsJSON, err := json.Marshal(item.Tags)
+	if err != nil {
+		return fmt.Errorf("marshal contact crm tags: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO contact_crm_profile (
+			session_id, conversation_id, assignee, priority, notes, tags_json, updated_by, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (session_id, conversation_id) DO UPDATE SET
+			assignee = excluded.assignee,
+			priority = excluded.priority,
+			notes = excluded.notes,
+			tags_json = excluded.tags_json,
+			updated_by = excluded.updated_by,
+			updated_at = excluded.updated_at
+	`, item.SessionID, item.ConversationID, item.Assignee, item.Priority, item.Notes, string(tagsJSON), item.UpdatedBy, item.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("save contact crm profile: %w", err)
 	}
 
 	return nil

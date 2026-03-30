@@ -150,7 +150,6 @@ const contactsBoards = [
 ];
 
 const contactsKanbanBoardStorageKey = 'pulse-hub.contacts-kanban-board';
-const contactsCustomBoardsStorageKey = 'pulse-hub.contacts-custom-boards';
 
 const navigationItems: Array<{
   id: WorkspaceView;
@@ -180,8 +179,17 @@ type Props = {
 type RealtimeSocketEvent = {
   sessionId: string;
   chatJid?: string;
-  kind: 'connection' | 'chat.new' | 'message.new' | 'message.ack' | 'kanban.stage.updated';
+  kind:
+    | 'connection'
+    | 'chat.new'
+    | 'message.new'
+    | 'message.ack'
+    | 'kanban.stage.updated'
+    | 'kanban.board.updated'
+    | 'kanban.contact.updated';
   direction?: 'incoming' | 'outgoing';
+  text?: string;
+  payload?: string;
   occurredAt?: string;
 };
 
@@ -209,6 +217,24 @@ type CustomContactsBoard = {
   contactsFilter: ConversationFilter;
   contactsAudienceFilter: 'all' | 'verified';
   contactsChannelFilter: 'all' | 'whatsapp' | 'instagram' | 'facebook';
+};
+
+type ContactKanbanBoardRecord = CustomContactsBoard & {
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ContactCRMProfileRecord = {
+  sessionId: string;
+  conversationId: string;
+  assignee?: string;
+  priority?: '' | 'low' | 'medium' | 'high' | 'urgent';
+  notes?: string;
+  tags?: string[];
+  updatedBy?: string;
+  updatedAt: string;
 };
 
 type ContactKanbanStageId = 'new' | 'qualified' | 'active' | 'followup' | 'won';
@@ -247,13 +273,18 @@ export function DashboardClient({ initialOverview }: Props) {
   const [showAdvancedContactsFilters, setShowAdvancedContactsFilters] = useState(false);
   const [contactsSearch, setContactsSearch] = useState('');
   const [activeContactsBoard, setActiveContactsBoard] = useState<ContactsBoardId>('contacts');
-  const [customContactsBoards, setCustomContactsBoards] = useState<CustomContactsBoard[]>([]);
+  const [customContactsBoards, setCustomContactsBoards] = useState<ContactKanbanBoardRecord[]>([]);
   const [showCreateBoardModal, setShowCreateBoardModal] = useState(false);
   const [newBoardForm, setNewBoardForm] = useState({ label: '', description: '' });
   const [contactKanbanStageMap, setContactKanbanStageMap] = useState<
     Record<string, ContactKanbanStageId>
   >({});
+  const [contactCrmProfileMap, setContactCrmProfileMap] = useState<
+    Record<string, ContactCRMProfileRecord>
+  >({});
   const [isLoadingContactKanban, setIsLoadingContactKanban] = useState(true);
+  const [isLoadingContactBoards, setIsLoadingContactBoards] = useState(true);
+  const [isLoadingContactCRM, setIsLoadingContactCRM] = useState(true);
   const [draggedContactKey, setDraggedContactKey] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<ContactKanbanStageId | null>(null);
   const [showCreateContactModal, setShowCreateContactModal] = useState(false);
@@ -291,7 +322,8 @@ export function DashboardClient({ initialOverview }: Props) {
   const currentView = viewTransition ?? activeView;
   const hasWorkspaceData = overview.sessions.length > 0 || overview.conversations.length > 0;
   const shouldShowInitialSkeleton = isPending && !hasWorkspaceData && !errorMessage;
-  const shouldShowContactsSkeleton = shouldShowInitialSkeleton || isLoadingContactKanban;
+  const shouldShowContactsSkeleton =
+    shouldShowInitialSkeleton || isLoadingContactKanban || isLoadingContactBoards || isLoadingContactCRM;
   const deferredContactsSearch = useDeferredValue(contactsSearch);
   const isConversationSwitching = pendingConversationId !== null;
   const isDashboardView = activeView === 'dashboard';
@@ -797,15 +829,6 @@ export function DashboardClient({ initialOverview }: Props) {
   }, []);
 
   useEffect(() => {
-    const rawCustomBoards = window.localStorage.getItem(contactsCustomBoardsStorageKey);
-    if (rawCustomBoards) {
-      try {
-        setCustomContactsBoards(JSON.parse(rawCustomBoards) as CustomContactsBoard[]);
-      } catch {
-        window.localStorage.removeItem(contactsCustomBoardsStorageKey);
-      }
-    }
-
     const rawBoard = window.localStorage.getItem(contactsKanbanBoardStorageKey);
     if (
       rawBoard &&
@@ -818,13 +841,6 @@ export function DashboardClient({ initialOverview }: Props) {
   useEffect(() => {
     window.localStorage.setItem(contactsKanbanBoardStorageKey, activeContactsBoard);
   }, [activeContactsBoard]);
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      contactsCustomBoardsStorageKey,
-      JSON.stringify(customContactsBoards),
-    );
-  }, [customContactsBoards]);
 
   useEffect(() => {
     if (
@@ -870,6 +886,38 @@ export function DashboardClient({ initialOverview }: Props) {
     });
   }, []);
 
+  const loadContactBoards = useCallback(async () => {
+    const response = await fetch(`${apiUrl}/whatsapp/contacts/boards`, {
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error('Nao foi possivel carregar os boards do CRM.');
+    }
+
+    const records = (await response.json()) as ContactKanbanBoardRecord[];
+    setCustomContactsBoards(records);
+  }, []);
+
+  const loadContactCRMProfiles = useCallback(async () => {
+    const response = await fetch(`${apiUrl}/whatsapp/contacts/crm`, {
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error('Nao foi possivel carregar os dados do CRM.');
+    }
+
+    const records = (await response.json()) as ContactCRMProfileRecord[];
+    setContactCrmProfileMap(() => {
+      const nextMap: Record<string, ContactCRMProfileRecord> = {};
+      for (const record of records) {
+        nextMap[`${record.sessionId}:${record.conversationId}`] = record;
+      }
+      return nextMap;
+    });
+  }, []);
+
   useEffect(() => {
     if (!isAuthReady) {
       return;
@@ -880,6 +928,28 @@ export function DashboardClient({ initialOverview }: Props) {
       .catch(() => undefined)
       .finally(() => setIsLoadingContactKanban(false));
   }, [isAuthReady, loadContactKanbanStages]);
+
+  useEffect(() => {
+    if (!isAuthReady) {
+      return;
+    }
+
+    setIsLoadingContactBoards(true);
+    void loadContactBoards()
+      .catch(() => undefined)
+      .finally(() => setIsLoadingContactBoards(false));
+  }, [isAuthReady, loadContactBoards]);
+
+  useEffect(() => {
+    if (!isAuthReady) {
+      return;
+    }
+
+    setIsLoadingContactCRM(true);
+    void loadContactCRMProfiles()
+      .catch(() => undefined)
+      .finally(() => setIsLoadingContactCRM(false));
+  }, [isAuthReady, loadContactCRMProfiles]);
 
   const fetchConversationMessages = useCallback(async (sessionId: string, conversationId: string) => {
     const response = await fetch(
@@ -1328,7 +1398,35 @@ export function DashboardClient({ initialOverview }: Props) {
         }
 
         if (payload.kind === 'kanban.stage.updated') {
-          void loadContactKanbanStages().catch(() => undefined);
+          const nextStage = payload.text;
+          if (payload.chatJid && payload.sessionId && isValidContactKanbanStageId(nextStage)) {
+            setContactKanbanStageMap((current) => ({
+              ...current,
+              [`${payload.sessionId}:${payload.chatJid}`]: nextStage,
+            }));
+          } else {
+            void loadContactKanbanStages().catch(() => undefined);
+          }
+        }
+
+        if (payload.kind === 'kanban.board.updated') {
+          void loadContactBoards().catch(() => undefined);
+        }
+
+        if (payload.kind === 'kanban.contact.updated') {
+          if (payload.payload) {
+            try {
+              const record = JSON.parse(payload.payload) as ContactCRMProfileRecord;
+              setContactCrmProfileMap((current) => ({
+                ...current,
+                [`${record.sessionId}:${record.conversationId}`]: record,
+              }));
+            } catch {
+              void loadContactCRMProfiles().catch(() => undefined);
+            }
+          } else {
+            void loadContactCRMProfiles().catch(() => undefined);
+          }
         }
 
         if (
@@ -1377,6 +1475,8 @@ export function DashboardClient({ initialOverview }: Props) {
     activeSessionId,
     isAuthReady,
     isConversationsView,
+    loadContactBoards,
+    loadContactCRMProfiles,
     loadContactKanbanStages,
     loadMessages,
     loadOverview,
@@ -1528,7 +1628,7 @@ export function DashboardClient({ initialOverview }: Props) {
     [customContactsBoards],
   );
 
-  const createContactsBoard = useCallback(() => {
+  const createContactsBoard = useCallback(async () => {
     const label = newBoardForm.label.trim();
     const description = newBoardForm.description.trim() || 'Board personalizado do CRM';
     if (!label) {
@@ -1541,42 +1641,82 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     const boardId = `custom:${slugifyContact(label)}-${Date.now()}` as const;
-    const nextBoard: CustomContactsBoard = {
+    const nextBoard: ContactKanbanBoardRecord = {
       id: boardId,
       label,
       description,
       contactsFilter,
       contactsAudienceFilter,
       contactsChannelFilter,
+      createdBy: authUser?.name || authUser?.email || 'Operador',
+      updatedBy: authUser?.name || authUser?.email || 'Operador',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
-    setCustomContactsBoards((current) => [...current, nextBoard]);
-    setNewBoardForm({ label: '', description: '' });
-    setShowCreateBoardModal(false);
-    activateContactsBoard(nextBoard.id);
-    pushToast({
-      tone: 'success',
-      title: 'Board criado',
-      description: 'O novo board foi salvo com os filtros atuais.',
-    });
+    const created = await executeAction(async () => {
+      const response = await fetch(`${apiUrl}/whatsapp/contacts/boards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(nextBoard),
+      });
+
+      if (!response.ok) {
+        throw new Error('Nao foi possivel criar o board do CRM.');
+      }
+
+      await loadContactBoards();
+    }, { successMessage: 'Board criado' });
+
+    if (created) {
+      setCustomContactsBoards((current) => {
+        if (current.some((board) => board.id === nextBoard.id)) {
+          return current;
+        }
+        return [nextBoard, ...current];
+      });
+      setNewBoardForm({ label: '', description: '' });
+      setShowCreateBoardModal(false);
+      activateContactsBoard(nextBoard.id);
+    }
   }, [
     activateContactsBoard,
+    authUser?.email,
+    authUser?.name,
     contactsAudienceFilter,
     contactsChannelFilter,
     contactsFilter,
+    executeAction,
+    loadContactBoards,
     newBoardForm.description,
     newBoardForm.label,
     pushToast,
   ]);
 
   const removeContactsBoard = useCallback(
-    (boardId: ContactsBoardId) => {
-      setCustomContactsBoards((current) => current.filter((board) => board.id !== boardId));
+    async (boardId: ContactsBoardId) => {
+      const removedBoards = customContactsBoards.filter((board) => board.id !== boardId);
       if (activeContactsBoard === boardId) {
         setActiveContactsBoard('contacts');
       }
+
+      const removed = await executeAction(async () => {
+        const response = await fetch(`${apiUrl}/whatsapp/contacts/boards/${encodeURIComponent(boardId)}`, {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          throw new Error('Nao foi possivel remover o board do CRM.');
+        }
+
+        setCustomContactsBoards(removedBoards);
+      }, { successMessage: 'Board removido' });
+
+      if (!removed && activeContactsBoard === boardId) {
+        setActiveContactsBoard(boardId);
+      }
     },
-    [activeContactsBoard],
+    [activeContactsBoard, customContactsBoards, executeAction],
   );
 
   const createManualContact = useCallback(async () => {
@@ -1631,6 +1771,56 @@ export function DashboardClient({ initialOverview }: Props) {
     pushToast,
     selectedSession?.id,
   ]);
+
+  const saveContactCRMProfile = useCallback(
+    async (
+      contact: ConversationRecord,
+      patch: Partial<Pick<ContactCRMProfileRecord, 'assignee' | 'priority' | 'notes' | 'tags'>>,
+    ) => {
+      const key = buildContactKanbanKey(contact);
+      const previousProfile = contactCrmProfileMap[key];
+      const nextProfile: ContactCRMProfileRecord = {
+        sessionId: contact.sessionId,
+        conversationId: contact.id,
+        assignee: patch.assignee ?? previousProfile?.assignee ?? '',
+        priority: patch.priority ?? previousProfile?.priority ?? '',
+        notes: patch.notes ?? previousProfile?.notes ?? '',
+        tags: patch.tags ?? previousProfile?.tags ?? [],
+        updatedBy: authUser?.name || authUser?.email || 'Operador',
+        updatedAt: new Date().toISOString(),
+      };
+
+      setContactCrmProfileMap((current) => ({
+        ...current,
+        [key]: nextProfile,
+      }));
+
+      const saved = await executeAction(async () => {
+        const response = await fetch(`${apiUrl}/whatsapp/contacts/crm`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(nextProfile),
+        });
+
+        if (!response.ok) {
+          throw new Error('Nao foi possivel salvar os dados do CRM.');
+        }
+      }, { successMessage: 'CRM atualizado' });
+
+      if (!saved) {
+        setContactCrmProfileMap((current) => {
+          const nextMap = { ...current };
+          if (previousProfile) {
+            nextMap[key] = previousProfile;
+          } else {
+            delete nextMap[key];
+          }
+          return nextMap;
+        });
+      }
+    },
+    [authUser?.email, authUser?.name, contactCrmProfileMap, executeAction],
+  );
 
   const createSession = () => {
     runAction(async () => {
@@ -1982,7 +2172,9 @@ export function DashboardClient({ initialOverview }: Props) {
                       <button
                         aria-label={`Remover board ${board.label}`}
                         className="grid h-7 w-7 place-items-center rounded-full bg-white/5 text-zinc-500 transition hover:bg-white/10 hover:text-white"
-                        onClick={() => removeContactsBoard(board.id)}
+                        onClick={() => {
+                          void removeContactsBoard(board.id);
+                        }}
                         type="button"
                       >
                         <X className="h-3.5 w-3.5" strokeWidth={2.1} />
@@ -2188,6 +2380,7 @@ export function DashboardClient({ initialOverview }: Props) {
                         <ContactKanbanCard
                           key={buildContactKanbanKey(contact)}
                           contact={contact}
+                          crmProfile={contactCrmProfileMap[buildContactKanbanKey(contact)]}
                           onCopyId={() => void navigator.clipboard?.writeText(contact.participantId)}
                           onDragEnd={() => {
                             setDraggedContactKey(null);
@@ -2233,9 +2426,12 @@ export function DashboardClient({ initialOverview }: Props) {
         <aside className="min-h-0 overflow-y-auto rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(12,12,14,0.98))] p-4 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)]">
           {selectedContact ? (
             <ContactKanbanDetailPanel
+              key={`${buildContactKanbanKey(selectedContact)}:${contactCrmProfileMap[buildContactKanbanKey(selectedContact)]?.updatedAt ?? 'base'}`}
               contact={selectedContact}
+              crmProfile={contactCrmProfileMap[buildContactKanbanKey(selectedContact)]}
               onCopyId={() => void navigator.clipboard?.writeText(selectedContact.participantId)}
               onMoveStage={moveContactToStage}
+              onSaveProfile={saveContactCRMProfile}
               onOpenConversation={() => {
                 setSelectedSessionId(selectedContact.sessionId);
                 setSelectedConversationId(selectedContact.id);
@@ -3113,7 +3309,9 @@ export function DashboardClient({ initialOverview }: Props) {
               </button>
               <button
                 className="rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
-                onClick={createContactsBoard}
+                onClick={() => {
+                  void createContactsBoard();
+                }}
                 type="button"
               >
                 Criar board
@@ -3871,6 +4069,7 @@ function AnalyticsLoadingState() {
 
 function ContactKanbanCard({
   contact,
+  crmProfile,
   selected,
   onSelect,
   onOpenConversation,
@@ -3879,6 +4078,7 @@ function ContactKanbanCard({
   onDragEnd,
 }: {
   contact: ConversationRecord;
+  crmProfile?: ContactCRMProfileRecord;
   selected: boolean;
   onSelect: () => void;
   onOpenConversation: () => void;
@@ -3888,6 +4088,7 @@ function ContactKanbanCard({
 }) {
   const channel = getContactChannelMeta(contact);
   const relativePulse = formatRelativePulse(contact.lastMessageAt);
+  const priorityTone = getContactPriorityTone(crmProfile?.priority);
 
   return (
     <article
@@ -3936,6 +4137,21 @@ function ContactKanbanCard({
             <span className="rounded-full bg-white/6 px-2.5 py-1 text-[10px] font-semibold text-zinc-400">
               {relativePulse.primary}
             </span>
+            {crmProfile?.priority ? (
+              <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${priorityTone}`}>
+                {crmProfile.priority}
+              </span>
+            ) : null}
+            {crmProfile?.assignee ? (
+              <span className="rounded-full bg-white/6 px-2.5 py-1 text-[10px] font-semibold text-zinc-300">
+                {crmProfile.assignee}
+              </span>
+            ) : null}
+            {(crmProfile?.tags ?? []).slice(0, 2).map((tag) => (
+              <span key={tag} className="rounded-full bg-white/6 px-2.5 py-1 text-[10px] font-semibold text-zinc-400">
+                #{tag}
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -3968,14 +4184,21 @@ function ContactKanbanCard({
 
 function ContactKanbanDetailPanel({
   contact,
+  crmProfile,
   stage,
   onMoveStage,
+  onSaveProfile,
   onOpenConversation,
   onCopyId,
 }: {
   contact: ConversationRecord;
+  crmProfile?: ContactCRMProfileRecord;
   stage: ContactKanbanStageId;
   onMoveStage: (contact: ConversationRecord, stage: ContactKanbanStageId) => void | Promise<void>;
+  onSaveProfile: (
+    contact: ConversationRecord,
+    patch: Partial<Pick<ContactCRMProfileRecord, 'assignee' | 'priority' | 'notes' | 'tags'>>,
+  ) => void | Promise<void>;
   onOpenConversation: () => void;
   onCopyId: () => void;
 }) {
@@ -3983,6 +4206,12 @@ function ContactKanbanDetailPanel({
   const interactionMetric = getContactInteractionMetric(contact);
   const relativePulse = formatRelativePulse(contact.lastMessageAt);
   const connectivity = getContactConnectivity(contact);
+  const [draftAssignee, setDraftAssignee] = useState(crmProfile?.assignee ?? '');
+  const [draftPriority, setDraftPriority] = useState<ContactCRMProfileRecord['priority']>(
+    crmProfile?.priority ?? '',
+  );
+  const [draftNotes, setDraftNotes] = useState(crmProfile?.notes ?? '');
+  const [draftTags, setDraftTags] = useState((crmProfile?.tags ?? []).join(', '));
 
   return (
     <div className="space-y-5">
@@ -4057,6 +4286,84 @@ function ContactKanbanDetailPanel({
           <div className="mt-3 flex items-center gap-2 text-xs">
             <span className={`h-2.5 w-2.5 rounded-full ${connectivity.dot}`} />
             <span className={connectivity.tone}>{connectivity.label}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-[26px] border border-white/6 bg-white/[0.03] p-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
+            CRM inline
+          </p>
+          <button
+            className="rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-3 py-1.5 text-xs font-semibold text-black"
+            onClick={() => {
+              void onSaveProfile(contact, {
+                assignee: draftAssignee.trim(),
+                priority: draftPriority ?? '',
+                notes: draftNotes.trim(),
+                tags: parseContactTagsInput(draftTags),
+              });
+            }}
+            type="button"
+          >
+            Salvar
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <div>
+            <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+              Responsavel
+            </label>
+            <input
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
+              onChange={(event) => setDraftAssignee(event.target.value)}
+              placeholder="Nome do responsavel"
+              value={draftAssignee}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+              Prioridade
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['', 'low', 'medium', 'high', 'urgent'] as const).map((priority) => (
+                <button
+                  key={priority || 'none'}
+                  className={`rounded-2xl border px-3 py-2.5 text-left text-sm transition ${draftPriority === priority ? 'border-[var(--primary)]/30 bg-[var(--primary)]/10 text-white' : 'border-white/8 bg-white/[0.03] text-zinc-400 hover:bg-white/[0.05]'}`}
+                  onClick={() => setDraftPriority(priority)}
+                  type="button"
+                >
+                  {priority || 'Sem prioridade'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+              Tags
+            </label>
+            <input
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
+              onChange={(event) => setDraftTags(event.target.value)}
+              placeholder="vip, retorno, atacado"
+              value={draftTags}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+              Observacoes
+            </label>
+            <textarea
+              className="min-h-28 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
+              onChange={(event) => setDraftNotes(event.target.value)}
+              placeholder="Resumo do contexto, proxima acao, objeccoes, detalhes do atendimento..."
+              value={draftNotes}
+            />
           </div>
         </div>
       </div>
@@ -4970,6 +5277,34 @@ function applyContactsWorkspaceFilters(
 
     return true;
   });
+}
+
+function isValidContactKanbanStageId(
+  value?: string,
+): value is ContactKanbanStageId {
+  return ['new', 'qualified', 'active', 'followup', 'won'].includes(value ?? '');
+}
+
+function getContactPriorityTone(priority?: ContactCRMProfileRecord['priority']) {
+  switch (priority) {
+    case 'urgent':
+      return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
+    case 'high':
+      return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+    case 'medium':
+      return 'border-sky-500/30 bg-sky-500/10 text-sky-200';
+    case 'low':
+      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
+    default:
+      return 'border-white/8 bg-white/[0.04] text-zinc-400';
+  }
+}
+
+function parseContactTagsInput(value: string) {
+  return value
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 }
 
 function buildContactKanbanKey(contact: ConversationRecord) {

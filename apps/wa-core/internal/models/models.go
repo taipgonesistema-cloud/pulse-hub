@@ -130,6 +130,7 @@ type RealtimeEvent struct {
 	Status     string `json:"status,omitempty"`
 	AckStatus  string `json:"ackStatus,omitempty"`
 	Text       string `json:"text,omitempty"`
+	Payload    string `json:"payload,omitempty"`
 	OccurredAt string `json:"occurredAt"`
 }
 
@@ -230,6 +231,30 @@ type ContactKanbanStageRecord struct {
 	UpdatedAt      string `json:"updatedAt"`
 }
 
+type ContactKanbanBoardRecord struct {
+	ID                     string `json:"id"`
+	Label                  string `json:"label"`
+	Description            string `json:"description"`
+	ContactsFilter         string `json:"contactsFilter"`
+	ContactsAudienceFilter string `json:"contactsAudienceFilter"`
+	ContactsChannelFilter  string `json:"contactsChannelFilter"`
+	CreatedBy              string `json:"createdBy,omitempty"`
+	UpdatedBy              string `json:"updatedBy,omitempty"`
+	CreatedAt              string `json:"createdAt"`
+	UpdatedAt              string `json:"updatedAt"`
+}
+
+type ContactCRMProfileRecord struct {
+	SessionID      string   `json:"sessionId"`
+	ConversationID string   `json:"conversationId"`
+	Assignee       string   `json:"assignee,omitempty"`
+	Priority       string   `json:"priority,omitempty"`
+	Notes          string   `json:"notes,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
+	UpdatedBy      string   `json:"updatedBy,omitempty"`
+	UpdatedAt      string   `json:"updatedAt"`
+}
+
 type UpdateContactKanbanStageRequest struct {
 	SessionID      string `json:"sessionId"`
 	ConversationID string `json:"conversationId"`
@@ -243,6 +268,27 @@ type CreateManualContactRequest struct {
 	Phone     string `json:"phone"`
 	Stage     string `json:"stage,omitempty"`
 	UpdatedBy string `json:"updatedBy,omitempty"`
+}
+
+type CreateContactKanbanBoardRequest struct {
+	ID                     string `json:"id"`
+	Label                  string `json:"label"`
+	Description            string `json:"description"`
+	ContactsFilter         string `json:"contactsFilter"`
+	ContactsAudienceFilter string `json:"contactsAudienceFilter"`
+	ContactsChannelFilter  string `json:"contactsChannelFilter"`
+	CreatedBy              string `json:"createdBy,omitempty"`
+	UpdatedBy              string `json:"updatedBy,omitempty"`
+}
+
+type UpdateContactCRMProfileRequest struct {
+	SessionID      string   `json:"sessionId"`
+	ConversationID string   `json:"conversationId"`
+	Assignee       string   `json:"assignee,omitempty"`
+	Priority       string   `json:"priority,omitempty"`
+	Notes          string   `json:"notes,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
+	UpdatedBy      string   `json:"updatedBy,omitempty"`
 }
 
 func NowString() string {

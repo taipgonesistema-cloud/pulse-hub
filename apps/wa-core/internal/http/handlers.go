@@ -69,6 +69,11 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 	r.Post("/auth/sign-in", api.handleSignIn)
 	r.Get("/dashboard/overview", api.handleDashboardOverview)
 	r.Route("/whatsapp", func(r chi.Router) {
+		r.Get("/contacts/boards", api.handleListContactKanbanBoards)
+		r.Post("/contacts/boards", api.handleCreateContactKanbanBoard)
+		r.Delete("/contacts/boards/{id}", api.handleDeleteContactKanbanBoard)
+		r.Get("/contacts/crm", api.handleListContactCRMProfiles)
+		r.Put("/contacts/crm", api.handleUpdateContactCRMProfile)
 		r.Get("/contacts/kanban", api.handleListContactKanbanStages)
 		r.Post("/contacts/manual", api.handleCreateManualContact)
 		r.Put("/contacts/kanban", api.handleUpdateContactKanbanStage)
@@ -92,7 +97,7 @@ func (a *API) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -513,6 +518,157 @@ func (a *API) handleConversationRead(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *API) handleListContactKanbanBoards(w http.ResponseWriter, r *http.Request) {
+	items, err := a.store.ListContactKanbanBoards(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, items)
+}
+
+func (a *API) handleCreateContactKanbanBoard(w http.ResponseWriter, r *http.Request) {
+	var request models.CreateContactKanbanBoardRequest
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	request.ID = strings.TrimSpace(request.ID)
+	request.Label = strings.TrimSpace(request.Label)
+	request.Description = strings.TrimSpace(request.Description)
+	request.ContactsFilter = strings.TrimSpace(strings.ToLower(request.ContactsFilter))
+	request.ContactsAudienceFilter = strings.TrimSpace(strings.ToLower(request.ContactsAudienceFilter))
+	request.ContactsChannelFilter = strings.TrimSpace(strings.ToLower(request.ContactsChannelFilter))
+	request.CreatedBy = strings.TrimSpace(request.CreatedBy)
+	request.UpdatedBy = strings.TrimSpace(request.UpdatedBy)
+
+	if request.ID == "" || request.Label == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "id e label sao obrigatorios."})
+		return
+	}
+
+	if !isValidConversationFilter(request.ContactsFilter) {
+		request.ContactsFilter = "all"
+	}
+	if !isValidContactsAudienceFilter(request.ContactsAudienceFilter) {
+		request.ContactsAudienceFilter = "all"
+	}
+	if !isValidContactsChannelFilter(request.ContactsChannelFilter) {
+		request.ContactsChannelFilter = "all"
+	}
+
+	now := models.NowString()
+	record := models.ContactKanbanBoardRecord{
+		ID:                     request.ID,
+		Label:                  request.Label,
+		Description:            request.Description,
+		ContactsFilter:         request.ContactsFilter,
+		ContactsAudienceFilter: request.ContactsAudienceFilter,
+		ContactsChannelFilter:  request.ContactsChannelFilter,
+		CreatedBy:              request.CreatedBy,
+		UpdatedBy:              request.UpdatedBy,
+		CreatedAt:              now,
+		UpdatedAt:              now,
+	}
+
+	if err := a.store.SaveContactKanbanBoard(r.Context(), record); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	a.hub.Broadcast(models.RealtimeEvent{
+		Kind:       "kanban.board.updated",
+		Text:       record.ID,
+		OccurredAt: now,
+	})
+
+	respondJSON(w, http.StatusCreated, record)
+}
+
+func (a *API) handleDeleteContactKanbanBoard(w http.ResponseWriter, r *http.Request) {
+	boardID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if boardID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "id do board obrigatorio."})
+		return
+	}
+
+	if err := a.store.DeleteContactKanbanBoard(r.Context(), boardID); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	a.hub.Broadcast(models.RealtimeEvent{
+		Kind:       "kanban.board.updated",
+		Text:       boardID,
+		OccurredAt: models.NowString(),
+	})
+
+	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *API) handleListContactCRMProfiles(w http.ResponseWriter, r *http.Request) {
+	items, err := a.store.ListContactCRMProfiles(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, items)
+}
+
+func (a *API) handleUpdateContactCRMProfile(w http.ResponseWriter, r *http.Request) {
+	var request models.UpdateContactCRMProfileRequest
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	request.SessionID = strings.TrimSpace(request.SessionID)
+	request.ConversationID = strings.TrimSpace(request.ConversationID)
+	request.Assignee = strings.TrimSpace(request.Assignee)
+	request.Priority = strings.TrimSpace(strings.ToLower(request.Priority))
+	request.Notes = strings.TrimSpace(request.Notes)
+	request.UpdatedBy = strings.TrimSpace(request.UpdatedBy)
+	request.Tags = normalizeTags(request.Tags)
+
+	if request.SessionID == "" || request.ConversationID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "sessionId e conversationId sao obrigatorios."})
+		return
+	}
+	if !isValidContactPriority(request.Priority) {
+		request.Priority = ""
+	}
+
+	record := models.ContactCRMProfileRecord{
+		SessionID:      request.SessionID,
+		ConversationID: request.ConversationID,
+		Assignee:       request.Assignee,
+		Priority:       request.Priority,
+		Notes:          request.Notes,
+		Tags:           request.Tags,
+		UpdatedBy:      request.UpdatedBy,
+		UpdatedAt:      models.NowString(),
+	}
+
+	if err := a.store.SaveContactCRMProfile(r.Context(), record); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	payload, _ := json.Marshal(record)
+	a.hub.Broadcast(models.RealtimeEvent{
+		Kind:       "kanban.contact.updated",
+		SessionID:  record.SessionID,
+		ChatJID:    record.ConversationID,
+		Payload:    string(payload),
+		OccurredAt: record.UpdatedAt,
+	})
+
+	respondJSON(w, http.StatusOK, record)
 }
 
 func (a *API) handleListContactKanbanStages(w http.ResponseWriter, r *http.Request) {
@@ -1059,6 +1215,60 @@ func isValidContactKanbanStage(value string) bool {
 	default:
 		return false
 	}
+}
+
+func isValidConversationFilter(value string) bool {
+	switch value {
+	case "all", "direct", "groups", "unread":
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidContactsAudienceFilter(value string) bool {
+	switch value {
+	case "all", "verified":
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidContactsChannelFilter(value string) bool {
+	switch value {
+	case "all", "whatsapp", "instagram", "facebook":
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidContactPriority(value string) bool {
+	switch value {
+	case "", "low", "medium", "high", "urgent":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeTags(tags []string) []string {
+	items := make([]string, 0, len(tags))
+	seen := make(map[string]struct{}, len(tags))
+	for _, tag := range tags {
+		normalized := strings.TrimSpace(tag)
+		if normalized == "" {
+			continue
+		}
+		key := strings.ToLower(normalized)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		items = append(items, normalized)
+	}
+	return items
 }
 
 func normalizeManualContactPhone(value string) (string, string, error) {
