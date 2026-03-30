@@ -9,7 +9,9 @@ import (
 	"syscall"
 	"time"
 
+	appauth "pulsehub/wa-core/internal/auth"
 	httpapi "pulsehub/wa-core/internal/http"
+	"pulsehub/wa-core/internal/models"
 	appstore "pulsehub/wa-core/internal/store"
 	"pulsehub/wa-core/internal/whatsapp"
 	"pulsehub/wa-core/internal/ws"
@@ -42,6 +44,16 @@ func main() {
 	defer func() {
 		_ = store.Close()
 	}()
+
+	seedPasswordHash, err := appauth.HashPassword(cfg.AuthPassword)
+	if err != nil {
+		logger.Error("hash seed password failed", "error", err)
+		os.Exit(1)
+	}
+	if _, err := store.EnsureSeedUser(ctx, cfg.AuthEmail, cfg.AuthName, seedPasswordHash, models.AuthRole(cfg.AuthRole)); err != nil {
+		logger.Error("ensure seed user failed", "error", err)
+		os.Exit(1)
+	}
 
 	hub, err := ws.NewHub(ctx, logger, cfg.RedisURL)
 	if err != nil {

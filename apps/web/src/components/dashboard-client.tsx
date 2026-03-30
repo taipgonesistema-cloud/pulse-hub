@@ -56,8 +56,19 @@ import type {
   MessageRecord,
   SessionRecord,
 } from '@/lib/pulse-hub';
-
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333';
+import {
+  apiUrl,
+  authFetch,
+  buildAuthenticatedWebSocketUrl,
+  clearStoredAuthSession,
+  createUser,
+  getCurrentUser,
+  getStoredAuthToken,
+  getStoredAuthUser,
+  listUsers,
+  signOutRequest,
+  updateUser,
+} from '@/lib/pulse-hub';
 
 const statusLabel: Record<SessionRecord['status'], string> = {
   demo: 'Demo',
@@ -288,6 +299,9 @@ export function DashboardClient({ initialOverview }: Props) {
   const [isLoadingContactKanban, setIsLoadingContactKanban] = useState(true);
   const [isLoadingContactBoards, setIsLoadingContactBoards] = useState(true);
   const [isLoadingContactCRM, setIsLoadingContactCRM] = useState(true);
+  const [settingsSection, setSettingsSection] = useState<'sessions' | 'users'>('sessions');
+  const [workspaceUsers, setWorkspaceUsers] = useState<AuthUser[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [draggedContactKey, setDraggedContactKey] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<ContactKanbanStageId | null>(null);
   const [showCreateContactModal, setShowCreateContactModal] = useState(false);
@@ -304,6 +318,19 @@ export function DashboardClient({ initialOverview }: Props) {
     name: '',
     phoneNumber: '',
     channelName: '',
+  });
+  const [newUserForm, setNewUserForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'attendant' as AuthUser['role'],
+  });
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editingUserForm, setEditingUserForm] = useState({
+    name: '',
+    password: '',
+    role: 'attendant' as AuthUser['role'],
+    isActive: true,
   });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -328,6 +355,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const shouldShowInitialSkeleton = isPending && !hasWorkspaceData && !errorMessage;
   const shouldShowContactsSkeleton =
     shouldShowInitialSkeleton || isLoadingContactKanban || isLoadingContactBoards || isLoadingContactCRM;
+  const isAdminUser = authUser?.role === 'admin';
   const deferredContactsSearch = useDeferredValue(contactsSearch);
   const isConversationSwitching = pendingConversationId !== null;
   const isDashboardView = activeView === 'dashboard';
@@ -752,10 +780,24 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [isConversationsView, selectedConversation, selectedSession?.phoneNumber]);
 
   const signOut = useCallback(() => {
-    window.localStorage.removeItem('pulse-hub.auth-token');
-    window.localStorage.removeItem('pulse-hub.auth-user');
-    router.push('/login');
+    void signOutRequest().catch(() => undefined).finally(() => {
+      clearStoredAuthSession();
+      router.push('/login');
+    });
   }, [router]);
+
+  const authenticatedFetch = useCallback(
+    async (input: string, init?: RequestInit) => {
+      const response = await authFetch(input, init);
+      if (response.status === 401) {
+        clearStoredAuthSession();
+        router.replace('/login');
+        throw new Error('Sua sessao expirou. Entre novamente.');
+      }
+      return response;
+    },
+    [router],
+  );
 
   const dismissToast = useCallback((toastId: number) => {
     const timer = toastTimersRef.current.get(toastId);
@@ -832,23 +874,56 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   useEffect(() => {
-    const token = window.localStorage.getItem('pulse-hub.auth-token');
-    const rawUser = window.localStorage.getItem('pulse-hub.auth-user');
+    const token = getStoredAuthToken();
+    const cachedUser = getStoredAuthUser();
 
-    if (!token || !rawUser) {
+    if (!token) {
+      clearStoredAuthSession();
       router.replace('/login');
       return;
     }
 
-    try {
-      setAuthUser(JSON.parse(rawUser) as AuthUser);
-      setIsAuthReady(true);
-    } catch {
-      window.localStorage.removeItem('pulse-hub.auth-token');
-      window.localStorage.removeItem('pulse-hub.auth-user');
-      router.replace('/login');
+    if (cachedUser) {
+      setAuthUser(cachedUser);
     }
+
+    let cancelled = false;
+
+    void getCurrentUser()
+      .then((user) => {
+        if (cancelled) {
+          return;
+        }
+        setAuthUser(user);
+        window.localStorage.setItem('pulse-hub.auth-user', JSON.stringify(user));
+        setIsAuthReady(true);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        clearStoredAuthSession();
+        router.replace('/login');
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
+
+  useEffect(() => {
+    if (!isAuthReady || overview.sessions.length === 0) {
+      return;
+    }
+
+    if (!selectedSessionId) {
+      setSelectedSessionId(overview.sessions[0].id);
+    }
+
+    if (activeView === 'settings' && !selectedSessionId) {
+      setActiveView('dashboard');
+    }
+  }, [activeView, isAuthReady, overview.sessions, selectedSessionId]);
 
   useEffect(() => {
     const toastTimers = toastTimersRef.current;
@@ -864,6 +939,12 @@ export function DashboardClient({ initialOverview }: Props) {
       toastTimers.clear();
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAdminUser && settingsSection !== 'sessions') {
+      setSettingsSection('sessions');
+    }
+  }, [isAdminUser, settingsSection]);
 
   useEffect(() => {
     const rawBoard = window.localStorage.getItem(contactsKanbanBoardStorageKey);
@@ -889,7 +970,7 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [activeContactsBoard, customContactsBoards]);
 
   const loadOverview = useCallback(async () => {
-    const response = await fetch(`${apiUrl}/dashboard/overview`, {
+    const response = await authenticatedFetch(`${apiUrl}/dashboard/overview`, {
       cache: 'no-store',
     });
 
@@ -914,10 +995,10 @@ export function DashboardClient({ initialOverview }: Props) {
     setOverview((current) =>
       areOverviewsEquivalent(current, smoothedOverview) ? current : smoothedOverview,
     );
-  }, [activeConversationId, activeSessionId, isConversationActivelyViewed]);
+  }, [activeConversationId, activeSessionId, authenticatedFetch, isConversationActivelyViewed]);
 
   const loadContactKanbanStages = useCallback(async () => {
-    const response = await fetch(`${apiUrl}/whatsapp/contacts/kanban`, {
+    const response = await authenticatedFetch(`${apiUrl}/whatsapp/contacts/kanban`, {
       cache: 'no-store',
     });
 
@@ -933,10 +1014,10 @@ export function DashboardClient({ initialOverview }: Props) {
       }
       return nextMap;
     });
-  }, []);
+  }, [authenticatedFetch]);
 
   const loadContactBoards = useCallback(async () => {
-    const response = await fetch(`${apiUrl}/whatsapp/contacts/boards`, {
+    const response = await authenticatedFetch(`${apiUrl}/whatsapp/contacts/boards`, {
       cache: 'no-store',
     });
 
@@ -946,10 +1027,10 @@ export function DashboardClient({ initialOverview }: Props) {
 
     const records = (await response.json()) as ContactKanbanBoardRecord[];
     setCustomContactsBoards(records);
-  }, []);
+  }, [authenticatedFetch]);
 
   const loadContactCRMProfiles = useCallback(async () => {
-    const response = await fetch(`${apiUrl}/whatsapp/contacts/crm`, {
+    const response = await authenticatedFetch(`${apiUrl}/whatsapp/contacts/crm`, {
       cache: 'no-store',
     });
 
@@ -965,7 +1046,17 @@ export function DashboardClient({ initialOverview }: Props) {
       }
       return nextMap;
     });
-  }, []);
+  }, [authenticatedFetch]);
+
+  const loadWorkspaceUsers = useCallback(async () => {
+    if (!isAdminUser) {
+      setWorkspaceUsers([]);
+      return;
+    }
+
+    const users = await listUsers();
+    setWorkspaceUsers(users);
+  }, [isAdminUser]);
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -1000,8 +1091,20 @@ export function DashboardClient({ initialOverview }: Props) {
       .finally(() => setIsLoadingContactCRM(false));
   }, [isAuthReady, loadContactCRMProfiles]);
 
+  useEffect(() => {
+    if (!isAuthReady || !isAdminUser) {
+      setWorkspaceUsers([]);
+      return;
+    }
+
+    setIsLoadingUsers(true);
+    void loadWorkspaceUsers()
+      .catch(() => undefined)
+      .finally(() => setIsLoadingUsers(false));
+  }, [isAdminUser, isAuthReady, loadWorkspaceUsers]);
+
   const fetchConversationMessages = useCallback(async (sessionId: string, conversationId: string) => {
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${apiUrl}/whatsapp/sessions/${sessionId}/conversations/${conversationId}/messages`,
       { cache: 'no-store' },
     );
@@ -1011,7 +1114,7 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     return (await response.json()) as MessageRecord[];
-  }, []);
+  }, [authenticatedFetch]);
 
   const loadMessages = useCallback(
     async (
@@ -1121,7 +1224,7 @@ export function DashboardClient({ initialOverview }: Props) {
       });
 
       try {
-        await fetch(
+        await authenticatedFetch(
           `${apiUrl}/whatsapp/sessions/${sessionId}/conversations/${conversationId}/read`,
           {
             method: 'POST',
@@ -1131,7 +1234,7 @@ export function DashboardClient({ initialOverview }: Props) {
         void loadOverview().catch(() => undefined);
       }
     },
-    [loadOverview],
+    [authenticatedFetch, loadOverview],
   );
 
   const realtimeContextRef = useRef({
@@ -1507,7 +1610,7 @@ export function DashboardClient({ initialOverview }: Props) {
         return;
       }
 
-      socket = new WebSocket(getWebSocketUrl(`${apiUrl}/ws`));
+      socket = new WebSocket(buildAuthenticatedWebSocketUrl(`${apiUrl}/ws`));
 
       socket.onopen = () => {
         setIsRealtimeConnected(true);
@@ -1748,7 +1851,7 @@ export function DashboardClient({ initialOverview }: Props) {
       setSelectedContactId(contact.id);
 
       const persisted = await executeAction(async () => {
-        const response = await fetch(`${apiUrl}/whatsapp/contacts/kanban`, {
+        const response = await authenticatedFetch(`${apiUrl}/whatsapp/contacts/kanban`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1776,7 +1879,7 @@ export function DashboardClient({ initialOverview }: Props) {
         });
       }
     },
-    [authUser?.email, authUser?.name, contactKanbanStageMap, executeAction],
+    [authUser?.email, authUser?.name, authenticatedFetch, contactKanbanStageMap, executeAction],
   );
 
   const activateContactsBoard = useCallback(
@@ -1831,7 +1934,7 @@ export function DashboardClient({ initialOverview }: Props) {
         updatedBy: nextBoard.updatedBy,
       };
 
-      const response = await fetch(`${apiUrl}/whatsapp/contacts/boards`, {
+      const response = await authenticatedFetch(`${apiUrl}/whatsapp/contacts/boards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestPayload),
@@ -1862,6 +1965,7 @@ export function DashboardClient({ initialOverview }: Props) {
     contactsAudienceFilter,
     contactsChannelFilter,
     contactsFilter,
+    authenticatedFetch,
     executeAction,
     loadContactBoards,
     newBoardForm.description,
@@ -1877,7 +1981,7 @@ export function DashboardClient({ initialOverview }: Props) {
       }
 
       const removed = await executeAction(async () => {
-        const response = await fetch(`${apiUrl}/whatsapp/contacts/boards/${encodeURIComponent(boardId)}`, {
+        const response = await authenticatedFetch(`${apiUrl}/whatsapp/contacts/boards/${encodeURIComponent(boardId)}`, {
           method: 'DELETE',
         });
 
@@ -1892,7 +1996,7 @@ export function DashboardClient({ initialOverview }: Props) {
         setActiveContactsBoard(boardId);
       }
     },
-    [activeContactsBoard, customContactsBoards, executeAction],
+    [activeContactsBoard, authenticatedFetch, customContactsBoards, executeAction],
   );
 
   const createManualContact = useCallback(async () => {
@@ -1910,7 +2014,7 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     const created = await executeAction(async () => {
-      const response = await fetch(`${apiUrl}/whatsapp/contacts/manual`, {
+      const response = await authenticatedFetch(`${apiUrl}/whatsapp/contacts/manual`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1937,6 +2041,7 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [
     authUser?.email,
     authUser?.name,
+    authenticatedFetch,
     createContactStage,
     executeAction,
     loadContactKanbanStages,
@@ -1982,7 +2087,7 @@ export function DashboardClient({ initialOverview }: Props) {
           updatedBy: nextProfile.updatedBy,
         };
 
-        const response = await fetch(`${apiUrl}/whatsapp/contacts/crm`, {
+        const response = await authenticatedFetch(`${apiUrl}/whatsapp/contacts/crm`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(requestPayload),
@@ -2005,12 +2110,97 @@ export function DashboardClient({ initialOverview }: Props) {
         });
       }
     },
-    [authUser?.email, authUser?.name, contactCrmProfileMap, executeAction],
+    [authUser?.email, authUser?.name, authenticatedFetch, contactCrmProfileMap, executeAction],
   );
+
+  const submitNewUser = useCallback(async () => {
+    if (!isAdminUser) {
+      return;
+    }
+
+    const payload = {
+      name: newUserForm.name.trim(),
+      email: newUserForm.email.trim(),
+      password: newUserForm.password,
+      role: newUserForm.role,
+      isActive: true,
+    };
+
+    if (!payload.name || !payload.email || !payload.password) {
+      pushToast({
+        tone: 'error',
+        title: 'Dados do usuario incompletos',
+        description: 'Preencha nome, email e senha para criar o usuario.',
+      });
+      return;
+    }
+
+    const created = await executeAction(async () => {
+      const user = await createUser(payload);
+      setWorkspaceUsers((current) => [user, ...current.filter((item) => item.id !== user.id)]);
+      setNewUserForm({ name: '', email: '', password: '', role: 'attendant' });
+    }, { successMessage: 'Usuario criado' });
+
+    if (created) {
+      await loadWorkspaceUsers().catch(() => undefined);
+    }
+  }, [executeAction, isAdminUser, loadWorkspaceUsers, newUserForm.email, newUserForm.name, newUserForm.password, newUserForm.role, pushToast]);
+
+  const startEditingUser = useCallback((user: AuthUser) => {
+    setEditingUserId(user.id);
+    setEditingUserForm({
+      name: user.name,
+      password: '',
+      role: user.role,
+      isActive: user.isActive,
+    });
+  }, []);
+
+  const submitUserUpdate = useCallback(async () => {
+    if (!editingUserId) {
+      return;
+    }
+
+    const payload = {
+      name: editingUserForm.name.trim(),
+      password: editingUserForm.password.trim() || undefined,
+      role: editingUserForm.role,
+      isActive: editingUserForm.isActive,
+    };
+
+    if (!payload.name) {
+      pushToast({
+        tone: 'error',
+        title: 'Nome obrigatorio',
+        description: 'Defina o nome exibido do usuario antes de salvar.',
+      });
+      return;
+    }
+
+    const saved = await executeAction(async () => {
+      const user = await updateUser(editingUserId, payload);
+      setWorkspaceUsers((current) => current.map((item) => (item.id === user.id ? user : item)));
+      if (authUser?.id === user.id) {
+        setAuthUser(user);
+        window.localStorage.setItem('pulse-hub.auth-user', JSON.stringify(user));
+      }
+      setEditingUserId(null);
+      setEditingUserForm({
+        name: '',
+        password: '',
+        role: 'attendant',
+        isActive: true,
+      });
+    }, { successMessage: 'Usuario atualizado' });
+
+    if (saved) {
+      await loadWorkspaceUsers().catch(() => undefined);
+    }
+  }, [authUser?.id, editingUserForm.isActive, editingUserForm.name, editingUserForm.password, editingUserForm.role, editingUserId, executeAction, loadWorkspaceUsers, pushToast]);
 
   const createSession = () => {
     runAction(async () => {
-      const response = await fetch(`${apiUrl}/whatsapp/sessions`, {
+      const response = await authenticatedFetch(`${apiUrl}/whatsapp/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sessionForm),
@@ -2031,7 +2221,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const connectSession = (sessionId: string) => {
     runAction(async () => {
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${apiUrl}/whatsapp/sessions/${sessionId}/connect`,
         { method: 'POST' },
       );
@@ -2046,7 +2236,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const disconnectSession = (sessionId: string) => {
     runAction(async () => {
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${apiUrl}/whatsapp/sessions/${sessionId}/disconnect`,
         { method: 'POST' },
       );
@@ -2067,7 +2257,7 @@ export function DashboardClient({ initialOverview }: Props) {
     const payload = text.trim();
     const replyToMessageId = replyTargetMessage?.id;
     return executeAction(async () => {
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${apiUrl}/whatsapp/sessions/${selectedSession.id}/conversations/${selectedConversation.id}/messages`,
         {
           method: 'POST',
@@ -2089,7 +2279,7 @@ export function DashboardClient({ initialOverview }: Props) {
       }).catch(() => undefined);
       void loadOverview().catch(() => undefined);
     });
-  }, [applyOutgoingMessageUpdate, executeAction, loadMessages, loadOverview, replyTargetMessage, selectedConversation, selectedSession]);
+  }, [applyOutgoingMessageUpdate, authenticatedFetch, executeAction, loadMessages, loadOverview, replyTargetMessage, selectedConversation, selectedSession]);
 
   const sendMedia = useCallback(
     (file: File, options?: { sticker?: boolean; caption?: string }) => {
@@ -2109,7 +2299,7 @@ export function DashboardClient({ initialOverview }: Props) {
       }
 
       return executeAction(async () => {
-        const response = await fetch(
+        const response = await authenticatedFetch(
           `${apiUrl}/whatsapp/sessions/${selectedSession.id}/conversations/${selectedConversation.id}/media`,
           {
             method: 'POST',
@@ -2131,7 +2321,7 @@ export function DashboardClient({ initialOverview }: Props) {
         void loadOverview().catch(() => undefined);
       });
     },
-    [applyOutgoingMessageUpdate, executeAction, loadMessages, loadOverview, replyTargetMessage, selectedConversation, selectedSession],
+    [applyOutgoingMessageUpdate, authenticatedFetch, executeAction, loadMessages, loadOverview, replyTargetMessage, selectedConversation, selectedSession],
   );
 
   const reactToMessage = useCallback(
@@ -2141,7 +2331,7 @@ export function DashboardClient({ initialOverview }: Props) {
       }
 
       return executeAction(async () => {
-        const response = await fetch(
+        const response = await authenticatedFetch(
           `${apiUrl}/whatsapp/sessions/${selectedSession.id}/conversations/${selectedConversation.id}/reactions`,
           {
             method: 'POST',
@@ -2164,7 +2354,7 @@ export function DashboardClient({ initialOverview }: Props) {
         void loadOverview().catch(() => undefined);
       });
     },
-    [executeAction, loadMessages, loadOverview, selectedConversation, selectedSession],
+    [authenticatedFetch, executeAction, loadMessages, loadOverview, selectedConversation, selectedSession],
   );
 
   if (!isAuthReady) {
@@ -2926,213 +3116,380 @@ export function DashboardClient({ initialOverview }: Props) {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-              WhatsApp configuration
+              Workspace administration
             </p>
             <h2 className="font-headline mt-2 text-2xl font-semibold text-white">
-              Conectar e gerenciar sessoes
+              {settingsSection === 'users' ? 'Gerenciar usuarios do workspace' : 'Conectar e gerenciar sessoes'}
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              Crie uma sessao operacional, gere QR code, reconecte numeros e acompanhe o
-              estado da autenticacao sem sair do painel.
+              {settingsSection === 'users'
+                ? 'Controle acessos por role sem derrubar a sessao compartilhada do WhatsApp.'
+                : 'Crie uma sessao operacional, gere QR code, reconecte numeros e acompanhe o estado da autenticacao sem sair do painel.'}
             </p>
           </div>
-          <button
-            className="rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white"
-            onClick={() => runAction(loadOverview)}
-            type="button"
-          >
-            Refresh settings
-          </button>
-        </div>
-
-        <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="space-y-6">
-            <div className="glass-panel rounded-[30px] p-6">
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                Provision new session
-              </p>
-              <div className="mt-5 space-y-3">
-                <Field
-                  onChange={(value) =>
-                    setSessionForm((current) => ({ ...current, name: value }))
-                  }
-                  placeholder="Nome operacional"
-                  value={sessionForm.name}
-                />
-                <Field
-                  onChange={(value) =>
-                    setSessionForm((current) => ({ ...current, phoneNumber: value }))
-                  }
-                  placeholder="Numero do WhatsApp"
-                  value={sessionForm.phoneNumber}
-                />
-                <Field
-                  onChange={(value) =>
-                    setSessionForm((current) => ({ ...current, channelName: value }))
-                  }
-                  placeholder="Fila / canal"
-                  value={sessionForm.channelName}
-                />
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 rounded-full border border-white/8 bg-white/5 p-1">
+              <button
+                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'sessions' ? 'bg-[var(--primary)] text-black' : 'text-[var(--muted)] hover:text-white'}`}
+                onClick={() => setSettingsSection('sessions')}
+                type="button"
+              >
+                Sessions
+              </button>
+              {isAdminUser ? (
                 <button
-                  className="w-full rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
-                  onClick={createSession}
+                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'users' ? 'bg-[var(--secondary)] text-black' : 'text-[var(--muted)] hover:text-white'}`}
+                  onClick={() => setSettingsSection('users')}
                   type="button"
                 >
-                  Criar sessao
+                  Users
                 </button>
-              </div>
+              ) : null}
             </div>
-
-            <div className="glass-panel rounded-[30px] p-6">
-              <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                Session stack
-              </p>
-              <div className="mt-5 space-y-3">
-                {shouldShowInitialSkeleton ? (
-                  <StackSkeleton rows={3} />
-                ) : overview.sessions.length > 0 ? (
-                  overview.sessions.map((session) => {
-                    const active = session.id === selectedSession?.id;
-
-                    return (
-                      <button
-                        key={session.id}
-                        className={`flex w-full items-center justify-between rounded-[24px] border px-4 py-4 text-left transition ${
-                          active
-                            ? 'border-[var(--primary)]/30 bg-[var(--primary)]/10'
-                            : 'border-white/6 bg-white/4 hover:bg-white/6'
-                        }`}
-                        onClick={() => setSelectedSessionId(session.id)}
-                        type="button"
-                      >
-                        <div>
-                          <p className="text-base font-semibold text-white">{session.name}</p>
-                          <p className="mt-1 text-sm text-[var(--muted)]">
-                            {session.phoneNumber} · {session.channelName}
-                          </p>
-                        </div>
-                        <span className={`rounded-full px-3 py-1 text-xs ${statusTone[session.status]}`}>
-                          {statusLabel[session.status]}
-                        </span>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <EmptyStateCard
-                    description="Preencha os dados acima para provisionar o primeiro numero operacional deste workspace."
-                    title="Nenhuma sessao criada ainda"
-                  />
-                )}
-              </div>
-            </div>
+            <button
+              className="rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white"
+              onClick={() => runAction(settingsSection === 'users' ? loadWorkspaceUsers : loadOverview)}
+              type="button"
+            >
+              Refresh {settingsSection}
+            </button>
           </div>
+        </div>
 
-          <div className="space-y-6">
-            {selectedSession ? (
-              <>
+        {settingsSection === 'users' ? (
+          isAdminUser ? (
+            <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+              <div className="space-y-6">
                 <div className="glass-panel rounded-[30px] p-6">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                        Session control
-                      </p>
-                      <h3 className="font-headline mt-3 text-3xl font-semibold text-white">
-                        {selectedSession.name}
-                      </h3>
-                      <p className="mt-2 text-sm text-[var(--muted)]">
-                        {selectedSession.phoneNumber} · {selectedSession.channelName}
-                      </p>
-                    </div>
-                    <span className={`rounded-full px-3 py-1 text-xs ${statusTone[selectedSession.status]}`}>
-                      {statusLabel[selectedSession.status]}
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                    Create user
+                  </p>
+                  <div className="mt-5 space-y-3">
+                    <Field
+                      onChange={(value) => setNewUserForm((current) => ({ ...current, name: value }))}
+                      placeholder="Nome exibido"
+                      value={newUserForm.name}
+                    />
+                    <Field
+                      onChange={(value) => setNewUserForm((current) => ({ ...current, email: value }))}
+                      placeholder="Email de acesso"
+                      value={newUserForm.email}
+                    />
+                    <Field
+                      onChange={(value) => setNewUserForm((current) => ({ ...current, password: value }))}
+                      placeholder="Senha inicial"
+                      type="password"
+                      value={newUserForm.password}
+                    />
+                    <select
+                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none"
+                      onChange={(event) => setNewUserForm((current) => ({ ...current, role: event.target.value as AuthUser['role'] }))}
+                      value={newUserForm.role}
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="supervisor">Supervisor</option>
+                      <option value="attendant">Attendant</option>
+                    </select>
+                    <button
+                      className="w-full rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
+                      onClick={() => void submitNewUser()}
+                      type="button"
+                    >
+                      Criar usuario
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="glass-panel rounded-[30px] p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                      Workspace users
+                    </p>
+                    <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
+                      {workspaceUsers.length} usuarios
                     </span>
                   </div>
 
-                  <div className="mt-6 grid gap-4 md:grid-cols-3">
-                    <MetricCard
-                      label="Unread"
-                      value={selectedSession.unread}
-                      detail="Mensagens pendentes"
-                      tone="primary"
-                      compact
-                    />
-                    <MetricCard
-                      label="Waiting"
-                      value={selectedSession.waiting}
-                      detail="Conversas na fila"
-                      tone="tertiary"
-                      compact
-                    />
-                    <MetricCard
-                      label="Attendants"
-                      value={selectedSession.attendants}
-                      detail="Atendentes vinculados"
-                      tone="secondary"
-                      compact
-                    />
-                  </div>
-
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    <button
-                      className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
-                      onClick={() => connectSession(selectedSession.id)}
-                      type="button"
-                    >
-                      <QrCode className="h-4 w-4" strokeWidth={2.1} />
-                      Gerar QR / conectar
-                    </button>
-                    <button
-                      className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
-                      onClick={() => disconnectSession(selectedSession.id)}
-                      type="button"
-                    >
-                      <Wifi className="h-4 w-4" strokeWidth={2.1} />
-                      Desconectar
-                    </button>
-                  </div>
-
-                  {selectedSession.lastError ? (
-                    <div className="mt-6 rounded-[24px] border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-                      {selectedSession.lastError}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="glass-panel rounded-[30px] p-6">
-                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                    QR authentication
-                  </p>
-                  <div className="mt-5 flex min-h-[320px] items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-black/20 p-6">
-                    {selectedSession.qrCodeDataUrl ? (
-                      <div className="rounded-[28px] bg-white p-4">
-                        <Image
-                          alt={`QR code da sessao ${selectedSession.name}`}
-                          className="mx-auto rounded-[20px]"
-                          height={260}
-                          src={selectedSession.qrCodeDataUrl}
-                          unoptimized
-                          width={260}
-                        />
-                      </div>
-                    ) : (
+                  <div className="mt-5 space-y-3">
+                    {isLoadingUsers ? <StackSkeleton rows={4} /> : null}
+                    {!isLoadingUsers && workspaceUsers.length === 0 ? (
                       <EmptyStateCard
-                        actionLabel="Gerar QR / conectar"
-                        description="Gere um novo QR para autenticar esta sessao. Se ja houver login persistido, a conexao pode voltar sem novo codigo."
-                        onAction={() => connectSession(selectedSession.id)}
-                        title="QR aguardando conexao"
+                        description="O primeiro administrador ja pode criar supervisores e atendentes aqui."
+                        title="Nenhum usuario adicional ainda"
                       />
-                    )}
+                    ) : null}
+
+                    {!isLoadingUsers ? workspaceUsers.map((user) => {
+                      const editing = editingUserId === user.id;
+
+                      return (
+                        <div key={user.id} className="rounded-[24px] border border-white/8 bg-white/4 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="text-base font-semibold text-white">{user.name}</p>
+                              <p className="mt-1 text-sm text-[var(--muted)]">{user.email}</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${user.isActive ? 'bg-[var(--secondary)]/14 text-[var(--secondary)]' : 'bg-rose-500/14 text-rose-300'}`}>
+                                {user.isActive ? 'ativo' : 'inativo'}
+                              </span>
+                              <span className="rounded-full bg-[var(--primary)]/12 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--primary)]">
+                                {formatRoleLabel(user.role)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <p className="mt-3 text-xs text-[var(--muted)]">
+                            Ultimo login: {user.lastLoginAt ? formatTimestamp(user.lastLoginAt) : 'ainda sem login'}
+                          </p>
+
+                          {editing ? (
+                            <div className="mt-4 space-y-3">
+                              <Field
+                                onChange={(value) => setEditingUserForm((current) => ({ ...current, name: value }))}
+                                placeholder="Nome"
+                                value={editingUserForm.name}
+                              />
+                              <Field
+                                onChange={(value) => setEditingUserForm((current) => ({ ...current, password: value }))}
+                                placeholder="Nova senha (opcional)"
+                                type="password"
+                                value={editingUserForm.password}
+                              />
+                              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                                <select
+                                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none"
+                                  onChange={(event) => setEditingUserForm((current) => ({ ...current, role: event.target.value as AuthUser['role'] }))}
+                                  value={editingUserForm.role}
+                                >
+                                  <option value="admin">Admin</option>
+                                  <option value="supervisor">Supervisor</option>
+                                  <option value="attendant">Attendant</option>
+                                </select>
+                                <label className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
+                                  <input
+                                    checked={editingUserForm.isActive}
+                                    onChange={(event) => setEditingUserForm((current) => ({ ...current, isActive: event.target.checked }))}
+                                    type="checkbox"
+                                  />
+                                  Ativo
+                                </label>
+                              </div>
+                              <div className="flex flex-wrap gap-3">
+                                <button
+                                  className="rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
+                                  onClick={() => void submitUserUpdate()}
+                                  type="button"
+                                >
+                                  Salvar usuario
+                                </button>
+                                <button
+                                  className="rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
+                                  onClick={() => setEditingUserId(null)}
+                                  type="button"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-4 flex flex-wrap gap-3">
+                              <button
+                                className="rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
+                                onClick={() => startEditingUser(user)}
+                                type="button"
+                              >
+                                Editar usuario
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }) : null}
                   </div>
                 </div>
-              </>
-            ) : (
-              <EmptyStateCard
-                description="Escolha uma sessao existente ou crie uma nova para abrir os controles, gerar QR e acompanhar a autenticacao."
-                title="Selecione uma sessao para continuar"
-              />
-            )}
+              </div>
+            </div>
+          ) : (
+            <EmptyStateCard
+              description="Apenas administradores podem gerenciar usuarios do workspace."
+              title="Acesso restrito"
+            />
+          )
+        ) : (
+          <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+            <div className="space-y-6">
+              <div className="glass-panel rounded-[30px] p-6">
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                  Provision new session
+                </p>
+                <div className="mt-5 space-y-3">
+                  <Field
+                    onChange={(value) =>
+                      setSessionForm((current) => ({ ...current, name: value }))
+                    }
+                    placeholder="Nome operacional"
+                    value={sessionForm.name}
+                  />
+                  <Field
+                    onChange={(value) =>
+                      setSessionForm((current) => ({ ...current, phoneNumber: value }))
+                    }
+                    placeholder="Numero do WhatsApp"
+                    value={sessionForm.phoneNumber}
+                  />
+                  <Field
+                    onChange={(value) =>
+                      setSessionForm((current) => ({ ...current, channelName: value }))
+                    }
+                    placeholder="Fila / canal"
+                    value={sessionForm.channelName}
+                  />
+                  <button
+                    className="w-full rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
+                    onClick={createSession}
+                    type="button"
+                  >
+                    Criar sessao
+                  </button>
+                </div>
+              </div>
+
+              <div className="glass-panel rounded-[30px] p-6">
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                  Session stack
+                </p>
+                <div className="mt-5 space-y-3">
+                  {shouldShowInitialSkeleton ? (
+                    <StackSkeleton rows={3} />
+                  ) : overview.sessions.length > 0 ? (
+                    overview.sessions.map((session) => {
+                      const active = session.id === selectedSession?.id;
+
+                      return (
+                        <button
+                          key={session.id}
+                          className={`flex w-full items-center justify-between rounded-[24px] border px-4 py-4 text-left transition ${
+                            active
+                              ? 'border-[var(--primary)]/30 bg-[var(--primary)]/10'
+                              : 'border-white/6 bg-white/4 hover:bg-white/6'
+                          }`}
+                          onClick={() => setSelectedSessionId(session.id)}
+                          type="button"
+                        >
+                          <div>
+                            <p className="text-base font-semibold text-white">{session.name}</p>
+                            <p className="mt-1 text-sm text-[var(--muted)]">
+                              {session.phoneNumber} · {session.channelName}
+                            </p>
+                          </div>
+                          <span className={`rounded-full px-3 py-1 text-xs ${statusTone[session.status]}`}>
+                            {statusLabel[session.status]}
+                          </span>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <EmptyStateCard
+                      description="Preencha os dados acima para provisionar o primeiro numero operacional deste workspace."
+                      title="Nenhuma sessao criada ainda"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {selectedSession ? (
+                <>
+                  <div className="glass-panel rounded-[30px] p-6">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                          Session control
+                        </p>
+                        <h3 className="font-headline mt-3 text-3xl font-semibold text-white">
+                          {selectedSession.name}
+                        </h3>
+                        <p className="mt-2 text-sm text-[var(--muted)]">
+                          {selectedSession.phoneNumber} · {selectedSession.channelName}
+                        </p>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-xs ${statusTone[selectedSession.status]}`}>
+                        {statusLabel[selectedSession.status]}
+                      </span>
+                    </div>
+
+                    <div className="mt-6 grid gap-4 md:grid-cols-3">
+                      <MetricCard label="Unread" value={selectedSession.unread} detail="Mensagens pendentes" tone="primary" compact />
+                      <MetricCard label="Waiting" value={selectedSession.waiting} detail="Conversas na fila" tone="tertiary" compact />
+                      <MetricCard label="Attendants" value={selectedSession.attendants} detail="Atendentes vinculados" tone="secondary" compact />
+                    </div>
+
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      <button
+                        className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
+                        onClick={() => connectSession(selectedSession.id)}
+                        type="button"
+                      >
+                        <QrCode className="h-4 w-4" strokeWidth={2.1} />
+                        Gerar QR / conectar
+                      </button>
+                      <button
+                        className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
+                        onClick={() => disconnectSession(selectedSession.id)}
+                        type="button"
+                      >
+                        <Wifi className="h-4 w-4" strokeWidth={2.1} />
+                        Desconectar
+                      </button>
+                    </div>
+
+                    {selectedSession.lastError ? (
+                      <div className="mt-6 rounded-[24px] border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                        {selectedSession.lastError}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="glass-panel rounded-[30px] p-6">
+                    <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                      QR authentication
+                    </p>
+                    <div className="mt-5 flex min-h-[320px] items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-black/20 p-6">
+                      {selectedSession.qrCodeDataUrl ? (
+                        <div className="rounded-[28px] bg-white p-4">
+                          <Image
+                            alt={`QR code da sessao ${selectedSession.name}`}
+                            className="mx-auto rounded-[20px]"
+                            height={260}
+                            src={selectedSession.qrCodeDataUrl}
+                            unoptimized
+                            width={260}
+                          />
+                        </div>
+                      ) : (
+                        <EmptyStateCard
+                          actionLabel="Gerar QR / conectar"
+                          description="Gere um novo QR para autenticar esta sessao. Se ja houver login persistido, a conexao pode voltar sem novo codigo."
+                          onAction={() => connectSession(selectedSession.id)}
+                          title="QR aguardando conexao"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <EmptyStateCard
+                  description="Escolha uma sessao existente ou crie uma nova para abrir os controles, gerar QR e acompanhar a autenticacao."
+                  title="Selecione uma sessao para continuar"
+                />
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </section>
   );
@@ -5482,16 +5839,19 @@ function Field({
   value,
   placeholder,
   onChange,
+  type = 'text',
 }: {
   value: string;
   placeholder: string;
   onChange: (value: string) => void;
+  type?: 'text' | 'password';
 }) {
   return (
     <input
       className="w-full rounded-2xl border-0 border-b-2 border-transparent bg-[var(--surface-high)] px-4 py-3 text-sm text-white outline-none transition focus:border-[var(--primary)]"
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
+      type={type}
       value={value}
     />
   );
@@ -5545,6 +5905,32 @@ function formatClock(timestamp: string) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function formatTimestamp(timestamp: string) {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return '--';
+  }
+
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatRoleLabel(role: AuthUser['role']) {
+  switch (role) {
+    case 'admin':
+      return 'Admin';
+    case 'supervisor':
+      return 'Supervisor';
+    default:
+      return 'Attendant';
+  }
 }
 
 function formatDateLabel(timestamp: string) {
@@ -5853,16 +6239,6 @@ function resolveApiAsset(src?: string | null) {
     return `${apiUrl}${src}`;
   }
   return src;
-}
-
-function getWebSocketUrl(baseUrl: string) {
-  if (baseUrl.startsWith('https://')) {
-    return `wss://${baseUrl.slice('https://'.length)}`;
-  }
-  if (baseUrl.startsWith('http://')) {
-    return `ws://${baseUrl.slice('http://'.length)}`;
-  }
-  return baseUrl;
 }
 
 function sanitizeOverview(overview: DashboardOverview): DashboardOverview {

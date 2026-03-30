@@ -20,6 +20,7 @@ import (
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	waProto "google.golang.org/protobuf/encoding/protojson"
 
+	appauth "pulsehub/wa-core/internal/auth"
 	"pulsehub/wa-core/internal/models"
 	appstore "pulsehub/wa-core/internal/store"
 	"pulsehub/wa-core/internal/whatsapp"
@@ -57,41 +58,51 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 	r.Use(api.cors)
 
 	r.Get("/health", api.handleHealth)
-	r.Post("/session/init", api.handleSessionInit)
-	r.Get("/session/qr", api.handleSessionQR)
-	r.Get("/session/status", api.handleSessionStatus)
-	r.Get("/contacts", api.handleContacts)
-	r.Get("/contacts/{jid}/photo", api.handleContactPhoto)
-	r.Get("/chats", api.handleChats)
-	r.Get("/chats/{jid}/messages", api.handleChatMessages)
-	r.Post("/messages/text", api.handleSendText)
-	r.Post("/messages/media", api.handleSendMedia)
-	r.Get("/messages/{id}/media", api.handleMessageMedia)
-	r.Get("/ws", api.handleWebSocket)
-
 	r.Post("/auth/sign-in", api.handleSignIn)
-	r.Get("/dashboard/overview", api.handleDashboardOverview)
-	r.Route("/whatsapp", func(r chi.Router) {
-		r.Get("/contacts/boards", api.handleListContactKanbanBoards)
-		r.Post("/contacts/boards", api.handleCreateContactKanbanBoard)
-		r.Delete("/contacts/boards/{id}", api.handleDeleteContactKanbanBoard)
-		r.Get("/contacts/crm", api.handleListContactCRMProfiles)
-		r.Put("/contacts/crm", api.handleUpdateContactCRMProfile)
-		r.Get("/contacts/kanban", api.handleListContactKanbanStages)
-		r.Post("/contacts/manual", api.handleCreateManualContact)
-		r.Put("/contacts/kanban", api.handleUpdateContactKanbanStage)
-		r.Get("/sessions", api.handleListSessions)
-		r.Post("/sessions", api.handleCreateSession)
-		r.Post("/sessions/{id}/connect", api.handleConnectSession)
-		r.Post("/sessions/{id}/disconnect", api.handleDisconnectSession)
-		r.Get("/sessions/{id}/qr", api.handleSessionQRCompat)
-		r.Get("/sessions/{id}/conversations", api.handleConversations)
-		r.Get("/sessions/{id}/conversations/{jid}/messages", api.handleConversationMessages)
-		r.Post("/sessions/{id}/conversations/{jid}/messages", api.handleConversationSend)
-		r.Post("/sessions/{id}/conversations/{jid}/media", api.handleConversationSendMedia)
-		r.Post("/sessions/{id}/conversations/{jid}/reactions", api.handleConversationReaction)
-		r.Post("/sessions/{id}/conversations/{jid}/read", api.handleConversationRead)
-		r.Get("/sessions/{id}/stream", api.handleSessionStream)
+
+	r.Group(func(r chi.Router) {
+		r.Use(api.requireAuth)
+
+		r.Get("/auth/me", api.handleMe)
+		r.Post("/auth/sign-out", api.handleSignOut)
+		r.Get("/auth/users", api.handleListUsers)
+		r.Post("/auth/users", api.handleCreateUser)
+		r.Put("/auth/users/{id}", api.handleUpdateUser)
+
+		r.Post("/session/init", api.handleSessionInit)
+		r.Get("/session/qr", api.handleSessionQR)
+		r.Get("/session/status", api.handleSessionStatus)
+		r.Get("/contacts", api.handleContacts)
+		r.Get("/contacts/{jid}/photo", api.handleContactPhoto)
+		r.Get("/chats", api.handleChats)
+		r.Get("/chats/{jid}/messages", api.handleChatMessages)
+		r.Post("/messages/text", api.handleSendText)
+		r.Post("/messages/media", api.handleSendMedia)
+		r.Get("/messages/{id}/media", api.handleMessageMedia)
+		r.Get("/ws", api.handleWebSocket)
+		r.Get("/dashboard/overview", api.handleDashboardOverview)
+		r.Route("/whatsapp", func(r chi.Router) {
+			r.Get("/contacts/boards", api.handleListContactKanbanBoards)
+			r.Post("/contacts/boards", api.handleCreateContactKanbanBoard)
+			r.Delete("/contacts/boards/{id}", api.handleDeleteContactKanbanBoard)
+			r.Get("/contacts/crm", api.handleListContactCRMProfiles)
+			r.Put("/contacts/crm", api.handleUpdateContactCRMProfile)
+			r.Get("/contacts/kanban", api.handleListContactKanbanStages)
+			r.Post("/contacts/manual", api.handleCreateManualContact)
+			r.Put("/contacts/kanban", api.handleUpdateContactKanbanStage)
+			r.Get("/sessions", api.handleListSessions)
+			r.Post("/sessions", api.handleCreateSession)
+			r.Post("/sessions/{id}/connect", api.handleConnectSession)
+			r.Post("/sessions/{id}/disconnect", api.handleDisconnectSession)
+			r.Get("/sessions/{id}/qr", api.handleSessionQRCompat)
+			r.Get("/sessions/{id}/conversations", api.handleConversations)
+			r.Get("/sessions/{id}/conversations/{jid}/messages", api.handleConversationMessages)
+			r.Post("/sessions/{id}/conversations/{jid}/messages", api.handleConversationSend)
+			r.Post("/sessions/{id}/conversations/{jid}/media", api.handleConversationSendMedia)
+			r.Post("/sessions/{id}/conversations/{jid}/reactions", api.handleConversationReaction)
+			r.Post("/sessions/{id}/conversations/{jid}/read", api.handleConversationRead)
+			r.Get("/sessions/{id}/stream", api.handleSessionStream)
+		})
 	})
 
 	return r
@@ -275,24 +286,46 @@ func (a *API) handleSignIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if strings.TrimSpace(request.Email) != a.auth.Email || request.Password != a.auth.Password {
+	user, passwordHash, err := a.store.GetAuthUserByEmail(r.Context(), request.Email)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if user == nil || !user.IsActive || appauth.ComparePassword(passwordHash, request.Password) != nil {
 		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Credenciais invalidas."})
 		return
 	}
 
 	now := models.NowString()
+	if err := a.store.SetAuthUserLastLogin(r.Context(), user.ID, now); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	user.LastLoginAt = now
+	user.UpdatedAt = now
+
+	token, err := appauth.GenerateToken()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if err := a.store.SaveAuthSession(r.Context(), models.AuthSession{
+		UserID:     user.ID,
+		TokenHash:  appauth.HashToken(token),
+		CreatedAt:  now,
+		LastSeenAt: now,
+		UpdatedAt:  now,
+		ExpiresAt:  time.Now().UTC().Add(authSessionDuration).Format(time.RFC3339),
+		UserAgent:  strings.TrimSpace(r.UserAgent()),
+		RemoteAddr: strings.TrimSpace(r.RemoteAddr),
+	}); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	response := models.SignInResponse{
-		User: models.AuthUser{
-			ID:          "local-admin",
-			Email:       a.auth.Email,
-			Name:        a.auth.Name,
-			Role:        a.auth.Role,
-			IsActive:    true,
-			LastLoginAt: now,
-			CreatedAt:   now,
-			UpdatedAt:   now,
-		},
-		Token: "wa-core-local-token",
+		User:  *user,
+		Token: token,
 	}
 
 	respondJSON(w, http.StatusOK, response)
@@ -932,14 +965,16 @@ func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOver
 
 	connectedNumbers := 0
 	activeSessions := 0
-	onlineUsers := 0
+	onlineUsers, err := a.store.CountActiveAuthSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
 	waitingConversations := 0
 	for _, session := range sessions {
 		connectedNumbers++
 		if session.Status == models.SessionStatusActive {
 			activeSessions++
 		}
-		onlineUsers += session.Attendants
 		waitingConversations += session.Waiting
 	}
 
@@ -1221,7 +1256,11 @@ func (a *API) sessionToCompat(ctx context.Context, session *models.Session) (mod
 
 	attendants := 0
 	if session.Status == models.SessionStatusActive {
-		attendants = 1
+		count, err := a.store.CountActiveAuthSessions(ctx)
+		if err != nil {
+			return models.SessionRecord{}, err
+		}
+		attendants = count
 	}
 
 	return models.SessionRecord{

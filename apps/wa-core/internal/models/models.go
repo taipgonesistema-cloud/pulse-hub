@@ -6,6 +6,8 @@ const DefaultSessionID = "default"
 
 type SessionStatus string
 
+type AuthRole string
+
 const (
 	SessionStatusIdle         SessionStatus = "idle"
 	SessionStatusInitializing SessionStatus = "initializing"
@@ -14,6 +16,10 @@ const (
 	SessionStatusActive       SessionStatus = "active"
 	SessionStatusDisconnected SessionStatus = "disconnected"
 	SessionStatusError        SessionStatus = "error"
+
+	AuthRoleAdmin      AuthRole = "admin"
+	AuthRoleSupervisor AuthRole = "supervisor"
+	AuthRoleAttendant  AuthRole = "attendant"
 )
 
 type Session struct {
@@ -144,14 +150,27 @@ type RealtimeEvent struct {
 }
 
 type AuthUser struct {
-	ID          string `json:"id"`
-	Email       string `json:"email"`
-	Name        string `json:"name"`
-	Role        string `json:"role"`
-	IsActive    bool   `json:"isActive"`
-	LastLoginAt string `json:"lastLoginAt,omitempty"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID          string   `json:"id"`
+	Email       string   `json:"email"`
+	Name        string   `json:"name"`
+	Role        AuthRole `json:"role"`
+	IsActive    bool     `json:"isActive"`
+	LastLoginAt string   `json:"lastLoginAt,omitempty"`
+	CreatedAt   string   `json:"createdAt"`
+	UpdatedAt   string   `json:"updatedAt"`
+}
+
+type AuthSession struct {
+	ID         string `json:"id"`
+	UserID     string `json:"userId"`
+	TokenHash  string `json:"-"`
+	CreatedAt  string `json:"createdAt"`
+	LastSeenAt string `json:"lastSeenAt"`
+	ExpiresAt  string `json:"expiresAt"`
+	RevokedAt  string `json:"revokedAt,omitempty"`
+	UserAgent  string `json:"userAgent,omitempty"`
+	RemoteAddr string `json:"remoteAddr,omitempty"`
+	UpdatedAt  string `json:"updatedAt"`
 }
 
 type SignInRequest struct {
@@ -162,6 +181,21 @@ type SignInRequest struct {
 type SignInResponse struct {
 	User  AuthUser `json:"user"`
 	Token string   `json:"token"`
+}
+
+type CreateUserRequest struct {
+	Email    string   `json:"email"`
+	Name     string   `json:"name"`
+	Password string   `json:"password"`
+	Role     AuthRole `json:"role"`
+	IsActive *bool    `json:"isActive,omitempty"`
+}
+
+type UpdateUserRequest struct {
+	Name     string   `json:"name"`
+	Password string   `json:"password,omitempty"`
+	Role     AuthRole `json:"role"`
+	IsActive *bool    `json:"isActive,omitempty"`
 }
 
 type ChannelRecord struct {

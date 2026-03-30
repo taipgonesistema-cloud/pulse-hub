@@ -124,7 +124,22 @@ export type SignInResponse = {
   token: string;
 };
 
-const fallbackOverview: DashboardOverview = {
+export type CreateUserPayload = {
+  email: string;
+  name: string;
+  password: string;
+  role: AuthUser['role'];
+  isActive?: boolean;
+};
+
+export type UpdateUserPayload = {
+  name: string;
+  password?: string;
+  role: AuthUser['role'];
+  isActive?: boolean;
+};
+
+export const fallbackOverview: DashboardOverview = {
   product: 'Pulse Hub',
   phase: 'whatsapp-core',
   metrics: {
@@ -154,7 +169,82 @@ const fallbackOverview: DashboardOverview = {
   conversations: [],
 };
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333';
+export const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333';
+
+export const authTokenStorageKey = 'pulse-hub.auth-token';
+export const authUserStorageKey = 'pulse-hub.auth-user';
+
+export function getStoredAuthToken() {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  return window.localStorage.getItem(authTokenStorageKey) ?? '';
+}
+
+export function getStoredAuthUser() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const rawUser = window.localStorage.getItem(authUserStorageKey);
+  if (!rawUser) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawUser) as AuthUser;
+  } catch {
+    return null;
+  }
+}
+
+export function persistAuthSession(result: SignInResponse) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(authTokenStorageKey, result.token);
+  window.localStorage.setItem(authUserStorageKey, JSON.stringify(result.user));
+}
+
+export function clearStoredAuthSession() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.removeItem(authTokenStorageKey);
+  window.localStorage.removeItem(authUserStorageKey);
+}
+
+export async function authFetch(input: string, init?: RequestInit) {
+  const token = getStoredAuthToken();
+  const headers = new Headers(init?.headers ?? undefined);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  return fetch(input, {
+    ...init,
+    headers,
+  });
+}
+
+export function buildAuthenticatedWebSocketUrl(baseUrl: string) {
+  const token = getStoredAuthToken();
+  const url = new URL(baseUrl);
+  if (token) {
+    url.searchParams.set('token', token);
+  }
+
+  if (url.protocol === 'https:') {
+    url.protocol = 'wss:';
+  } else if (url.protocol === 'http:') {
+    url.protocol = 'ws:';
+  }
+
+  return url.toString();
+}
 
 export async function getDashboardOverview() {
   try {
@@ -193,4 +283,72 @@ export async function signIn(payload: SignInPayload) {
   }
 
   return (await response.json()) as SignInResponse;
+}
+
+export async function getCurrentUser() {
+  const response = await authFetch(`${apiUrl}/auth/me`, {
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error('Falha ao validar sessao atual.');
+  }
+
+  return (await response.json()) as AuthUser;
+}
+
+export async function signOutRequest() {
+  const response = await authFetch(`${apiUrl}/auth/sign-out`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    throw new Error('Falha ao encerrar a sessao atual.');
+  }
+}
+
+export async function listUsers() {
+  const response = await authFetch(`${apiUrl}/auth/users`, {
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error('Falha ao carregar usuarios.');
+  }
+
+  return (await response.json()) as AuthUser[];
+}
+
+export async function createUser(payload: CreateUserPayload) {
+  const response = await authFetch(`${apiUrl}/auth/users`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(errorPayload?.message ?? 'Falha ao criar usuario.');
+  }
+
+  return (await response.json()) as AuthUser;
+}
+
+export async function updateUser(userId: string, payload: UpdateUserPayload) {
+  const response = await authFetch(`${apiUrl}/auth/users/${encodeURIComponent(userId)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(errorPayload?.message ?? 'Falha ao atualizar usuario.');
+  }
+
+  return (await response.json()) as AuthUser;
 }

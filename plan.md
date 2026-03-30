@@ -1,103 +1,157 @@
-# UX Improvement Plan
+# Product Implementation Plan
 
-## Objective
+## Current Direction
 
-Improve the dashboard UX so it feels faster, clearer, lighter, and closer to modern operational products like WhatsApp Web, Umbler Talk, and Olist.
+Build Pulse Hub as a shared multi-user WhatsApp operations workspace.
 
-## Phase 1 - Quick Wins
+The WhatsApp connection in `apps/wa-core` stays shared and persistent.
+User login to the dashboard must be independent from the WhatsApp session, so multiple people can access the same workspace at the same time without disconnecting each other.
 
-### Navigation
+## Confirmed Product Rules
 
-- reduce click friction between `Dashboard`, `Conversations`, `Contacts`, and `Analytics`
-- make active, hover, and transition states clearer
-- add keyboard shortcuts for:
-  - opening search
-  - moving between chats
-  - sending messages
+- keep the backend on `apps/wa-core`
+- keep the frontend on `apps/web`
+- keep using `whatsmeow` directly
+- keep PostgreSQL + Redis
+- allow multiple dashboard users on the same active WhatsApp session
+- v1 access control uses roles only
+- do not add per-user limits yet
 
-### Conversations
+## Already Delivered
 
-- prefetch the next likely conversation on hover and keyboard navigation
-- keep scroll state more stable when switching chats
-- highlight unread messages more clearly
-- add a "new messages" separator in timeline
-- improve composer with:
-  - attachment preview
-  - drag-and-drop
-  - sending/upload states
+### Core Messaging
 
-### Visual Feedback
+- shared WhatsApp session management
+- QR login and reconnect flow
+- conversation timeline
+- media and sticker sending
+- reply to message
+- react to message
+- smoother unread handling for active conversations
+- lighter refresh and websocket behavior
 
-- standardize skeletons and loading states across all views
-- improve empty states so they explain what to do next
-- add subtle toast feedback for:
-  - success
-  - error
-  - reconnect/sync events
+### CRM / Contacts
 
-## Phase 2 - Perceived Performance
+- Kanban contacts workspace
+- shared Kanban stage persistence
+- shared custom boards
+- inline CRM editing
+- websocket sync for CRM and Kanban updates
 
-### Realtime
+### Analytics
 
-- make new chats and messages enter without layout jumps
-- add soft insertion animations for new items
-- improve sync/activity badges so realtime state is obvious
+- real response-time analytics
+- business-hours filtering
+- hardened frontend fallbacks for analytics payloads
 
-### Performance Perception
+## Main Goal Now
 
-- prefetch likely data paths ahead of user actions
-- keep transitions short and intentional
-- reduce full-page rerenders
-- isolate heavy sections into smaller components
-- virtualize:
-  - conversation list if it grows large
-  - message timeline if it grows large
+Introduce real multi-user dashboard authentication and user management without breaking the shared WhatsApp workspace.
 
-## Phase 3 - Information Quality
+## Phase 1 - Real Auth Foundation
 
-### Contacts / CRM
+### Backend
 
-- persist filters between navigations
-- make search faster and more tolerant
-- improve discoverability of contextual actions
-- make the side profile panel more useful and less decorative
+- add `app_user` table
+- add `app_user_session` table
+- hash passwords instead of using env-only credentials
+- keep env seed only for bootstrapping the first admin user
+- create real sign-in, sign-out, and `me` endpoints
+- allow multiple active login sessions per user
 
-### Density and Legibility
+### Frontend
 
-- calm down typography hierarchy
-- reduce chip/badge noise
-- keep primary information visible before secondary details
-- increase whitespace between major blocks
+- stop relying on fake local-only auth state
+- centralize authenticated API calls
+- attach auth token to API and websocket requests
+- make dashboard bootstrap work with authenticated user state
 
-## Phase 4 - Design System Consistency
+## Phase 2 - Role-Based Access
 
-### Visual Consistency
+### Roles for v1
 
-- define a single standard for:
-  - cards
-  - tables
-  - buttons
-  - modals
-  - pills
-  - loading states
-- align the dashboard visual language more closely with the provided reference
-- keep the interface more open and less "zoomed"
+- `admin`
+- `supervisor`
+- `attendant`
 
-## Suggested Implementation Order
+### Role Behavior
 
-1. navigation states and keyboard shortcuts
-2. conversation switching UX and message timeline polish
-3. loading/skeleton/toast standardization
-4. contacts CRM persistence and action clarity
-5. rerender reduction and prefetching
-6. virtualization where needed
-7. visual consistency pass across all pages
+- `admin` manages users, sessions, workspace settings, CRM, analytics, and messaging actions
+- `supervisor` manages operations and sessions but not user administration
+- `attendant` handles inbox, replies, reactions, and CRM work but not user management or sensitive settings
+
+### Enforcement
+
+- enforce roles in backend endpoints, not only in UI
+- hide or disable UI sections the current user cannot access
+- protect websocket-connected actions the same way as HTTP actions
+
+## Phase 3 - User Management UI
+
+### Settings Expansion
+
+- add a `Users` management area inside `Settings`
+- list users with:
+  - name
+  - email
+  - role
+  - active status
+  - last login
+  - current session activity
+
+### User Actions
+
+- create user
+- edit user profile
+- change role
+- activate or deactivate user
+- reset or replace password
+- revoke active login sessions if needed
+
+## Phase 4 - Shared Workspace Hardening
+
+- ensure multiple logged-in operators can stay in the same workspace safely
+- keep the WhatsApp session connected even if one dashboard user logs out
+- preserve realtime sync across users for conversations, CRM, Kanban, replies, and reactions
+- avoid coupling dashboard auth lifecycle to WhatsApp connection lifecycle
+
+## Phase 5 - Post-Auth UX Polish
+
+- refine settings IA after adding user management
+- improve session status visibility for supervisors/admins
+- add clearer activity/audit feedback for user changes
+- continue reducing heavy rerenders in large conversation/contact datasets
+- add virtualization where needed for long lists
+
+## Explicitly Deferred
+
+Do not implement these yet:
+
+- per-user limits
+- per-user quotas
+- session assignment caps
+- rate limits by operator
+- channel restrictions by operator
+- schedule-based permissions
+- custom permission matrices beyond role-based v1
+
+These can be added later after roles are stable.
+
+## Recommended Implementation Order
+
+1. add database schema for users and login sessions
+2. replace env-only fake auth with real auth endpoints
+3. add auth middleware and role checks in backend
+4. migrate frontend to authenticated dashboard bootstrap
+5. add `Users` management inside `Settings`
+6. gate UI and actions by role
+7. polish multi-user UX and audit visibility
 
 ## Success Criteria
 
-- switching views feels immediate and intentional
-- switching chats does not feel frozen
-- new messages/chats appear smoothly in realtime
-- user always understands whether something is loading, sending, or failed
-- dashboard feels visually lighter and more open
-- high-density pages remain readable with large data volumes
+- multiple people can log into the same dashboard workspace simultaneously
+- no user login disconnects the shared WhatsApp session
+- roles reliably restrict access in both backend and frontend
+- admins can manage users without leaving the dashboard
+- supervisors and attendants only see actions they are allowed to use
+- existing messaging, CRM, Kanban, and analytics flows remain stable during the auth migration

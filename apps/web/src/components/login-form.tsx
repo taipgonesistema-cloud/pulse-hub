@@ -3,7 +3,7 @@
 import { ArrowRight, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useMemo, useState } from 'react';
-import { signIn } from '@/lib/pulse-hub';
+import { persistAuthSession, signIn } from '@/lib/pulse-hub';
 
 type SubmitState =
   | { kind: 'idle'; message: string }
@@ -53,8 +53,7 @@ export function LoginForm() {
         password,
       });
 
-      window.localStorage.setItem('pulse-hub.auth-token', result.token);
-      window.localStorage.setItem('pulse-hub.auth-user', JSON.stringify(result.user));
+      persistAuthSession(result);
 
       setSubmitState({
         kind: 'success',

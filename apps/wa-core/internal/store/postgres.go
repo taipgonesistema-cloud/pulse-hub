@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 
 	"pulsehub/wa-core/internal/models"
@@ -152,6 +153,32 @@ func (s *Store) migrate(ctx context.Context) error {
 		PRIMARY KEY (session_id, conversation_id)
 	);
 
+	CREATE TABLE IF NOT EXISTS app_user (
+		id TEXT PRIMARY KEY,
+		email TEXT NOT NULL UNIQUE,
+		name TEXT NOT NULL,
+		password_hash TEXT NOT NULL,
+		role TEXT NOT NULL,
+		is_active BOOLEAN NOT NULL DEFAULT TRUE,
+		last_login_at TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS app_user_session (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		token_hash TEXT NOT NULL UNIQUE,
+		last_seen_at TEXT NOT NULL,
+		expires_at TEXT NOT NULL,
+		revoked_at TEXT NOT NULL DEFAULT '',
+		user_agent TEXT NOT NULL DEFAULT '',
+		remote_addr TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL,
+		CONSTRAINT fk_app_user FOREIGN KEY(user_id) REFERENCES app_user(id) ON DELETE CASCADE
+	);
+
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'text';
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT '';
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT NOT NULL DEFAULT '';
@@ -162,6 +189,9 @@ func (s *Store) migrate(ctx context.Context) error {
 	CREATE INDEX IF NOT EXISTS idx_contact_kanban_stage_updated_at ON contact_kanban_stage(updated_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_contact_kanban_board_updated_at ON contact_kanban_board(updated_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_contact_crm_profile_updated_at ON contact_crm_profile(updated_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_app_user_role ON app_user(role);
+	CREATE INDEX IF NOT EXISTS idx_app_user_session_user_id ON app_user_session(user_id);
+	CREATE INDEX IF NOT EXISTS idx_app_user_session_expires_at ON app_user_session(expires_at);
 	`
 
 	if _, err := s.db.ExecContext(ctx, query); err != nil {
@@ -261,6 +291,342 @@ func (s *Store) SaveSession(ctx context.Context, session models.Session) error {
 	}
 
 	return nil
+}
+
+func (s *Store) EnsureSeedUser(ctx context.Context, email, name, passwordHash string, role models.AuthRole) (*models.AuthUser, error) {
+	email = normalizeUserEmail(email)
+	if email == "" {
+		return nil, errors.New("seed user email is required")
+	}
+	if strings.TrimSpace(passwordHash) == "" {
+		return nil, errors.New("seed user password hash is required")
+	}
+	if strings.TrimSpace(name) == "" {
+		name = "Pulse Hub Admin"
+	}
+	role = normalizeAuthRole(role)
+	now := models.NowString()
+
+	existing, currentPasswordHash, err := s.GetAuthUserByEmail(ctx, email)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		if currentPasswordHash == "" {
+			if _, err := s.db.ExecContext(ctx, `
+				UPDATE app_user
+				SET password_hash = $1, role = $2, is_active = TRUE, updated_at = $3
+				WHERE id = $4
+			`, passwordHash, string(role), now, existing.ID); err != nil {
+				return nil, fmt.Errorf("update seed user %s: %w", existing.ID, err)
+			}
+			existing.Role = role
+			existing.IsActive = true
+			existing.UpdatedAt = now
+		}
+		return existing, nil
+	}
+
+	user := models.AuthUser{
+		ID:        uuid.NewString(),
+		Email:     email,
+		Name:      name,
+		Role:      role,
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	created, err := s.CreateAuthUser(ctx, user, passwordHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return created, nil
+}
+
+func (s *Store) GetAuthUserByEmail(ctx context.Context, email string) (*models.AuthUser, string, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, email, name, password_hash, role, is_active, last_login_at, created_at, updated_at
+		FROM app_user
+		WHERE email = $1
+	`, normalizeUserEmail(email))
+
+	var user models.AuthUser
+	var passwordHash string
+	if err := row.Scan(
+		&user.ID,
+		&user.Email,
+		&user.Name,
+		&passwordHash,
+		&user.Role,
+		&user.IsActive,
+		&user.LastLoginAt,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, "", nil
+		}
+		return nil, "", fmt.Errorf("get auth user by email %s: %w", email, err)
+	}
+
+	return &user, passwordHash, nil
+}
+
+func (s *Store) GetAuthUserByID(ctx context.Context, userID string) (*models.AuthUser, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, email, name, role, is_active, last_login_at, created_at, updated_at
+		FROM app_user
+		WHERE id = $1
+	`, strings.TrimSpace(userID))
+
+	var user models.AuthUser
+	if err := row.Scan(
+		&user.ID,
+		&user.Email,
+		&user.Name,
+		&user.Role,
+		&user.IsActive,
+		&user.LastLoginAt,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get auth user %s: %w", userID, err)
+	}
+
+	return &user, nil
+}
+
+func (s *Store) ListAuthUsers(ctx context.Context) ([]models.AuthUser, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, email, name, role, is_active, last_login_at, created_at, updated_at
+		FROM app_user
+		ORDER BY name ASC, email ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list auth users: %w", err)
+	}
+	defer rows.Close()
+
+	users := make([]models.AuthUser, 0)
+	for rows.Next() {
+		var user models.AuthUser
+		if err := rows.Scan(
+			&user.ID,
+			&user.Email,
+			&user.Name,
+			&user.Role,
+			&user.IsActive,
+			&user.LastLoginAt,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan auth user: %w", err)
+		}
+		users = append(users, user)
+	}
+
+	return users, rows.Err()
+}
+
+func (s *Store) CreateAuthUser(ctx context.Context, user models.AuthUser, passwordHash string) (*models.AuthUser, error) {
+	if user.ID == "" {
+		user.ID = uuid.NewString()
+	}
+	user.Email = normalizeUserEmail(user.Email)
+	user.Role = normalizeAuthRole(user.Role)
+	if user.CreatedAt == "" {
+		user.CreatedAt = models.NowString()
+	}
+	if user.UpdatedAt == "" {
+		user.UpdatedAt = user.CreatedAt
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO app_user (id, email, name, password_hash, role, is_active, last_login_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`, user.ID, user.Email, user.Name, passwordHash, string(user.Role), user.IsActive, user.LastLoginAt, user.CreatedAt, user.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("create auth user %s: %w", user.Email, err)
+	}
+
+	return &user, nil
+}
+
+func (s *Store) UpdateAuthUser(ctx context.Context, user models.AuthUser, passwordHash *string) (*models.AuthUser, error) {
+	user.Email = normalizeUserEmail(user.Email)
+	user.Role = normalizeAuthRole(user.Role)
+	user.UpdatedAt = models.NowString()
+
+	if passwordHash != nil {
+		_, err := s.db.ExecContext(ctx, `
+			UPDATE app_user
+			SET name = $1, role = $2, is_active = $3, password_hash = $4, updated_at = $5
+			WHERE id = $6
+		`, user.Name, string(user.Role), user.IsActive, *passwordHash, user.UpdatedAt, user.ID)
+		if err != nil {
+			return nil, fmt.Errorf("update auth user %s: %w", user.ID, err)
+		}
+	} else {
+		_, err := s.db.ExecContext(ctx, `
+			UPDATE app_user
+			SET name = $1, role = $2, is_active = $3, updated_at = $4
+			WHERE id = $5
+		`, user.Name, string(user.Role), user.IsActive, user.UpdatedAt, user.ID)
+		if err != nil {
+			return nil, fmt.Errorf("update auth user %s: %w", user.ID, err)
+		}
+	}
+
+	return s.GetAuthUserByID(ctx, user.ID)
+}
+
+func (s *Store) SaveAuthSession(ctx context.Context, session models.AuthSession) error {
+	if session.ID == "" {
+		session.ID = uuid.NewString()
+	}
+	if session.CreatedAt == "" {
+		session.CreatedAt = models.NowString()
+	}
+	if session.LastSeenAt == "" {
+		session.LastSeenAt = session.CreatedAt
+	}
+	if session.UpdatedAt == "" {
+		session.UpdatedAt = session.LastSeenAt
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO app_user_session (
+			id, user_id, token_hash, last_seen_at, expires_at, revoked_at,
+			user_agent, remote_addr, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	`, session.ID, session.UserID, session.TokenHash, session.LastSeenAt, session.ExpiresAt, session.RevokedAt, session.UserAgent, session.RemoteAddr, session.CreatedAt, session.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("save auth session %s: %w", session.ID, err)
+	}
+
+	return nil
+}
+
+func (s *Store) GetAuthUserBySessionTokenHash(ctx context.Context, tokenHash string) (*models.AuthUser, *models.AuthSession, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT
+			u.id, u.email, u.name, u.role, u.is_active, u.last_login_at, u.created_at, u.updated_at,
+			s.id, s.user_id, s.token_hash, s.last_seen_at, s.expires_at, s.revoked_at,
+			s.user_agent, s.remote_addr, s.created_at, s.updated_at
+		FROM app_user_session s
+		INNER JOIN app_user u ON u.id = s.user_id
+		WHERE s.token_hash = $1
+	`, strings.TrimSpace(tokenHash))
+
+	var user models.AuthUser
+	var session models.AuthSession
+	if err := row.Scan(
+		&user.ID,
+		&user.Email,
+		&user.Name,
+		&user.Role,
+		&user.IsActive,
+		&user.LastLoginAt,
+		&user.CreatedAt,
+		&user.UpdatedAt,
+		&session.ID,
+		&session.UserID,
+		&session.TokenHash,
+		&session.LastSeenAt,
+		&session.ExpiresAt,
+		&session.RevokedAt,
+		&session.UserAgent,
+		&session.RemoteAddr,
+		&session.CreatedAt,
+		&session.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, nil
+		}
+		return nil, nil, fmt.Errorf("get auth session by token: %w", err)
+	}
+
+	return &user, &session, nil
+}
+
+func (s *Store) DeleteAuthSessionByTokenHash(ctx context.Context, tokenHash string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM app_user_session WHERE token_hash = $1`, strings.TrimSpace(tokenHash))
+	if err != nil {
+		return fmt.Errorf("delete auth session: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) TouchAuthSession(ctx context.Context, sessionID, lastSeenAt string) error {
+	if strings.TrimSpace(sessionID) == "" {
+		return nil
+	}
+	if strings.TrimSpace(lastSeenAt) == "" {
+		lastSeenAt = models.NowString()
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE app_user_session
+		SET last_seen_at = $1, updated_at = $2
+		WHERE id = $3
+	`, lastSeenAt, lastSeenAt, strings.TrimSpace(sessionID))
+	if err != nil {
+		return fmt.Errorf("touch auth session %s: %w", sessionID, err)
+	}
+	return nil
+}
+
+func (s *Store) SetAuthUserLastLogin(ctx context.Context, userID, lastLoginAt string) error {
+	if strings.TrimSpace(userID) == "" {
+		return nil
+	}
+	if strings.TrimSpace(lastLoginAt) == "" {
+		lastLoginAt = models.NowString()
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE app_user
+		SET last_login_at = $1, updated_at = $2
+		WHERE id = $3
+	`, lastLoginAt, lastLoginAt, strings.TrimSpace(userID))
+	if err != nil {
+		return fmt.Errorf("set auth user last login %s: %w", userID, err)
+	}
+	return nil
+}
+
+func (s *Store) CountActiveAuthSessions(ctx context.Context) (int, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM app_user_session
+		WHERE revoked_at = '' AND expires_at > $1
+	`, models.NowString())
+
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return 0, fmt.Errorf("count active auth sessions: %w", err)
+	}
+
+	return count, nil
+}
+
+func normalizeUserEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func normalizeAuthRole(role models.AuthRole) models.AuthRole {
+	switch role {
+	case models.AuthRoleAdmin, models.AuthRoleSupervisor, models.AuthRoleAttendant:
+		return role
+	default:
+		return models.AuthRoleAttendant
+	}
 }
 
 func (s *Store) UpsertContact(ctx context.Context, contact models.Contact) error {
