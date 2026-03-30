@@ -681,6 +681,11 @@ export function DashboardClient({ initialOverview }: Props) {
     };
   }, [isAnalyticsView, overview.analytics, overview.conversations, overview.sessions]);
 
+  const safeResponseVelocity = useMemo(
+    () => normalizeResponseVelocityAnalytics(analyticsModel?.responseVelocity),
+    [analyticsModel?.responseVelocity],
+  );
+
   const queueLabel = useMemo(() => {
     if (!isConversationsView) {
       return 'No session selected';
@@ -2052,16 +2057,16 @@ export function DashboardClient({ initialOverview }: Props) {
                 </h3>
                 <div className="mt-2 flex items-baseline gap-4">
                   <p className="font-headline text-4xl font-extrabold text-white md:text-5xl">
-                    {formatDurationLabel(analyticsModel!.responseVelocity.averageSeconds)}
+                    {formatDurationLabel(safeResponseVelocity.averageSeconds)}
                   </p>
                   <p
                     className={`text-xl font-bold md:text-2xl ${
-                      analyticsModel!.responseVelocity.deltaSeconds >= 0
+                      safeResponseVelocity.deltaSeconds >= 0
                         ? 'text-[var(--secondary)]'
                         : 'text-[var(--error)]'
                     }`}
                   >
-                    {formatVelocityDelta(analyticsModel!.responseVelocity.deltaSeconds)}
+                    {formatVelocityDelta(safeResponseVelocity.deltaSeconds)}
                   </p>
                 </div>
               </div>
@@ -2070,12 +2075,12 @@ export function DashboardClient({ initialOverview }: Props) {
                   Live View
                 </span>
                 <span className="rounded-full bg-[var(--primary)]/10 px-3 py-1.5 text-[11px] font-bold text-[var(--primary)]">
-                  Target: {formatTargetLabel(analyticsModel!.responseVelocity.targetSeconds)}
+                  Target: {formatTargetLabel(safeResponseVelocity.targetSeconds)}
                 </span>
               </div>
             </div>
 
-            <DashboardResponseChart responseVelocity={analyticsModel!.responseVelocity} />
+            <DashboardResponseChart responseVelocity={safeResponseVelocity} />
           </div>
 
           <div className="col-span-12 space-y-4 lg:col-span-8">
@@ -3636,20 +3641,21 @@ function DashboardChannelStatCard({
 function DashboardResponseChart({
   responseVelocity,
 }: {
-  responseVelocity: DashboardOverview['analytics']['responseVelocity'];
+  responseVelocity?: DashboardOverview['analytics']['responseVelocity'] | null;
 }) {
-  const chartPoints = responseVelocity.points.length > 0
-    ? responseVelocity.points
+  const safeResponseVelocity = normalizeResponseVelocityAnalytics(responseVelocity);
+  const chartPoints = safeResponseVelocity.points.length > 0
+    ? safeResponseVelocity.points
     : [
-        { label: '08:00 AM', averageSeconds: responseVelocity.averageSeconds },
-        { label: '10:00 AM', averageSeconds: responseVelocity.averageSeconds },
-        { label: '12:00 PM', averageSeconds: responseVelocity.averageSeconds },
-        { label: '02:00 PM', averageSeconds: responseVelocity.averageSeconds },
-        { label: '04:00 PM', averageSeconds: responseVelocity.averageSeconds },
-        { label: '06:00 PM', averageSeconds: responseVelocity.averageSeconds },
+        { label: '08:00 AM', averageSeconds: safeResponseVelocity.averageSeconds },
+        { label: '10:00 AM', averageSeconds: safeResponseVelocity.averageSeconds },
+        { label: '12:00 PM', averageSeconds: safeResponseVelocity.averageSeconds },
+        { label: '02:00 PM', averageSeconds: safeResponseVelocity.averageSeconds },
+        { label: '04:00 PM', averageSeconds: safeResponseVelocity.averageSeconds },
+        { label: '06:00 PM', averageSeconds: safeResponseVelocity.averageSeconds },
       ];
-  const maxSeconds = Math.max(...chartPoints.map((point) => point.averageSeconds), responseVelocity.targetSeconds, 1);
-  const minSeconds = Math.min(...chartPoints.map((point) => point.averageSeconds), responseVelocity.targetSeconds, 1);
+  const maxSeconds = Math.max(...chartPoints.map((point) => point.averageSeconds), safeResponseVelocity.targetSeconds, 1);
+  const minSeconds = Math.min(...chartPoints.map((point) => point.averageSeconds), safeResponseVelocity.targetSeconds, 1);
   const step = chartPoints.length > 1 ? 400 / (chartPoints.length - 1) : 400;
   const linePath = chartPoints
     .map((point, index) => {
@@ -3696,7 +3702,7 @@ function DashboardResponseChart({
         </svg>
         <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg border border-white/10 bg-[var(--surface-highest)] px-3 py-1 text-[10px] font-bold text-white">
           <span className="mr-2 inline-block h-2 w-2 rounded-full bg-[var(--primary)]" />
-          Peak Efficiency: {responseVelocity.peakLabel}
+          Peak Efficiency: {safeResponseVelocity.peakLabel}
         </div>
       </div>
       <div className="mt-4 flex justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">
