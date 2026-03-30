@@ -626,7 +626,8 @@ export function DashboardClient({ initialOverview }: Props) {
       ? 94.2
       : Number((Math.max(totalConversations - unreadVolume, 0) / totalConversations * 100).toFixed(1));
     const csat = Math.min(4.9, Math.max(4.2, 4.5 + resolvedRate / 200));
-    const responseMinutes = Math.max(1.2, Number((1.2 + waitingVolume / 120).toFixed(1)));
+    const responseSeconds = Math.max(overview.analytics.responseVelocity.averageSeconds || 0, 0);
+    const responseMinutes = Number((responseSeconds / 60).toFixed(1));
 
     const channelTotals = {
       whatsapp: 0,
@@ -668,14 +669,16 @@ export function DashboardClient({ initialOverview }: Props) {
       csat: Number(csat.toFixed(1)),
       responseMinutes,
       resolvedRate,
+      responseSeconds,
       totalConversations,
       unreadVolume,
       waitingVolume,
       weeklyChannelSeries,
       heatmapRows,
       resolvedTickets,
+      responseVelocity: overview.analytics.responseVelocity,
     };
-  }, [isAnalyticsView, overview.conversations, overview.sessions]);
+  }, [isAnalyticsView, overview.analytics.responseVelocity, overview.conversations, overview.sessions]);
 
   const queueLabel = useMemo(() => {
     if (!isConversationsView) {
@@ -2047,8 +2050,18 @@ export function DashboardClient({ initialOverview }: Props) {
                   Average Response Velocity
                 </h3>
                 <div className="mt-2 flex items-baseline gap-4">
-                  <p className="font-headline text-4xl font-extrabold text-white md:text-5xl">1m 42s</p>
-                  <p className="text-xl font-bold text-[var(--secondary)] md:text-2xl">↓ 15s improved</p>
+                  <p className="font-headline text-4xl font-extrabold text-white md:text-5xl">
+                    {formatDurationLabel(analyticsModel!.responseVelocity.averageSeconds)}
+                  </p>
+                  <p
+                    className={`text-xl font-bold md:text-2xl ${
+                      analyticsModel!.responseVelocity.deltaSeconds >= 0
+                        ? 'text-[var(--secondary)]'
+                        : 'text-[var(--error)]'
+                    }`}
+                  >
+                    {formatVelocityDelta(analyticsModel!.responseVelocity.deltaSeconds)}
+                  </p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -2056,12 +2069,12 @@ export function DashboardClient({ initialOverview }: Props) {
                   Live View
                 </span>
                 <span className="rounded-full bg-[var(--primary)]/10 px-3 py-1.5 text-[11px] font-bold text-[var(--primary)]">
-                  Target: &lt;2m
+                  Target: {formatTargetLabel(analyticsModel!.responseVelocity.targetSeconds)}
                 </span>
               </div>
             </div>
 
-            <DashboardResponseChart />
+            <DashboardResponseChart responseVelocity={analyticsModel!.responseVelocity} />
           </div>
 
           <div className="col-span-12 space-y-4 lg:col-span-8">
@@ -3619,7 +3632,44 @@ function DashboardChannelStatCard({
   );
 }
 
-function DashboardResponseChart() {
+function DashboardResponseChart({
+  responseVelocity,
+}: {
+  responseVelocity: DashboardOverview['analytics']['responseVelocity'];
+}) {
+  const chartPoints = responseVelocity.points.length > 0
+    ? responseVelocity.points
+    : [
+        { label: '08:00 AM', averageSeconds: responseVelocity.averageSeconds },
+        { label: '10:00 AM', averageSeconds: responseVelocity.averageSeconds },
+        { label: '12:00 PM', averageSeconds: responseVelocity.averageSeconds },
+        { label: '02:00 PM', averageSeconds: responseVelocity.averageSeconds },
+        { label: '04:00 PM', averageSeconds: responseVelocity.averageSeconds },
+        { label: '06:00 PM', averageSeconds: responseVelocity.averageSeconds },
+      ];
+  const maxSeconds = Math.max(...chartPoints.map((point) => point.averageSeconds), responseVelocity.targetSeconds, 1);
+  const minSeconds = Math.min(...chartPoints.map((point) => point.averageSeconds), responseVelocity.targetSeconds, 1);
+  const step = chartPoints.length > 1 ? 400 / (chartPoints.length - 1) : 400;
+  const linePath = chartPoints
+    .map((point, index) => {
+      const x = index * step;
+      const normalized = maxSeconds === minSeconds
+        ? 0.5
+        : (point.averageSeconds - minSeconds) / (maxSeconds - minSeconds);
+      const y = 84 - normalized * 54;
+      return `${index === 0 ? 'M' : 'L'}${x},${y}`;
+    })
+    .join(' ');
+  const areaPath = `${linePath} L400,100 L0,100 Z`;
+  const peakIndex = chartPoints.reduce((bestIndex, point, index, items) =>
+    point.averageSeconds < items[bestIndex].averageSeconds ? index : bestIndex,
+  0);
+  const peakX = peakIndex * step;
+  const peakNormalized = maxSeconds === minSeconds
+    ? 0.5
+    : (chartPoints[peakIndex].averageSeconds - minSeconds) / (maxSeconds - minSeconds);
+  const peakY = 84 - peakNormalized * 54;
+
   return (
     <>
       <div className="relative h-48 w-full">
@@ -3631,30 +3681,27 @@ function DashboardResponseChart() {
             </linearGradient>
           </defs>
           <path
-            d="M0,80 Q50,40 100,60 T200,30 T300,50 T400,20"
+            d={linePath}
             fill="none"
             stroke="#7fafff"
             strokeLinecap="round"
             strokeWidth="4"
           />
           <path
-            d="M0,80 Q50,40 100,60 T200,30 T300,50 T400,20 L400,100 L0,100 Z"
+            d={areaPath}
             fill="url(#dashboardChartGradient)"
           />
-          <circle cx="200" cy="30" fill="#7fafff" r="5" stroke="#0e0e0e" strokeWidth="2" />
+          <circle cx={peakX} cy={peakY} fill="#7fafff" r="5" stroke="#0e0e0e" strokeWidth="2" />
         </svg>
         <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-lg border border-white/10 bg-[var(--surface-highest)] px-3 py-1 text-[10px] font-bold text-white">
           <span className="mr-2 inline-block h-2 w-2 rounded-full bg-[var(--primary)]" />
-          Peak Efficiency: 2:15 PM
+          Peak Efficiency: {responseVelocity.peakLabel}
         </div>
       </div>
       <div className="mt-4 flex justify-between text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-600">
-        <span>08:00 AM</span>
-        <span>10:00 AM</span>
-        <span>12:00 PM</span>
-        <span>02:00 PM</span>
-        <span>04:00 PM</span>
-        <span>06:00 PM</span>
+        {chartPoints.map((point) => (
+          <span key={point.label}>{point.label}</span>
+        ))}
       </div>
     </>
   );
@@ -5328,6 +5375,30 @@ function parseContactTagsInput(value: string) {
     .filter(Boolean);
 }
 
+function formatDurationLabel(totalSeconds: number) {
+  const safeSeconds = Math.max(Math.round(totalSeconds), 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
+}
+
+function formatVelocityDelta(deltaSeconds: number) {
+  if (deltaSeconds > 0) {
+    return `↓ ${deltaSeconds}s improved`;
+  }
+
+  if (deltaSeconds < 0) {
+    return `↑ ${Math.abs(deltaSeconds)}s slower`;
+  }
+
+  return 'No change vs previous period';
+}
+
+function formatTargetLabel(targetSeconds: number) {
+  const targetMinutes = Math.max(Math.round(targetSeconds / 60), 1);
+  return `<${targetMinutes}m`;
+}
+
 function buildContactKanbanKey(contact: ConversationRecord) {
   return `${contact.sessionId}:${contact.id}`;
 }
@@ -5395,6 +5466,15 @@ function getWebSocketUrl(baseUrl: string) {
 function sanitizeOverview(overview: DashboardOverview): DashboardOverview {
   return {
     ...overview,
+    analytics: overview.analytics ?? {
+      responseVelocity: {
+        averageSeconds: 102,
+        deltaSeconds: 0,
+        targetSeconds: 120,
+        peakLabel: 'No data',
+        points: [],
+      },
+    },
     conversations: dedupeConversations(overview.conversations),
   };
 }
@@ -5406,7 +5486,11 @@ function areOverviewsEquivalent(left: DashboardOverview, right: DashboardOvervie
     left.metrics.connectedNumbers !== right.metrics.connectedNumbers ||
     left.metrics.activeSessions !== right.metrics.activeSessions ||
     left.metrics.onlineUsers !== right.metrics.onlineUsers ||
-    left.metrics.waitingConversations !== right.metrics.waitingConversations
+    left.metrics.waitingConversations !== right.metrics.waitingConversations ||
+    left.analytics.responseVelocity.averageSeconds !== right.analytics.responseVelocity.averageSeconds ||
+    left.analytics.responseVelocity.deltaSeconds !== right.analytics.responseVelocity.deltaSeconds ||
+    left.analytics.responseVelocity.targetSeconds !== right.analytics.responseVelocity.targetSeconds ||
+    left.analytics.responseVelocity.peakLabel !== right.analytics.responseVelocity.peakLabel
   ) {
     return false;
   }
@@ -5468,6 +5552,18 @@ function areOverviewsEquivalent(left: DashboardOverview, right: DashboardOvervie
       current.preview !== next.preview ||
       current.lastMessageAt !== next.lastMessageAt
     ) {
+      return false;
+    }
+  }
+
+  if (left.analytics.responseVelocity.points.length !== right.analytics.responseVelocity.points.length) {
+    return false;
+  }
+
+  for (let index = 0; index < left.analytics.responseVelocity.points.length; index += 1) {
+    const current = left.analytics.responseVelocity.points[index];
+    const next = right.analytics.responseVelocity.points[index];
+    if (current.label !== next.label || current.averageSeconds !== next.averageSeconds) {
       return false;
     }
   }

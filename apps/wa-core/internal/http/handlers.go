@@ -8,6 +8,7 @@ import (
 	"hash/fnv"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"sort"
@@ -879,6 +880,10 @@ func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOver
 	if err != nil {
 		return nil, err
 	}
+	responseVelocity, err := a.buildResponseVelocityAnalytics(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	overview := &models.DashboardOverview{
 		Product:       "Pulse Hub",
@@ -886,6 +891,7 @@ func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOver
 		Sessions:      sessions,
 		Conversations: conversations,
 	}
+	overview.Analytics.ResponseVelocity = responseVelocity
 
 	connectedNumbers := 0
 	activeSessions := 0
@@ -917,6 +923,172 @@ func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOver
 	}
 
 	return overview, nil
+}
+
+func (a *API) buildResponseVelocityAnalytics(ctx context.Context) (models.DashboardResponseVelocityAnalytics, error) {
+	analytics := models.DashboardResponseVelocityAnalytics{
+		AverageSeconds: 102,
+		DeltaSeconds:   0,
+		TargetSeconds:  120,
+		PeakLabel:      "No data",
+		Points: []models.DashboardResponseVelocityPoint{
+			{Label: "08:00 AM", AverageSeconds: 102},
+			{Label: "10:00 AM", AverageSeconds: 102},
+			{Label: "12:00 PM", AverageSeconds: 102},
+			{Label: "02:00 PM", AverageSeconds: 102},
+			{Label: "04:00 PM", AverageSeconds: 102},
+			{Label: "06:00 PM", AverageSeconds: 102},
+		},
+	}
+
+	chats, err := a.manager.ListChats(ctx)
+	if err != nil {
+		return analytics, err
+	}
+
+	now := time.Now().UTC()
+	currentCutoff := now.Add(-7 * 24 * time.Hour)
+	previousCutoff := now.Add(-14 * 24 * time.Hour)
+	currentSamples := make([]int, 0)
+	previousSamples := make([]int, 0)
+	bucketLabels := []string{"08:00 AM", "10:00 AM", "12:00 PM", "02:00 PM", "04:00 PM", "06:00 PM"}
+	bucketValues := make(map[string][]int, len(bucketLabels))
+	fastestAt := time.Time{}
+	fastestSeconds := math.MaxInt
+
+	for _, chat := range chats {
+		canonicalJID, err := a.manager.CanonicalConversationJID(ctx, chat.JID)
+		if err != nil {
+			canonicalJID = chat.JID
+		}
+		if !isVisibleConversationJID(canonicalJID) {
+			continue
+		}
+
+		messages, err := a.manager.ListMessages(ctx, chat.JID)
+		if err != nil {
+			return analytics, err
+		}
+
+		for _, sample := range collectResponseSamples(messages) {
+			if sample.When.Before(previousCutoff) {
+				continue
+			}
+
+			if !sample.When.Before(currentCutoff) {
+				currentSamples = append(currentSamples, sample.Seconds)
+				bucketLabel := responseBucketLabel(sample.When)
+				bucketValues[bucketLabel] = append(bucketValues[bucketLabel], sample.Seconds)
+				if sample.Seconds < fastestSeconds {
+					fastestSeconds = sample.Seconds
+					fastestAt = sample.When
+				}
+				continue
+			}
+
+			previousSamples = append(previousSamples, sample.Seconds)
+		}
+	}
+
+	if len(currentSamples) > 0 {
+		analytics.AverageSeconds = averageInt(currentSamples)
+	}
+	if len(previousSamples) > 0 {
+		analytics.DeltaSeconds = averageInt(previousSamples) - analytics.AverageSeconds
+	}
+	if !fastestAt.IsZero() {
+		analytics.PeakLabel = fastestAt.Local().Format("3:04 PM")
+	}
+
+	points := make([]models.DashboardResponseVelocityPoint, 0, len(bucketLabels))
+	for _, label := range bucketLabels {
+		averageSeconds := analytics.AverageSeconds
+		if samples := bucketValues[label]; len(samples) > 0 {
+			averageSeconds = averageInt(samples)
+		}
+		points = append(points, models.DashboardResponseVelocityPoint{
+			Label:          label,
+			AverageSeconds: averageSeconds,
+		})
+	}
+	analytics.Points = points
+
+	return analytics, nil
+}
+
+type responseSample struct {
+	When    time.Time
+	Seconds int
+}
+
+func collectResponseSamples(messages []models.Message) []responseSample {
+	samples := make([]responseSample, 0)
+	for index, message := range messages {
+		if message.FromMe {
+			continue
+		}
+
+		incomingAt, err := time.Parse(time.RFC3339, message.Timestamp)
+		if err != nil {
+			continue
+		}
+
+		for nextIndex := index + 1; nextIndex < len(messages); nextIndex++ {
+			next := messages[nextIndex]
+			if !next.FromMe {
+				continue
+			}
+
+			outgoingAt, err := time.Parse(time.RFC3339, next.Timestamp)
+			if err != nil {
+				continue
+			}
+
+			delta := outgoingAt.Sub(incomingAt)
+			if delta <= 0 {
+				break
+			}
+			if delta > 12*time.Hour {
+				break
+			}
+
+			samples = append(samples, responseSample{
+				When:    outgoingAt.UTC(),
+				Seconds: int(delta.Seconds()),
+			})
+			break
+		}
+	}
+	return samples
+}
+
+func responseBucketLabel(value time.Time) string {
+	hour := value.Local().Hour()
+	switch {
+	case hour < 10:
+		return "08:00 AM"
+	case hour < 12:
+		return "10:00 AM"
+	case hour < 14:
+		return "12:00 PM"
+	case hour < 16:
+		return "02:00 PM"
+	case hour < 18:
+		return "04:00 PM"
+	default:
+		return "06:00 PM"
+	}
+}
+
+func averageInt(values []int) int {
+	if len(values) == 0 {
+		return 0
+	}
+	total := 0
+	for _, value := range values {
+		total += value
+	}
+	return int(math.Round(float64(total) / float64(len(values))))
 }
 
 func (a *API) buildSessionRecords(ctx context.Context) ([]models.SessionRecord, error) {

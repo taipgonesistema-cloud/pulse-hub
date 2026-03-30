@@ -71,6 +71,18 @@ export type DashboardOverview = {
     onlineUsers: number;
     waitingConversations: number;
   };
+  analytics: {
+    responseVelocity: {
+      averageSeconds: number;
+      deltaSeconds: number;
+      targetSeconds: number;
+      peakLabel: string;
+      points: Array<{
+        label: string;
+        averageSeconds: number;
+      }>;
+    };
+  };
   channels: ChannelRecord[];
   sessions: SessionRecord[];
   conversations: ConversationRecord[];
@@ -105,6 +117,22 @@ const fallbackOverview: DashboardOverview = {
     activeSessions: 0,
     onlineUsers: 0,
     waitingConversations: 0,
+  },
+  analytics: {
+    responseVelocity: {
+      averageSeconds: 102,
+      deltaSeconds: 0,
+      targetSeconds: 120,
+      peakLabel: 'No data',
+      points: [
+        { label: '08:00 AM', averageSeconds: 102 },
+        { label: '10:00 AM', averageSeconds: 102 },
+        { label: '12:00 PM', averageSeconds: 102 },
+        { label: '02:00 PM', averageSeconds: 102 },
+        { label: '04:00 PM', averageSeconds: 102 },
+        { label: '06:00 PM', averageSeconds: 102 },
+      ],
+    },
   },
   channels: [],
   sessions: [],

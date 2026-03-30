@@ -218,9 +218,25 @@ type DashboardOverview struct {
 		OnlineUsers          int `json:"onlineUsers"`
 		WaitingConversations int `json:"waitingConversations"`
 	} `json:"metrics"`
+	Analytics struct {
+		ResponseVelocity DashboardResponseVelocityAnalytics `json:"responseVelocity"`
+	} `json:"analytics"`
 	Channels      []ChannelRecord      `json:"channels"`
 	Sessions      []SessionRecord      `json:"sessions"`
 	Conversations []ConversationRecord `json:"conversations"`
+}
+
+type DashboardResponseVelocityAnalytics struct {
+	AverageSeconds int                              `json:"averageSeconds"`
+	DeltaSeconds   int                              `json:"deltaSeconds"`
+	TargetSeconds  int                              `json:"targetSeconds"`
+	PeakLabel      string                           `json:"peakLabel"`
+	Points         []DashboardResponseVelocityPoint `json:"points"`
+}
+
+type DashboardResponseVelocityPoint struct {
+	Label          string `json:"label"`
+	AverageSeconds int    `json:"averageSeconds"`
 }
 
 type ContactKanbanStageRecord struct {
