@@ -1588,6 +1588,37 @@ export function DashboardClient({ initialOverview }: Props) {
     });
   }, [executeAction]);
 
+  const applyOutgoingMessageUpdate = useCallback(
+    (sessionId: string, conversationId: string, message: MessageRecord) => {
+      const cacheKey = buildConversationCacheKey(sessionId, conversationId);
+
+      messageCacheRef.current.set(
+        cacheKey,
+        mergeMessageIntoTimeline(messageCacheRef.current.get(cacheKey) ?? [], message),
+      );
+
+      if (activeSessionId === sessionId && activeConversationId === conversationId) {
+        setMessages((current) => mergeMessageIntoTimeline(current, message));
+      }
+
+      setOverview((current) => ({
+        ...current,
+        conversations: current.conversations.map((conversation) => {
+          if (conversation.sessionId !== sessionId || conversation.id !== conversationId) {
+            return conversation;
+          }
+
+          return {
+            ...conversation,
+            preview: summarizeConversationPreview(message),
+            lastMessageAt: message.timestamp,
+          };
+        }),
+      }));
+    },
+    [activeConversationId, activeSessionId],
+  );
+
   const moveContactToStage = useCallback(
     async (contact: ConversationRecord, nextStage: ContactKanbanStageId) => {
       const storageKey = buildContactKanbanKey(contact);
@@ -1932,11 +1963,16 @@ export function DashboardClient({ initialOverview }: Props) {
         throw new Error('Nao foi possivel enviar a mensagem.');
       }
 
-      await loadMessages(selectedSession.id, selectedConversation.id);
-      await loadOverview();
+      const createdMessage = (await response.json()) as MessageRecord;
+      applyOutgoingMessageUpdate(selectedSession.id, selectedConversation.id, createdMessage);
       setReplyTargetMessage(null);
+
+      void loadMessages(selectedSession.id, selectedConversation.id, {
+        showLoading: false,
+      }).catch(() => undefined);
+      void loadOverview().catch(() => undefined);
     });
-  }, [executeAction, loadMessages, loadOverview, replyTargetMessage, selectedConversation, selectedSession]);
+  }, [applyOutgoingMessageUpdate, executeAction, loadMessages, loadOverview, replyTargetMessage, selectedConversation, selectedSession]);
 
   const sendMedia = useCallback(
     (file: File, options?: { sticker?: boolean; caption?: string }) => {
@@ -1968,12 +2004,17 @@ export function DashboardClient({ initialOverview }: Props) {
           throw new Error('Nao foi possivel enviar a midia.');
         }
 
-        await loadMessages(selectedSession.id, selectedConversation.id);
-        await loadOverview();
+        const createdMessage = (await response.json()) as MessageRecord;
+        applyOutgoingMessageUpdate(selectedSession.id, selectedConversation.id, createdMessage);
         setReplyTargetMessage(null);
+
+        void loadMessages(selectedSession.id, selectedConversation.id, {
+          showLoading: false,
+        }).catch(() => undefined);
+        void loadOverview().catch(() => undefined);
       });
     },
-    [executeAction, loadMessages, loadOverview, replyTargetMessage, selectedConversation, selectedSession],
+    [applyOutgoingMessageUpdate, executeAction, loadMessages, loadOverview, replyTargetMessage, selectedConversation, selectedSession],
   );
 
   if (!isAuthReady) {
@@ -5767,6 +5808,38 @@ function areReplyTargetsEquivalent(left?: MessageRecord['replyTo'], right?: Mess
     left.body === right.body &&
     left.kind === right.kind
   );
+}
+
+function mergeMessageIntoTimeline(messages: MessageRecord[], message: MessageRecord) {
+  const existingIndex = messages.findIndex((current) => current.id === message.id);
+  if (existingIndex === -1) {
+    return [...messages, message];
+  }
+
+  const nextMessages = messages.slice();
+  nextMessages[existingIndex] = message;
+  return nextMessages;
+}
+
+function summarizeConversationPreview(message: MessageRecord) {
+  switch (message.kind) {
+    case 'image':
+      return message.body && message.body !== '[imagem]' ? message.body : 'Foto';
+    case 'video':
+      return message.body && message.body !== '[video]' ? message.body : 'Video';
+    case 'audio':
+      return message.body && message.body !== '[audio]' && message.body !== '[voice note]'
+        ? message.body
+        : 'Audio';
+    case 'document':
+      return message.body && message.body !== '[documento]'
+        ? message.body
+        : message.fileName || 'Documento';
+    case 'sticker':
+      return 'Figurinha';
+    default:
+      return message.body || 'Mensagem';
+  }
 }
 
 function dedupeConversations(conversations: ConversationRecord[]) {
