@@ -1044,11 +1044,15 @@ func collectResponseSamples(messages []models.Message) []responseSample {
 				continue
 			}
 
+			if !isBusinessHoursResponseWindow(incomingAt, outgoingAt) {
+				break
+			}
+
 			delta := outgoingAt.Sub(incomingAt)
 			if delta <= 0 {
 				break
 			}
-			if delta > 12*time.Hour {
+			if delta > 2*time.Hour {
 				break
 			}
 
@@ -1060,6 +1064,36 @@ func collectResponseSamples(messages []models.Message) []responseSample {
 		}
 	}
 	return samples
+}
+
+func isBusinessHoursResponseWindow(incomingAt, outgoingAt time.Time) bool {
+	incomingLocal := incomingAt.Local()
+	outgoingLocal := outgoingAt.Local()
+
+	if incomingLocal.Weekday() == time.Saturday || incomingLocal.Weekday() == time.Sunday {
+		return false
+	}
+	if outgoingLocal.Weekday() == time.Saturday || outgoingLocal.Weekday() == time.Sunday {
+		return false
+	}
+	if incomingLocal.YearDay() != outgoingLocal.YearDay() || incomingLocal.Year() != outgoingLocal.Year() {
+		return false
+	}
+
+	incomingMinutes := incomingLocal.Hour()*60 + incomingLocal.Minute()
+	outgoingMinutes := outgoingLocal.Hour()*60 + outgoingLocal.Minute()
+
+	const businessStartMinutes = 8 * 60
+	const businessEndMinutes = 18 * 60
+
+	if incomingMinutes < businessStartMinutes || incomingMinutes >= businessEndMinutes {
+		return false
+	}
+	if outgoingMinutes < businessStartMinutes || outgoingMinutes >= businessEndMinutes {
+		return false
+	}
+
+	return true
 }
 
 func responseBucketLabel(value time.Time) string {
