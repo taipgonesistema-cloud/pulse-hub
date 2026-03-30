@@ -320,6 +320,7 @@ export function DashboardClient({ initialOverview }: Props) {
     unreadCount: number;
   } | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
   const toastTimersRef = useRef(new Map<number, number>());
   const toastIdRef = useRef(0);
   const currentView = viewTransition ?? activeView;
@@ -1133,6 +1134,55 @@ export function DashboardClient({ initialOverview }: Props) {
     [loadOverview],
   );
 
+  const realtimeContextRef = useRef({
+    isConversationsView: false,
+    activeSessionId: null as string | null,
+    activeConversationId: null as string | null,
+  });
+  const loadOverviewRef = useRef(loadOverview);
+  const loadMessagesRef = useRef(loadMessages);
+  const loadContactBoardsRef = useRef(loadContactBoards);
+  const loadContactCRMProfilesRef = useRef(loadContactCRMProfiles);
+  const loadContactKanbanStagesRef = useRef(loadContactKanbanStages);
+  const markConversationAsReadRef = useRef(markConversationAsRead);
+  const isConversationActivelyViewedRef = useRef(isConversationActivelyViewed);
+
+  useEffect(() => {
+    realtimeContextRef.current = {
+      isConversationsView,
+      activeSessionId,
+      activeConversationId,
+    };
+  }, [activeConversationId, activeSessionId, isConversationsView]);
+
+  useEffect(() => {
+    loadOverviewRef.current = loadOverview;
+  }, [loadOverview]);
+
+  useEffect(() => {
+    loadMessagesRef.current = loadMessages;
+  }, [loadMessages]);
+
+  useEffect(() => {
+    loadContactBoardsRef.current = loadContactBoards;
+  }, [loadContactBoards]);
+
+  useEffect(() => {
+    loadContactCRMProfilesRef.current = loadContactCRMProfiles;
+  }, [loadContactCRMProfiles]);
+
+  useEffect(() => {
+    loadContactKanbanStagesRef.current = loadContactKanbanStages;
+  }, [loadContactKanbanStages]);
+
+  useEffect(() => {
+    markConversationAsReadRef.current = markConversationAsRead;
+  }, [markConversationAsRead]);
+
+  useEffect(() => {
+    isConversationActivelyViewedRef.current = isConversationActivelyViewed;
+  }, [isConversationActivelyViewed]);
+
   const openConversation = useCallback((conversationId: string) => {
     if (!conversationId || conversationId === selectedConversationId) {
       return;
@@ -1332,11 +1382,15 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
-    const intervalMs =
-      selectedSession.status === 'active'
-        ? 2000
+    const pageVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+    const intervalMs = isRealtimeConnected
+      ? pageVisible
+        ? 12000
+        : 30000
+      : selectedSession.status === 'active'
+        ? 5000
         : ['initializing', 'qr_ready', 'syncing'].includes(selectedSession.status)
-          ? 2500
+          ? 7000
           : null;
 
     if (!intervalMs) {
@@ -1348,7 +1402,7 @@ export function DashboardClient({ initialOverview }: Props) {
     }, intervalMs);
 
     return () => window.clearInterval(interval);
-  }, [isAuthReady, isConversationsView, loadOverview, selectedSession]);
+  }, [isAuthReady, isConversationsView, isRealtimeConnected, loadOverview, selectedSession]);
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -1410,17 +1464,20 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
+    const intervalMs = isRealtimeConnected ? 12000 : 5000;
+
     const interval = window.setInterval(() => {
       void loadMessages(activeSessionId, activeConversationId, {
         showLoading: false,
       }).catch(() => undefined);
-    }, 4000);
+    }, intervalMs);
 
     return () => window.clearInterval(interval);
   }, [
     activeConversationId,
     activeSessionId,
     activeSessionStatus,
+    isRealtimeConnected,
     isConversationsView,
     loadMessages,
   ]);
@@ -1441,7 +1498,7 @@ export function DashboardClient({ initialOverview }: Props) {
       }
 
       refreshTimer = window.setTimeout(() => {
-        void loadOverview().catch(() => undefined);
+        void loadOverviewRef.current().catch(() => undefined);
       }, 180);
     };
 
@@ -1451,6 +1508,10 @@ export function DashboardClient({ initialOverview }: Props) {
       }
 
       socket = new WebSocket(getWebSocketUrl(`${apiUrl}/ws`));
+
+      socket.onopen = () => {
+        setIsRealtimeConnected(true);
+      };
 
       socket.onmessage = (event) => {
         let payload: RealtimeSocketEvent;
@@ -1478,12 +1539,12 @@ export function DashboardClient({ initialOverview }: Props) {
               [`${payload.sessionId}:${payload.chatJid}`]: nextStage,
             }));
           } else {
-            void loadContactKanbanStages().catch(() => undefined);
+            void loadContactKanbanStagesRef.current().catch(() => undefined);
           }
         }
 
         if (payload.kind === 'kanban.board.updated') {
-          void loadContactBoards().catch(() => undefined);
+          void loadContactBoardsRef.current().catch(() => undefined);
         }
 
         if (payload.kind === 'kanban.contact.updated') {
@@ -1495,12 +1556,14 @@ export function DashboardClient({ initialOverview }: Props) {
                 [`${record.sessionId}:${record.conversationId}`]: record,
               }));
             } catch {
-              void loadContactCRMProfiles().catch(() => undefined);
+              void loadContactCRMProfilesRef.current().catch(() => undefined);
             }
           } else {
-            void loadContactCRMProfiles().catch(() => undefined);
+            void loadContactCRMProfilesRef.current().catch(() => undefined);
           }
         }
+
+        const { isConversationsView, activeSessionId, activeConversationId } = realtimeContextRef.current;
 
         if (
           isConversationsView &&
@@ -1509,13 +1572,13 @@ export function DashboardClient({ initialOverview }: Props) {
           payload.kind === 'message.new' &&
           payload.chatJid === activeConversationId
         ) {
-          if (payload.direction === 'incoming' && isConversationActivelyViewed(activeSessionId, activeConversationId)) {
-            void markConversationAsRead(activeSessionId, activeConversationId).catch(() => undefined);
+          if (payload.direction === 'incoming' && isConversationActivelyViewedRef.current(activeSessionId, activeConversationId)) {
+            void markConversationAsReadRef.current(activeSessionId, activeConversationId).catch(() => undefined);
           }
 
           const delay = payload.direction === 'incoming' ? 300 : 0;
           window.setTimeout(() => {
-            void loadMessages(activeSessionId, activeConversationId, {
+            void loadMessagesRef.current(activeSessionId, activeConversationId, {
               showLoading: false,
             }).catch(() => undefined);
           }, delay);
@@ -1527,6 +1590,7 @@ export function DashboardClient({ initialOverview }: Props) {
       };
 
       socket.onclose = () => {
+        setIsRealtimeConnected(false);
         if (cancelled) {
           return;
         }
@@ -1545,21 +1609,10 @@ export function DashboardClient({ initialOverview }: Props) {
       if (reconnectTimer) {
         window.clearTimeout(reconnectTimer);
       }
+      setIsRealtimeConnected(false);
       socket?.close();
     };
-  }, [
-    activeConversationId,
-    activeSessionId,
-    isAuthReady,
-    isConversationActivelyViewed,
-    isConversationsView,
-    loadContactBoards,
-    loadContactCRMProfiles,
-    loadContactKanbanStages,
-    loadMessages,
-    loadOverview,
-    markConversationAsRead,
-  ]);
+  }, [isAuthReady]);
 
   useEffect(() => {
     if (!isConversationsView) {
