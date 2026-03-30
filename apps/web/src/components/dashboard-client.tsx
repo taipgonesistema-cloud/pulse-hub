@@ -5182,7 +5182,7 @@ function ConversationComposer({
         return trimmedValue;
       }
 
-      return `*${trimmedSignature}*\n${trimmedValue}`;
+      return `*${trimmedSignature}:*\n${trimmedValue}`;
     },
     [signatureEnabled, signatureName],
   );
@@ -5456,7 +5456,7 @@ function ConversationComposer({
               value={signatureName}
             />
             <span className="rounded-full bg-black/20 px-3 py-2 text-xs text-zinc-400">
-              Preview: {signatureEnabled && signatureName.trim() ? `*${signatureName.trim()}*` : 'desativada'}
+              Preview: {signatureEnabled && signatureName.trim() ? `*${signatureName.trim()}:*` : 'desativada'}
             </span>
           </div>
         </div>
