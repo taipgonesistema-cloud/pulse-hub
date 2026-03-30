@@ -3760,12 +3760,14 @@ export function DashboardClient({ initialOverview }: Props) {
             <div className="border-t border-white/5 bg-[var(--surface-low)]/45 px-3 py-3 backdrop-blur-xl md:px-4">
               <ConversationComposer
                 key={`${selectedSession.id}:${selectedConversation?.id ?? 'none'}`}
+                defaultSignatureName={authUser?.name ?? 'Operador'}
                 disabled={!selectedConversation || isPending}
                 onCancelReply={() => setReplyTargetMessage(null)}
                 onSendMedia={sendMedia}
                 onSend={sendMessage}
                 quickReplies={quickReplies}
                 replyToMessage={replyTargetMessage}
+                signatureStorageKey={`pulse-hub.composer-signature:${authUser?.id ?? 'guest'}`}
               />
             </div>
           </>
@@ -5088,21 +5090,27 @@ function AvatarBadge({
 }
 
 function ConversationComposer({
+  defaultSignatureName,
   disabled,
   onSend,
   onSendMedia,
   onCancelReply,
   quickReplies,
   replyToMessage,
+  signatureStorageKey,
 }: {
+  defaultSignatureName: string;
   disabled: boolean;
   onSend: (text: string) => Promise<boolean>;
   onSendMedia: (file: File, options?: { sticker?: boolean; caption?: string }) => Promise<boolean>;
   onCancelReply: () => void;
   quickReplies: string[];
   replyToMessage: MessageRecord | null;
+  signatureStorageKey: string;
 }) {
   const [draft, setDraft] = useState('');
+  const [signatureEnabled, setSignatureEnabled] = useState(true);
+  const [signatureName, setSignatureName] = useState(defaultSignatureName.trim() || 'Operador');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState<ComposerAttachment | null>(null);
@@ -5114,6 +5122,45 @@ function ConversationComposer({
 
   const composerBusy = disabled || isSendingText || isUploading;
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const rawValue = window.localStorage.getItem(signatureStorageKey);
+    if (!rawValue) {
+      setSignatureEnabled(true);
+      setSignatureName(defaultSignatureName.trim() || 'Operador');
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(rawValue) as {
+        enabled?: boolean;
+        name?: string;
+      };
+      setSignatureEnabled(parsed.enabled !== false);
+      setSignatureName(parsed.name?.trim() || defaultSignatureName.trim() || 'Operador');
+    } catch {
+      setSignatureEnabled(true);
+      setSignatureName(defaultSignatureName.trim() || 'Operador');
+    }
+  }, [defaultSignatureName, signatureStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(
+      signatureStorageKey,
+      JSON.stringify({
+        enabled: signatureEnabled,
+        name: signatureName.trim() || defaultSignatureName.trim() || 'Operador',
+      }),
+    );
+  }, [defaultSignatureName, signatureEnabled, signatureName, signatureStorageKey]);
+
   const clearAttachment = useCallback(() => {
     setSelectedAttachment((current) => {
       if (current?.previewUrl) {
@@ -5122,6 +5169,23 @@ function ConversationComposer({
       return null;
     });
   }, []);
+
+  const applySignature = useCallback(
+    (value: string) => {
+      const trimmedValue = value.trim();
+      if (!trimmedValue) {
+        return '';
+      }
+
+      const trimmedSignature = signatureName.trim();
+      if (!signatureEnabled || !trimmedSignature) {
+        return trimmedValue;
+      }
+
+      return `*${trimmedSignature}*\n${trimmedValue}`;
+    },
+    [signatureEnabled, signatureName],
+  );
 
   const queueAttachment = useCallback((file: File, options?: { sticker?: boolean }) => {
     const sticker = options?.sticker ?? false;
@@ -5159,7 +5223,7 @@ function ConversationComposer({
       setIsUploading(true);
       const sent = await onSendMedia(selectedAttachment.file, {
         sticker: selectedAttachment.sticker,
-        caption: selectedAttachment.sticker ? '' : draft.trim(),
+        caption: selectedAttachment.sticker ? '' : applySignature(draft),
       });
       setIsUploading(false);
 
@@ -5170,7 +5234,7 @@ function ConversationComposer({
       return;
     }
 
-    const payload = draft.trim();
+    const payload = applySignature(draft);
     if (!payload) {
       return;
     }
@@ -5181,7 +5245,7 @@ function ConversationComposer({
     if (sent) {
       setDraft('');
     }
-  }, [clearAttachment, composerBusy, draft, onSend, onSendMedia, selectedAttachment]);
+  }, [applySignature, clearAttachment, composerBusy, draft, onSend, onSendMedia, selectedAttachment]);
 
   return (
     <div
@@ -5366,6 +5430,37 @@ function ConversationComposer({
           Solte o arquivo aqui para anexar a conversa.
         </div>
       ) : null}
+
+      <div className="mb-3 flex flex-wrap items-center gap-3 rounded-[24px] border border-white/10 bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.9)]">
+        <button
+          aria-pressed={signatureEnabled}
+          className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${signatureEnabled ? 'border-[var(--primary)]/40 bg-[var(--primary)]/20' : 'border-white/10 bg-white/5'}`}
+          disabled={composerBusy}
+          onClick={() => setSignatureEnabled((current) => !current)}
+          type="button"
+        >
+          <span
+            className={`ml-1 block h-5 w-5 rounded-full transition ${signatureEnabled ? 'translate-x-5 bg-[var(--primary)]' : 'translate-x-0 bg-zinc-400'}`}
+          />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
+            Assinatura do operador
+          </p>
+          <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center">
+            <input
+              className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none transition focus:border-[var(--primary)]/40"
+              disabled={composerBusy}
+              onChange={(event) => setSignatureName(event.target.value)}
+              placeholder="Nome da assinatura"
+              value={signatureName}
+            />
+            <span className="rounded-full bg-black/20 px-3 py-2 text-xs text-zinc-400">
+              Preview: {signatureEnabled && signatureName.trim() ? `*${signatureName.trim()}*` : 'desativada'}
+            </span>
+          </div>
+        </div>
+      </div>
 
       <div className="flex items-center gap-3 rounded-[30px] bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-18px_rgba(0,0,0,0.9)]">
         <div className="relative">
