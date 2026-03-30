@@ -511,11 +511,18 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 		return nil, err
 	}
 
+	contextInfo, err := m.buildReplyContext(ctx, normalizedJID.String(), req.ReplyToMessageID)
+	if err != nil {
+		return nil, err
+	}
+
+	messageProto := buildTextMessageProto(text, contextInfo)
+
 	messageID := types.MessageID(client.GenerateMessageID())
 	resp, err := client.SendMessage(
 		ctx,
 		normalizedJID,
-		&waE2E.Message{Conversation: proto.String(text)},
+		messageProto,
 		whatsmeow.SendRequestExtra{ID: messageID},
 	)
 	if err != nil {
@@ -532,6 +539,7 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 		AckStatus: "sent",
 		Kind:      "text",
 		Text:      text,
+		RawJSON:   marshalProto(messageProto),
 		Timestamp: resp.Timestamp.UTC().Format(time.RFC3339),
 	}
 
@@ -589,6 +597,12 @@ func (m *Manager) SendMedia(ctx context.Context, req models.SendMediaRequest) (*
 		return nil, err
 	}
 
+	contextInfo, err := m.buildReplyContext(ctx, normalizedJID.String(), req.ReplyToMessageID)
+	if err != nil {
+		return nil, err
+	}
+	applyContextInfoToMessage(messageProto, contextInfo)
+
 	messageID := types.MessageID(client.GenerateMessageID())
 	resp, err := client.SendMessage(
 		ctx,
@@ -634,6 +648,123 @@ func (m *Manager) SendMedia(ctx context.Context, req models.SendMediaRequest) (*
 	}
 
 	return &message, nil
+}
+
+func buildTextMessageProto(text string, contextInfo *waE2E.ContextInfo) *waE2E.Message {
+	if contextInfo == nil {
+		return &waE2E.Message{Conversation: proto.String(text)}
+	}
+
+	return &waE2E.Message{ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+		Text:        proto.String(text),
+		ContextInfo: contextInfo,
+	}}
+}
+
+func (m *Manager) buildReplyContext(ctx context.Context, chatJID, replyToMessageID string) (*waE2E.ContextInfo, error) {
+	replyToMessageID = strings.TrimSpace(replyToMessageID)
+	if replyToMessageID == "" {
+		return nil, nil
+	}
+
+	target, err := m.store.GetMessageByID(ctx, replyToMessageID)
+	if err != nil {
+		return nil, err
+	}
+	if target == nil {
+		return nil, errors.New("reply target message not found")
+	}
+	if target.ChatJID != chatJID {
+		return nil, errors.New("reply target does not belong to this conversation")
+	}
+
+	contextInfo := &waE2E.ContextInfo{
+		StanzaID:      proto.String(target.ID),
+		RemoteJID:     proto.String(target.ChatJID),
+		QuotedMessage: buildQuotedMessageProto(*target),
+	}
+
+	if participant := quotedMessageParticipant(*target); participant != "" {
+		contextInfo.Participant = proto.String(participant)
+	}
+
+	return contextInfo, nil
+}
+
+func buildQuotedMessageProto(message models.Message) *waE2E.Message {
+	if parsed := parseStoredMessageProto(message.RawJSON); parsed != nil {
+		return parsed
+	}
+
+	switch message.Kind {
+	case "image":
+		return &waE2E.Message{ImageMessage: &waE2E.ImageMessage{Caption: proto.String(message.Text)}}
+	case "video":
+		return &waE2E.Message{VideoMessage: &waE2E.VideoMessage{Caption: proto.String(message.Text)}}
+	case "audio":
+		return &waE2E.Message{AudioMessage: &waE2E.AudioMessage{PTT: proto.Bool(strings.EqualFold(strings.TrimSpace(message.Text), "[voice note]"))}}
+	case "document":
+		return &waE2E.Message{DocumentMessage: &waE2E.DocumentMessage{
+			Caption:  proto.String(message.Text),
+			FileName: proto.String(message.FileName),
+		}}
+	case "sticker":
+		return &waE2E.Message{StickerMessage: &waE2E.StickerMessage{}}
+	default:
+		return &waE2E.Message{Conversation: proto.String(message.Text)}
+	}
+}
+
+func parseStoredMessageProto(raw string) *waE2E.Message {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	var message waE2E.Message
+	if err := waProto.Unmarshal([]byte(raw), &message); err != nil {
+		return nil
+	}
+
+	return unwrapMessageProto(&message)
+}
+
+func quotedMessageParticipant(message models.Message) string {
+	if !strings.HasSuffix(message.ChatJID, "@g.us") {
+		return ""
+	}
+
+	return strings.TrimSpace(message.SenderJID)
+}
+
+func applyContextInfoToMessage(message *waE2E.Message, contextInfo *waE2E.ContextInfo) {
+	if message == nil || contextInfo == nil {
+		return
+	}
+
+	if text := strings.TrimSpace(message.GetConversation()); text != "" {
+		message.Conversation = nil
+		message.ExtendedTextMessage = &waE2E.ExtendedTextMessage{
+			Text:        proto.String(text),
+			ContextInfo: contextInfo,
+		}
+		return
+	}
+
+	switch {
+	case message.GetExtendedTextMessage() != nil:
+		message.GetExtendedTextMessage().ContextInfo = contextInfo
+	case message.GetImageMessage() != nil:
+		message.GetImageMessage().ContextInfo = contextInfo
+	case message.GetVideoMessage() != nil:
+		message.GetVideoMessage().ContextInfo = contextInfo
+	case message.GetDocumentMessage() != nil:
+		message.GetDocumentMessage().ContextInfo = contextInfo
+	case message.GetAudioMessage() != nil:
+		message.GetAudioMessage().ContextInfo = contextInfo
+	case message.GetStickerMessage() != nil:
+		message.GetStickerMessage().ContextInfo = contextInfo
+	}
 }
 
 func (m *Manager) GetMessageMedia(ctx context.Context, messageID string) ([]byte, string, string, error) {

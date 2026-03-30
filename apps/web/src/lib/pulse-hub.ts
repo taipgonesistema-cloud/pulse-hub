@@ -15,6 +15,13 @@ export type SessionStatus =
   | 'disconnected'
   | 'error';
 
+export type MessageReplyRecord = {
+  messageId: string;
+  author?: string;
+  body?: string;
+  kind?: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'media';
+};
+
 export type MessageRecord = {
   id: string;
   conversationId: string;
@@ -26,6 +33,7 @@ export type MessageRecord = {
   fileName?: string;
   timestamp: string;
   author: string;
+  replyTo?: MessageReplyRecord;
 };
 
 export type ConversationRecord = {
