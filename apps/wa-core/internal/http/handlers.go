@@ -89,6 +89,7 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 		r.Get("/sessions/{id}/conversations/{jid}/messages", api.handleConversationMessages)
 		r.Post("/sessions/{id}/conversations/{jid}/messages", api.handleConversationSend)
 		r.Post("/sessions/{id}/conversations/{jid}/media", api.handleConversationSendMedia)
+		r.Post("/sessions/{id}/conversations/{jid}/reactions", api.handleConversationReaction)
 		r.Post("/sessions/{id}/conversations/{jid}/read", api.handleConversationRead)
 		r.Get("/sessions/{id}/stream", api.handleSessionStream)
 	})
@@ -500,6 +501,35 @@ func (a *API) handleConversationSendMedia(w http.ResponseWriter, r *http.Request
 	}
 
 	message, err := a.manager.SendMedia(r.Context(), req)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, toMessageRecord(*message, jid))
+}
+
+func (a *API) handleConversationReaction(w http.ResponseWriter, r *http.Request) {
+	if !a.isDefaultSession(chi.URLParam(r, "id")) {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	jid, err := pathJID(chi.URLParam(r, "jid"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var request models.SendReactionRequest
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	request.JID = jid
+
+	message, err := a.manager.SendReaction(r.Context(), request)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
 		return
@@ -1031,6 +1061,9 @@ type responseSample struct {
 func collectResponseSamples(messages []models.Message) []responseSample {
 	samples := make([]responseSample, 0)
 	for index, message := range messages {
+		if message.Kind == "reaction" {
+			continue
+		}
 		if message.FromMe {
 			continue
 		}
@@ -1042,6 +1075,9 @@ func collectResponseSamples(messages []models.Message) []responseSample {
 
 		for nextIndex := index + 1; nextIndex < len(messages); nextIndex++ {
 			next := messages[nextIndex]
+			if next.Kind == "reaction" {
+				continue
+			}
 			if !next.FromMe {
 				continue
 			}
@@ -1071,6 +1107,17 @@ func collectResponseSamples(messages []models.Message) []responseSample {
 		}
 	}
 	return samples
+}
+
+func latestPreviewMessage(messages []models.Message) models.Message {
+	for index := len(messages) - 1; index >= 0; index-- {
+		if messages[index].Kind == "reaction" {
+			continue
+		}
+		return messages[index]
+	}
+
+	return models.Message{}
 }
 
 func isBusinessHoursResponseWindow(incomingAt, outgoingAt time.Time) bool {
@@ -1244,7 +1291,7 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 		if !ok {
 			messages, err := a.manager.ListMessages(ctx, chat.JID)
 			if err == nil && len(messages) > 0 {
-				latestMessage = messages[len(messages)-1]
+				latestMessage = latestPreviewMessage(messages)
 				latestMessageByConversation[canonicalJID] = latestMessage
 			}
 		}
@@ -1298,10 +1345,16 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 }
 
 func toMessageRecords(messages []models.Message, conversationID string) []models.MessageRecord {
+	reactionsByMessageID := buildMessageReactions(messages)
 	items := make([]models.MessageRecord, 0, len(messages))
 	for _, message := range messages {
+		if message.Kind == "reaction" {
+			continue
+		}
+
 		record := toMessageRecord(message, conversationID)
 		record.ReplyTo = buildMessageReplyRecord(message)
+		record.Reactions = reactionsByMessageID[message.ID]
 		items = append(items, record)
 	}
 	return items
@@ -1357,6 +1410,96 @@ func buildMessageReplyRecord(message models.Message) *models.MessageReplyRecord 
 	}
 
 	return reply
+}
+
+func buildMessageReactions(messages []models.Message) map[string][]models.MessageReaction {
+	actorReactionsByTarget := make(map[string]map[string]string)
+
+	for _, message := range messages {
+		if message.Kind != "reaction" {
+			continue
+		}
+
+		targetMessageID, ok := reactionTargetMessageID(message)
+		if !ok {
+			continue
+		}
+
+		reactionsByActor, exists := actorReactionsByTarget[targetMessageID]
+		if !exists {
+			reactionsByActor = make(map[string]string)
+			actorReactionsByTarget[targetMessageID] = reactionsByActor
+		}
+
+		actorKey := reactionActorKey(message)
+		emoji := strings.TrimSpace(message.Text)
+		if emoji == "" {
+			delete(reactionsByActor, actorKey)
+			continue
+		}
+
+		reactionsByActor[actorKey] = emoji
+	}
+
+	reactionsByTarget := make(map[string][]models.MessageReaction, len(actorReactionsByTarget))
+	for targetMessageID, reactionsByActor := range actorReactionsByTarget {
+		counts := make(map[string]int)
+		fromMe := make(map[string]bool)
+
+		for actorKey, emoji := range reactionsByActor {
+			counts[emoji]++
+			if strings.HasPrefix(actorKey, "me:") {
+				fromMe[emoji] = true
+			}
+		}
+
+		reactions := make([]models.MessageReaction, 0, len(counts))
+		for emoji, count := range counts {
+			reactions = append(reactions, models.MessageReaction{
+				Emoji:  emoji,
+				Count:  count,
+				FromMe: fromMe[emoji],
+			})
+		}
+
+		sort.Slice(reactions, func(i, j int) bool {
+			if reactions[i].FromMe != reactions[j].FromMe {
+				return reactions[i].FromMe
+			}
+			if reactions[i].Count != reactions[j].Count {
+				return reactions[i].Count > reactions[j].Count
+			}
+			return reactions[i].Emoji < reactions[j].Emoji
+		})
+
+		reactionsByTarget[targetMessageID] = reactions
+	}
+
+	return reactionsByTarget
+}
+
+func reactionTargetMessageID(message models.Message) (string, bool) {
+	parsed := parseStoredMessageProto(message.RawJSON)
+	if parsed == nil || parsed.GetReactionMessage() == nil || parsed.GetReactionMessage().GetKey() == nil {
+		return "", false
+	}
+
+	targetMessageID := strings.TrimSpace(parsed.GetReactionMessage().GetKey().GetID())
+	if targetMessageID == "" {
+		return "", false
+	}
+
+	return targetMessageID, true
+}
+
+func reactionActorKey(message models.Message) string {
+	if message.FromMe {
+		return "me:" + fallbackText(message.SenderJID, fallbackText(message.Author, message.ID))
+	}
+	if sender := strings.TrimSpace(message.SenderJID); sender != "" {
+		return "sender:" + sender
+	}
+	return "author:" + fallbackText(message.Author, message.ID)
 }
 
 func parseStoredMessageProto(raw string) *waE2E.Message {

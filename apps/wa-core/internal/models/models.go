@@ -96,6 +96,13 @@ type SendMediaRequest struct {
 	ReplyToMessageID string
 }
 
+type SendReactionRequest struct {
+	JID       string `json:"jid"`
+	MessageID string `json:"messageId"`
+	Emoji     string `json:"emoji"`
+	Author    string `json:"author,omitempty"`
+}
+
 type SessionQRResponse struct {
 	Status           SessionStatus `json:"status"`
 	Code             string        `json:"code,omitempty"`
@@ -176,6 +183,7 @@ type MessageRecord struct {
 	Timestamp      string              `json:"timestamp"`
 	Author         string              `json:"author"`
 	ReplyTo        *MessageReplyRecord `json:"replyTo,omitempty"`
+	Reactions      []MessageReaction   `json:"reactions,omitempty"`
 }
 
 type MessageReplyRecord struct {
@@ -183,6 +191,12 @@ type MessageReplyRecord struct {
 	Author    string `json:"author,omitempty"`
 	Body      string `json:"body,omitempty"`
 	Kind      string `json:"kind,omitempty"`
+}
+
+type MessageReaction struct {
+	Emoji  string `json:"emoji"`
+	Count  int    `json:"count"`
+	FromMe bool   `json:"fromMe,omitempty"`
 }
 
 type ConversationRecord struct {

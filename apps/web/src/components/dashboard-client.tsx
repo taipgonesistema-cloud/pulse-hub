@@ -89,6 +89,8 @@ const quickReplies = [
 
 const composerEmojis = ['🙂', '😂', '😍', '🙏', '🎉', '🔥', '✅', '❤️'];
 
+const messageReactionOptions = ['👍', '❤️', '😂', '😮', '🙏'];
+
 const contactsKanbanStages = [
   {
     id: 'new' as const,
@@ -2017,6 +2019,39 @@ export function DashboardClient({ initialOverview }: Props) {
     [applyOutgoingMessageUpdate, executeAction, loadMessages, loadOverview, replyTargetMessage, selectedConversation, selectedSession],
   );
 
+  const reactToMessage = useCallback(
+    (message: MessageRecord, emoji: string) => {
+      if (!selectedSession || !selectedConversation || !emoji.trim()) {
+        return Promise.resolve(false);
+      }
+
+      return executeAction(async () => {
+        const response = await fetch(
+          `${apiUrl}/whatsapp/sessions/${selectedSession.id}/conversations/${selectedConversation.id}/reactions`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messageId: message.id,
+              emoji: emoji.trim(),
+              author: 'Operador',
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error('Nao foi possivel reagir a mensagem.');
+        }
+
+        void loadMessages(selectedSession.id, selectedConversation.id, {
+          showLoading: false,
+        }).catch(() => undefined);
+        void loadOverview().catch(() => undefined);
+      });
+    },
+    [executeAction, loadMessages, loadOverview, selectedConversation, selectedSession],
+  );
+
   if (!isAuthReady) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#050505_0%,#111111_100%)] px-6 text-white">
@@ -3206,6 +3241,7 @@ export function DashboardClient({ initialOverview }: Props) {
                         }
                         message={message}
                         messageLookup={messagesById}
+                        onReact={reactToMessage}
                         onReply={setReplyTargetMessage}
                       />
                     </Fragment>
@@ -4949,6 +4985,7 @@ const MessageBubble = memo(function MessageBubble({
   conversation,
   isUnread = false,
   messageLookup,
+  onReact,
   onReply,
 }: {
   message: MessageRecord;
@@ -4956,10 +4993,13 @@ const MessageBubble = memo(function MessageBubble({
   conversation?: ConversationRecord;
   isUnread?: boolean;
   messageLookup: Map<string, MessageRecord>;
+  onReact: (message: MessageRecord, emoji: string) => Promise<boolean>;
   onReply: (message: MessageRecord) => void;
 }) {
   const incoming = message.direction !== 'outgoing';
   const showGroupAuthor = shouldShowGroupMessageAuthor(message, conversation);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const reactionPickerRef = useRef<HTMLDivElement | null>(null);
   const repliedMessage = message.replyTo ? messageLookup.get(message.replyTo.messageId) : undefined;
   const replyAuthor = repliedMessage
     ? repliedMessage.direction === 'outgoing'
@@ -4970,6 +5010,23 @@ const MessageBubble = memo(function MessageBubble({
     ? summarizeMessageForReply(repliedMessage)
     : summarizeReplyRecord(message.replyTo);
 
+  useEffect(() => {
+    if (!showReactionPicker) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (reactionPickerRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setShowReactionPicker(false);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
+  }, [showReactionPicker]);
+
   const bubbleBody = (
     <div
       className={`group relative ${incoming
@@ -4978,14 +5035,45 @@ const MessageBubble = memo(function MessageBubble({
           }`
         : 'rounded-[26px] rounded-tr-none border border-[rgba(127,175,255,0.2)] bg-[linear-gradient(180deg,rgba(100,161,255,0.16),rgba(100,161,255,0.08))] px-5 py-4 shadow-[inset_0_0_18px_rgba(127,175,255,0.08)]'}`}
     >
-      <button
-        aria-label="Responder mensagem"
-        className={`absolute top-3 grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-[rgba(12,16,22,0.92)] text-zinc-300 shadow-[0_16px_28px_-18px_rgba(0,0,0,0.9)] transition hover:text-white md:opacity-0 md:group-hover:opacity-100 ${incoming ? 'right-3' : 'left-3'}`}
-        onClick={() => onReply(message)}
-        type="button"
+      <div
+        ref={reactionPickerRef}
+        className={`absolute top-3 z-10 flex items-center gap-2 ${incoming ? 'right-3' : 'left-3'}`}
       >
-        <Reply className="h-4 w-4" strokeWidth={2.1} />
-      </button>
+        {showReactionPicker ? (
+          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-[rgba(10,14,18,0.96)] px-2 py-2 shadow-[0_20px_36px_-20px_rgba(0,0,0,0.95)]">
+            {messageReactionOptions.map((emoji) => (
+              <button
+                key={`${message.id}:${emoji}`}
+                className="grid h-8 w-8 place-items-center rounded-full bg-white/5 text-base transition hover:bg-white/10"
+                onClick={() => {
+                  setShowReactionPicker(false);
+                  void onReact(message, emoji);
+                }}
+                type="button"
+              >
+                <span aria-hidden>{emoji}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <button
+          aria-label="Reagir a mensagem"
+          className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-[rgba(12,16,22,0.92)] text-zinc-300 shadow-[0_16px_28px_-18px_rgba(0,0,0,0.9)] transition hover:text-white md:opacity-0 md:group-hover:opacity-100"
+          onClick={() => setShowReactionPicker((current) => !current)}
+          type="button"
+        >
+          <Heart className="h-4 w-4" strokeWidth={2.1} />
+        </button>
+        <button
+          aria-label="Responder mensagem"
+          className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-[rgba(12,16,22,0.92)] text-zinc-300 shadow-[0_16px_28px_-18px_rgba(0,0,0,0.9)] transition hover:text-white md:opacity-0 md:group-hover:opacity-100"
+          onClick={() => onReply(message)}
+          type="button"
+        >
+          <Reply className="h-4 w-4" strokeWidth={2.1} />
+        </button>
+      </div>
 
       {showGroupAuthor ? (
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--secondary)]">
@@ -5003,6 +5091,20 @@ const MessageBubble = memo(function MessageBubble({
       ) : null}
 
       <MessageContent message={message} />
+
+      {message.reactions?.length ? (
+        <div className={`mt-3 flex flex-wrap gap-2 ${incoming ? '' : 'justify-end'}`}>
+          {message.reactions.map((reaction) => (
+            <span
+              key={`${message.id}:${reaction.emoji}`}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${reaction.fromMe ? 'border-[var(--primary)]/30 bg-[var(--primary)]/14 text-[var(--primary)]' : 'border-white/10 bg-white/6 text-zinc-200'}`}
+            >
+              <span aria-hidden>{reaction.emoji}</span>
+              {reaction.count > 1 ? <span>{reaction.count}</span> : null}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {incoming ? (
         <span className="mt-3 block text-xs text-zinc-500">
@@ -5784,7 +5886,8 @@ function areMessageListsEquivalent(left: MessageRecord[], right: MessageRecord[]
       current.fileName !== next.fileName ||
       current.timestamp !== next.timestamp ||
 	      current.author !== next.author ||
-      !areReplyTargetsEquivalent(current.replyTo, next.replyTo)
+	      !areReplyTargetsEquivalent(current.replyTo, next.replyTo) ||
+	      !areMessageReactionsEquivalent(current.reactions, next.reactions)
     ) {
       return false;
     }
@@ -5808,6 +5911,33 @@ function areReplyTargetsEquivalent(left?: MessageRecord['replyTo'], right?: Mess
     left.body === right.body &&
     left.kind === right.kind
   );
+}
+
+function areMessageReactionsEquivalent(
+  left?: MessageRecord['reactions'],
+  right?: MessageRecord['reactions'],
+) {
+  const leftReactions = left ?? [];
+  const rightReactions = right ?? [];
+
+  if (leftReactions.length !== rightReactions.length) {
+    return false;
+  }
+
+  for (let index = 0; index < leftReactions.length; index += 1) {
+    const current = leftReactions[index];
+    const next = rightReactions[index];
+
+    if (
+      current.emoji !== next.emoji ||
+      current.count !== next.count ||
+      Boolean(current.fromMe) !== Boolean(next.fromMe)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function mergeMessageIntoTimeline(messages: MessageRecord[], message: MessageRecord) {

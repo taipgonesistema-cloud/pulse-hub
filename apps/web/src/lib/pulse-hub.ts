@@ -22,6 +22,12 @@ export type MessageReplyRecord = {
   kind?: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'media';
 };
 
+export type MessageReaction = {
+  emoji: string;
+  count: number;
+  fromMe?: boolean;
+};
+
 export type MessageRecord = {
   id: string;
   conversationId: string;
@@ -34,6 +40,7 @@ export type MessageRecord = {
   timestamp: string;
   author: string;
   replyTo?: MessageReplyRecord;
+  reactions?: MessageReaction[];
 };
 
 export type ConversationRecord = {

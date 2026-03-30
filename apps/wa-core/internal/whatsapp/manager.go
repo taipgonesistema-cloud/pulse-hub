@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"go.mau.fi/whatsmeow"
+	waCommon "go.mau.fi/whatsmeow/proto/waCommon"
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	waHistorySync "go.mau.fi/whatsmeow/proto/waHistorySync"
 	wmstore "go.mau.fi/whatsmeow/store"
@@ -661,6 +662,103 @@ func buildTextMessageProto(text string, contextInfo *waE2E.ContextInfo) *waE2E.M
 	}}
 }
 
+func (m *Manager) SendReaction(ctx context.Context, req models.SendReactionRequest) (*models.Message, error) {
+	emoji := strings.TrimSpace(req.Emoji)
+	if emoji == "" {
+		return nil, errors.New("reaction emoji is required")
+	}
+
+	parsedJID, err := types.ParseJID(strings.TrimSpace(req.JID))
+	if err != nil {
+		return nil, fmt.Errorf("invalid jid: %w", err)
+	}
+	parsedJID = parsedJID.ToNonAD()
+	if err := validateSendableJID(parsedJID); err != nil {
+		return nil, err
+	}
+
+	m.mu.RLock()
+	client := m.client
+	connected := client != nil && client.IsConnected()
+	m.mu.RUnlock()
+	if !connected {
+		return nil, errors.New("session is not connected")
+	}
+
+	normalizedJID, err := normalizeSendJID(ctx, client, parsedJID)
+	if err != nil {
+		return nil, err
+	}
+
+	targetMessageID := strings.TrimSpace(req.MessageID)
+	if targetMessageID == "" {
+		return nil, errors.New("reaction target message is required")
+	}
+
+	target, err := m.store.GetMessageByID(ctx, targetMessageID)
+	if err != nil {
+		return nil, err
+	}
+	if target == nil {
+		return nil, errors.New("reaction target message not found")
+	}
+	if target.ChatJID != normalizedJID.String() {
+		return nil, errors.New("reaction target does not belong to this conversation")
+	}
+
+	messageProto := &waE2E.Message{ReactionMessage: &waE2E.ReactionMessage{
+		Key:               buildReactionMessageKey(*target),
+		Text:              proto.String(emoji),
+		SenderTimestampMS: proto.Int64(time.Now().UnixMilli()),
+	}}
+
+	messageID := types.MessageID(client.GenerateMessageID())
+	resp, err := client.SendMessage(
+		ctx,
+		normalizedJID,
+		messageProto,
+		whatsmeow.SendRequestExtra{ID: messageID},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("send reaction: %w", err)
+	}
+
+	author := strings.TrimSpace(req.Author)
+	if author == "" {
+		author = "Operador"
+	}
+
+	message := models.Message{
+		ID:        string(resp.ID),
+		ChatJID:   normalizedJID.String(),
+		SenderJID: ownDeviceJID(client),
+		Author:    author,
+		FromMe:    true,
+		AckStatus: "sent",
+		Kind:      "reaction",
+		Text:      emoji,
+		RawJSON:   marshalProto(messageProto),
+		Timestamp: resp.Timestamp.UTC().Format(time.RFC3339),
+	}
+
+	created, err := m.store.SaveMessage(ctx, message)
+	if err != nil {
+		return nil, err
+	}
+	if created {
+		m.broadcast(models.RealtimeEvent{
+			Kind:       "message.new",
+			ChatJID:    message.ChatJID,
+			MessageID:  message.ID,
+			Direction:  "outgoing",
+			Text:       message.Text,
+			OccurredAt: message.Timestamp,
+		})
+	}
+
+	return &message, nil
+}
+
 func (m *Manager) buildReplyContext(ctx context.Context, chatJID, replyToMessageID string) (*waE2E.ContextInfo, error) {
 	replyToMessageID = strings.TrimSpace(replyToMessageID)
 	if replyToMessageID == "" {
@@ -765,6 +863,20 @@ func applyContextInfoToMessage(message *waE2E.Message, contextInfo *waE2E.Contex
 	case message.GetStickerMessage() != nil:
 		message.GetStickerMessage().ContextInfo = contextInfo
 	}
+}
+
+func buildReactionMessageKey(message models.Message) *waCommon.MessageKey {
+	key := &waCommon.MessageKey{
+		RemoteJID: proto.String(message.ChatJID),
+		FromMe:    proto.Bool(message.FromMe),
+		ID:        proto.String(message.ID),
+	}
+
+	if participant := quotedMessageParticipant(message); participant != "" {
+		key.Participant = proto.String(participant)
+	}
+
+	return key
 }
 
 func (m *Manager) GetMessageMedia(ctx context.Context, messageID string) ([]byte, string, string, error) {
@@ -1585,9 +1697,10 @@ func extractMessagePayload(message *waE2E.Message) (string, string, string, stri
 		message.GetLocationMessage() != nil,
 		message.GetLiveLocationMessage() != nil:
 		return "[midia]", "media", "", "", true
+	case message.GetReactionMessage() != nil:
+		return strings.TrimSpace(message.GetReactionMessage().GetText()), "reaction", "", "", true
 	case message.GetProtocolMessage() != nil,
 		message.GetSenderKeyDistributionMessage() != nil,
-		message.GetReactionMessage() != nil,
 		message.GetPlaceholderMessage() != nil:
 		return "", "", "", "", false
 	default:
