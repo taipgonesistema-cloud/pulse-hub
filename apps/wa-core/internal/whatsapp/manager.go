@@ -702,7 +702,11 @@ func (m *Manager) SendReaction(ctx context.Context, req models.SendReactionReque
 	if target == nil {
 		return nil, errors.New("reaction target message not found")
 	}
-	if target.ChatJID != normalizedJID.String() {
+	belongsToConversation, err := m.sameConversationJID(ctx, target.ChatJID, normalizedJID.String())
+	if err != nil {
+		return nil, err
+	}
+	if !belongsToConversation {
 		return nil, errors.New("reaction target does not belong to this conversation")
 	}
 
@@ -772,7 +776,11 @@ func (m *Manager) buildReplyContext(ctx context.Context, chatJID, replyToMessage
 	if target == nil {
 		return nil, errors.New("reply target message not found")
 	}
-	if target.ChatJID != chatJID {
+	belongsToConversation, err := m.sameConversationJID(ctx, target.ChatJID, chatJID)
+	if err != nil {
+		return nil, err
+	}
+	if !belongsToConversation {
 		return nil, errors.New("reply target does not belong to this conversation")
 	}
 
@@ -833,6 +841,40 @@ func quotedMessageParticipant(message models.Message) string {
 	}
 
 	return strings.TrimSpace(message.SenderJID)
+}
+
+func (m *Manager) sameConversationJID(ctx context.Context, left, right string) (bool, error) {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+	if left == "" || right == "" {
+		return false, nil
+	}
+	if left == right {
+		return true, nil
+	}
+
+	leftResolved, err := m.ResolveConversationJID(ctx, left)
+	if err != nil {
+		return false, err
+	}
+	rightResolved, err := m.ResolveConversationJID(ctx, right)
+	if err != nil {
+		return false, err
+	}
+	if leftResolved == rightResolved {
+		return true, nil
+	}
+
+	leftCanonical, err := m.CanonicalConversationJID(ctx, left)
+	if err != nil {
+		return false, err
+	}
+	rightCanonical, err := m.CanonicalConversationJID(ctx, right)
+	if err != nil {
+		return false, err
+	}
+
+	return leftCanonical == rightCanonical, nil
 }
 
 func applyContextInfoToMessage(message *waE2E.Message, contextInfo *waE2E.ContextInfo) {
