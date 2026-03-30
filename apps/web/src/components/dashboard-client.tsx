@@ -1655,10 +1655,21 @@ export function DashboardClient({ initialOverview }: Props) {
     };
 
     const created = await executeAction(async () => {
+      const requestPayload = {
+        id: nextBoard.id,
+        label: nextBoard.label,
+        description: nextBoard.description,
+        contactsFilter: nextBoard.contactsFilter,
+        contactsAudienceFilter: nextBoard.contactsAudienceFilter,
+        contactsChannelFilter: nextBoard.contactsChannelFilter,
+        createdBy: nextBoard.createdBy,
+        updatedBy: nextBoard.updatedBy,
+      };
+
       const response = await fetch(`${apiUrl}/whatsapp/contacts/boards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(nextBoard),
+        body: JSON.stringify(requestPayload),
       });
 
       if (!response.ok) {
@@ -1796,10 +1807,20 @@ export function DashboardClient({ initialOverview }: Props) {
       }));
 
       const saved = await executeAction(async () => {
+        const requestPayload = {
+          sessionId: nextProfile.sessionId,
+          conversationId: nextProfile.conversationId,
+          assignee: nextProfile.assignee,
+          priority: nextProfile.priority,
+          notes: nextProfile.notes,
+          tags: nextProfile.tags,
+          updatedBy: nextProfile.updatedBy,
+        };
+
         const response = await fetch(`${apiUrl}/whatsapp/contacts/crm`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(nextProfile),
+          body: JSON.stringify(requestPayload),
         });
 
         if (!response.ok) {
