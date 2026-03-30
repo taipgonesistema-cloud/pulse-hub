@@ -565,10 +565,6 @@ func (s *Store) SaveMessage(ctx context.Context, message models.Message) (bool, 
 		return false, nil
 	}
 
-	if message.Kind == "reaction" {
-		return true, nil
-	}
-
 	chat, err := s.GetChat(ctx, message.ChatJID)
 	if err != nil {
 		return true, err

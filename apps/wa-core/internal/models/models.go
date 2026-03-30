@@ -81,26 +81,17 @@ type SessionInitRequest struct {
 }
 
 type SendTextRequest struct {
-	JID              string `json:"jid"`
-	Text             string `json:"text"`
-	ReplyToMessageID string `json:"replyToMessageId,omitempty"`
+	JID  string `json:"jid"`
+	Text string `json:"text"`
 }
 
 type SendMediaRequest struct {
-	JID              string
-	Caption          string
-	FileName         string
-	MimeType         string
-	Data             []byte
-	Sticker          bool
-	ReplyToMessageID string
-}
-
-type SendReactionRequest struct {
-	JID       string `json:"jid"`
-	MessageID string `json:"messageId"`
-	Emoji     string `json:"emoji"`
-	Author    string `json:"author,omitempty"`
+	JID      string
+	Caption  string
+	FileName string
+	MimeType string
+	Data     []byte
+	Sticker  bool
 }
 
 type SessionQRResponse struct {
@@ -172,31 +163,16 @@ type ChannelRecord struct {
 }
 
 type MessageRecord struct {
-	ID             string                   `json:"id"`
-	ConversationID string                   `json:"conversationId"`
-	Direction      string                   `json:"direction"`
-	Kind           string                   `json:"kind,omitempty"`
-	Body           string                   `json:"body"`
-	MediaURL       string                   `json:"mediaUrl,omitempty"`
-	MimeType       string                   `json:"mimeType,omitempty"`
-	FileName       string                   `json:"fileName,omitempty"`
-	Timestamp      string                   `json:"timestamp"`
-	Author         string                   `json:"author"`
-	ReplyTo        *MessageReplyRecord      `json:"replyTo,omitempty"`
-	Reactions      []MessageReactionSummary `json:"reactions,omitempty"`
-}
-
-type MessageReplyRecord struct {
-	MessageID string `json:"messageId"`
-	Author    string `json:"author,omitempty"`
-	Body      string `json:"body,omitempty"`
-	Kind      string `json:"kind,omitempty"`
-}
-
-type MessageReactionSummary struct {
-	Emoji  string `json:"emoji"`
-	Count  int    `json:"count"`
-	FromMe bool   `json:"fromMe,omitempty"`
+	ID             string `json:"id"`
+	ConversationID string `json:"conversationId"`
+	Direction      string `json:"direction"`
+	Kind           string `json:"kind,omitempty"`
+	Body           string `json:"body"`
+	MediaURL       string `json:"mediaUrl,omitempty"`
+	MimeType       string `json:"mimeType,omitempty"`
+	FileName       string `json:"fileName,omitempty"`
+	Timestamp      string `json:"timestamp"`
+	Author         string `json:"author"`
 }
 
 type ConversationRecord struct {

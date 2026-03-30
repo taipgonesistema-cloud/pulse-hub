@@ -89,8 +89,6 @@ const quickReplies = [
 
 const composerEmojis = ['🙂', '😂', '😍', '🙏', '🎉', '🔥', '✅', '❤️'];
 
-const messageReactionOptions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
-
 const contactsKanbanStages = [
   {
     id: 'new' as const,
@@ -264,7 +262,6 @@ export function DashboardClient({ initialOverview }: Props) {
     initialOverview.conversations[0]?.id ?? '',
   );
   const [messages, setMessages] = useState<MessageRecord[]>([]);
-  const [replyTargetMessage, setReplyTargetMessage] = useState<MessageRecord | null>(null);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all');
@@ -584,11 +581,6 @@ export function DashboardClient({ initialOverview }: Props) {
 
     return Math.max(messages.length - unreadCount, 0);
   }, [activeConversationId, messages.length, openedUnreadMarker]);
-
-  const messagesById = useMemo(
-    () => new Map(messages.map((message) => [message.id, message])),
-    [messages],
-  );
 
   const dashboardConversations = useMemo(
     () => (isDashboardView ? overview.conversations.slice(0, 3) : []),
@@ -1501,12 +1493,10 @@ export function DashboardClient({ initialOverview }: Props) {
 
   useEffect(() => {
     if (!isConversationsView) {
-      setReplyTargetMessage(null);
       return;
     }
 
     shouldStickToBottomRef.current = true;
-    setReplyTargetMessage(null);
   }, [activeConversationId, isConversationsView]);
 
   useLayoutEffect(() => {
@@ -1899,18 +1889,13 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     const payload = text.trim();
-    const replyToMessageId = replyTargetMessage?.id;
     return executeAction(async () => {
       const response = await fetch(
         `${apiUrl}/whatsapp/sessions/${selectedSession.id}/conversations/${selectedConversation.id}/messages`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            body: payload,
-            author: 'Operador',
-            replyToMessageId,
-          }),
+          body: JSON.stringify({ body: payload, author: 'Operador' }),
         },
       );
 
@@ -1920,9 +1905,8 @@ export function DashboardClient({ initialOverview }: Props) {
 
       await loadMessages(selectedSession.id, selectedConversation.id);
       await loadOverview();
-      setReplyTargetMessage(null);
     });
-  }, [executeAction, loadMessages, loadOverview, replyTargetMessage?.id, selectedConversation, selectedSession]);
+  }, [executeAction, loadMessages, loadOverview, selectedConversation, selectedSession]);
 
   const sendMedia = useCallback(
     (file: File, options?: { sticker?: boolean; caption?: string }) => {
@@ -1930,13 +1914,9 @@ export function DashboardClient({ initialOverview }: Props) {
         return Promise.resolve(false);
       }
 
-      const replyToMessageId = replyTargetMessage?.id;
       const formData = new FormData();
       formData.append('file', file);
       formData.append('caption', options?.sticker ? '' : options?.caption ?? '');
-      if (replyToMessageId) {
-        formData.append('replyToMessageId', replyToMessageId);
-      }
       if (options?.sticker) {
         formData.append('sticker', 'true');
         formData.append('kind', 'sticker');
@@ -1956,40 +1936,6 @@ export function DashboardClient({ initialOverview }: Props) {
         }
 
         await loadMessages(selectedSession.id, selectedConversation.id);
-        await loadOverview();
-        setReplyTargetMessage(null);
-      });
-    },
-    [executeAction, loadMessages, loadOverview, replyTargetMessage?.id, selectedConversation, selectedSession],
-  );
-
-  const reactToMessage = useCallback(
-    (message: MessageRecord, emoji: string) => {
-      if (!selectedSession || !selectedConversation || !emoji.trim()) {
-        return Promise.resolve(false);
-      }
-
-      return executeAction(async () => {
-        const response = await fetch(
-          `${apiUrl}/whatsapp/sessions/${selectedSession.id}/conversations/${selectedConversation.id}/reactions`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messageId: message.id,
-              emoji: emoji.trim(),
-              author: 'Operador',
-            }),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error('Nao foi possivel reagir a mensagem.');
-        }
-
-        await loadMessages(selectedSession.id, selectedConversation.id, {
-          showLoading: false,
-        });
         await loadOverview();
       });
     },
@@ -3182,10 +3128,7 @@ export function DashboardClient({ initialOverview }: Props) {
                           index >= unreadSeparatorIndex &&
                           message.direction === 'incoming'
                         }
-                        messageLookup={messagesById}
                         message={message}
-                        onReact={reactToMessage}
-                        onReply={setReplyTargetMessage}
                       />
                     </Fragment>
                   ))}
@@ -3224,11 +3167,9 @@ export function DashboardClient({ initialOverview }: Props) {
               <ConversationComposer
                 key={`${selectedSession.id}:${selectedConversation?.id ?? 'none'}`}
                 disabled={!selectedConversation || isPending}
-                onCancelReply={() => setReplyTargetMessage(null)}
                 onSendMedia={sendMedia}
                 onSend={sendMessage}
                 quickReplies={quickReplies}
-                replyToMessage={replyTargetMessage}
               />
             </div>
           </>
@@ -4554,16 +4495,12 @@ function ConversationComposer({
   disabled,
   onSend,
   onSendMedia,
-  onCancelReply,
   quickReplies,
-  replyToMessage,
 }: {
   disabled: boolean;
   onSend: (text: string) => Promise<boolean>;
   onSendMedia: (file: File, options?: { sticker?: boolean; caption?: string }) => Promise<boolean>;
-  onCancelReply: () => void;
   quickReplies: string[];
-  replyToMessage: MessageRecord | null;
 }) {
   const [draft, setDraft] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -4781,30 +4718,6 @@ function ConversationComposer({
         </div>
       ) : null}
 
-      {replyToMessage ? (
-        <div className="mb-3 overflow-hidden rounded-[24px] border border-[var(--primary)]/18 bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.9)]">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 border-l-2 border-[var(--primary)]/55 pl-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--primary)]">
-                Respondendo {replyToMessage.direction === 'outgoing' ? 'voce' : replyToMessage.author}
-              </p>
-              <p className="mt-1 line-clamp-2 text-sm text-zinc-300">
-                {summarizeMessageForReply(replyToMessage)}
-              </p>
-            </div>
-            <button
-              aria-label="Cancelar resposta"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/5 text-[var(--muted)] transition hover:bg-white/10 hover:text-white"
-              disabled={composerBusy}
-              onClick={onCancelReply}
-              type="button"
-            >
-              <X className="h-4 w-4" strokeWidth={2.1} />
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       {showEmojiPicker ? (
         <div className="mb-3 flex flex-wrap gap-2 rounded-[26px] border border-white/10 bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.9)]">
           {composerEmojis.map((emoji) => (
@@ -4927,180 +4840,47 @@ const MessageBubble = memo(function MessageBubble({
   avatarUrl,
   conversation,
   isUnread = false,
-  messageLookup,
-  onReply,
-  onReact,
 }: {
   message: MessageRecord;
   avatarUrl?: string | null;
   conversation?: ConversationRecord;
   isUnread?: boolean;
-  messageLookup: Map<string, MessageRecord>;
-  onReply: (message: MessageRecord) => void;
-  onReact: (message: MessageRecord, emoji: string) => Promise<boolean>;
 }) {
   const incoming = message.direction !== 'outgoing';
   const showGroupAuthor = shouldShowGroupMessageAuthor(message, conversation);
-  const [showActions, setShowActions] = useState(false);
-  const [showReactionPicker, setShowReactionPicker] = useState(false);
-  const actionMenuRef = useRef<HTMLDivElement | null>(null);
-  const repliedMessage = message.replyTo ? messageLookup.get(message.replyTo.messageId) : undefined;
-  const replyAuthor = repliedMessage
-    ? repliedMessage.direction === 'outgoing'
-      ? 'Voce'
-      : repliedMessage.author
-    : normalizeReplyAuthor(message.replyTo?.author);
-  const replyPreview = repliedMessage
-    ? summarizeMessageForReply(repliedMessage)
-    : summarizeReplyRecord(message.replyTo);
-
-  useEffect(() => {
-    if (!showActions && !showReactionPicker) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (actionMenuRef.current?.contains(event.target as Node)) {
-        return;
-      }
-
-      setShowActions(false);
-      setShowReactionPicker(false);
-    };
-
-    window.addEventListener('pointerdown', handlePointerDown);
-    return () => window.removeEventListener('pointerdown', handlePointerDown);
-  }, [showActions, showReactionPicker]);
-
-  const bubbleBody = (
-    <div
-      className={`group relative ${incoming
-        ? `glass-panel rounded-[26px] rounded-tl-none px-5 py-4 ${
-            isUnread ? 'ring-1 ring-[var(--secondary)]/35 shadow-[0_0_0_1px_rgba(93,253,138,0.08)]' : ''
-          }`
-        : 'rounded-[26px] rounded-tr-none border border-[rgba(127,175,255,0.2)] bg-[linear-gradient(180deg,rgba(100,161,255,0.16),rgba(100,161,255,0.08))] px-5 py-4 shadow-[inset_0_0_18px_rgba(127,175,255,0.08)]'}`}
-    >
-      <div
-        ref={actionMenuRef}
-        className={`absolute top-3 z-20 ${incoming ? 'right-3' : 'left-3'}`}
-      >
-        <button
-          aria-label="Acoes da mensagem"
-          className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-[rgba(12,16,22,0.92)] text-zinc-300 shadow-[0_16px_28px_-18px_rgba(0,0,0,0.9)] transition hover:text-white md:opacity-0 md:group-hover:opacity-100"
-          onClick={() => {
-            setShowActions((current) => !current);
-            setShowReactionPicker(false);
-          }}
-          type="button"
-        >
-          <MoreVertical className="h-4 w-4" strokeWidth={2.1} />
-        </button>
-
-        {showActions ? (
-          <div className={`absolute top-[calc(100%+0.65rem)] w-44 rounded-[24px] border border-white/10 bg-[rgba(10,14,18,0.96)] p-2 shadow-[0_24px_40px_-20px_rgba(0,0,0,0.95)] ${incoming ? 'right-0' : 'left-0'}`}>
-            <button
-              className="flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm text-zinc-200 transition hover:bg-white/5"
-              onClick={() => {
-                onReply(message);
-                setShowActions(false);
-                setShowReactionPicker(false);
-              }}
-              type="button"
-            >
-              <span>Responder</span>
-              <Reply className="h-4 w-4" strokeWidth={2.1} />
-            </button>
-            <button
-              className="flex w-full items-center justify-between rounded-2xl px-3 py-3 text-left text-sm text-zinc-200 transition hover:bg-white/5"
-              onClick={() => {
-                setShowActions(false);
-                setShowReactionPicker((current) => !current);
-              }}
-              type="button"
-            >
-              <span>Reagir</span>
-              <Smile className="h-4 w-4" strokeWidth={2.1} />
-            </button>
-          </div>
-        ) : null}
-
-        {showReactionPicker ? (
-          <div className={`absolute top-[calc(100%+0.65rem)] flex items-center gap-1 rounded-[22px] border border-white/10 bg-[rgba(10,14,18,0.96)] px-2 py-2 shadow-[0_24px_40px_-20px_rgba(0,0,0,0.95)] ${incoming ? 'right-0' : 'left-0'}`}>
-            {messageReactionOptions.map((emoji) => (
-              <button
-                key={`${message.id}:${emoji}`}
-                className="grid h-10 w-10 place-items-center rounded-2xl bg-white/5 text-lg transition hover:bg-white/10"
-                onClick={() => {
-                  void onReact(message, emoji);
-                  setShowReactionPicker(false);
-                }}
-                type="button"
-              >
-                <span aria-hidden>{emoji}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-
-      {showGroupAuthor ? (
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--secondary)]">
-          {message.author}
-        </p>
-      ) : null}
-
-      {message.replyTo ? (
-        <div className={`mb-3 rounded-[20px] border px-3 py-3 ${incoming ? 'border-white/8 bg-white/4' : 'border-[rgba(127,175,255,0.18)] bg-[rgba(10,18,30,0.26)]'}`}>
-          <p className={`text-[11px] font-bold uppercase tracking-[0.16em] ${incoming ? 'text-[var(--secondary)]' : 'text-[var(--primary)]'}`}>
-            {replyAuthor || 'Mensagem citada'}
-          </p>
-          <p className="mt-1 text-sm leading-6 text-zinc-300">
-            {replyPreview}
-          </p>
-        </div>
-      ) : null}
-
-      <MessageContent message={message} />
-
-      {message.reactions?.length ? (
-        <div className={`mt-3 flex flex-wrap gap-2 ${incoming ? '' : 'justify-end'}`}>
-          {message.reactions.map((reaction) => (
-            <span
-              key={`${message.id}:${reaction.emoji}`}
-              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${reaction.fromMe ? 'border-[var(--primary)]/30 bg-[var(--primary)]/14 text-[var(--primary)]' : 'border-white/10 bg-white/6 text-zinc-200'}`}
-            >
-              <span aria-hidden>{reaction.emoji}</span>
-              {reaction.count > 1 ? <span>{reaction.count}</span> : null}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      {incoming ? (
-        <span className="mt-3 block text-xs text-zinc-500">
-          {formatClock(message.timestamp)}
-        </span>
-      ) : (
-        <div className="mt-3 flex items-center justify-end gap-2 text-xs text-[var(--primary)]">
-          <span>{formatClock(message.timestamp)}</span>
-          <span>••</span>
-        </div>
-      )}
-    </div>
-  );
 
   if (incoming) {
     return (
       <div className="flex max-w-[80%] gap-4">
         <AvatarBadge label={message.author} small src={showGroupAuthor ? null : avatarUrl} />
-        {bubbleBody}
+        <div
+          className={`glass-panel rounded-[26px] rounded-tl-none px-5 py-4 ${
+            isUnread ? 'ring-1 ring-[var(--secondary)]/35 shadow-[0_0_0_1px_rgba(93,253,138,0.08)]' : ''
+          }`}
+        >
+          {showGroupAuthor ? (
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--secondary)]">
+              {message.author}
+            </p>
+          ) : null}
+          <MessageContent message={message} />
+          <span className="mt-3 block text-xs text-zinc-500">
+            {formatClock(message.timestamp)}
+          </span>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="ml-auto flex max-w-[80%] justify-end">
-      {bubbleBody}
+      <div className="rounded-[26px] rounded-tr-none border border-[rgba(127,175,255,0.2)] bg-[linear-gradient(180deg,rgba(100,161,255,0.16),rgba(100,161,255,0.08))] px-5 py-4 shadow-[inset_0_0_18px_rgba(127,175,255,0.08)]">
+        <MessageContent message={message} />
+        <div className="mt-3 flex items-center justify-end gap-2 text-xs text-[var(--primary)]">
+          <span>{formatClock(message.timestamp)}</span>
+          <span>••</span>
+        </div>
+      </div>
     </div>
   );
 });
@@ -5181,57 +4961,6 @@ function MessageContent({ message }: { message: MessageRecord }) {
     default:
       return <FormattedMessageText className="text-lg leading-9 text-white/95" value={message.body} />;
   }
-}
-
-function summarizeMessageForReply(message: MessageRecord) {
-  const body = message.body.trim();
-
-  switch (message.kind) {
-    case 'image':
-      return body && body !== '[imagem]' ? body : 'Foto';
-    case 'video':
-      return body && body !== '[video]' ? body : 'Video';
-    case 'audio':
-      return body && body !== '[audio]' && body !== '[voice note]' ? body : 'Audio';
-    case 'document':
-      return body && body !== '[documento]' ? body : message.fileName || 'Documento';
-    case 'sticker':
-      return 'Figurinha';
-    default:
-      return body || 'Mensagem';
-  }
-}
-
-function summarizeReplyRecord(reply?: MessageRecord['replyTo']) {
-  if (!reply) {
-    return 'Mensagem';
-  }
-
-  const body = reply.body?.trim() ?? '';
-
-  switch (reply.kind) {
-    case 'image':
-      return body && body !== '[imagem]' ? body : 'Foto';
-    case 'video':
-      return body && body !== '[video]' ? body : 'Video';
-    case 'audio':
-      return body && body !== '[audio]' && body !== '[voice note]' ? body : 'Audio';
-    case 'document':
-      return body && body !== '[documento]' ? body : 'Documento';
-    case 'sticker':
-      return 'Figurinha';
-    default:
-      return body || 'Mensagem';
-  }
-}
-
-function normalizeReplyAuthor(author?: string) {
-  const value = author?.trim();
-  if (!value) {
-    return '';
-  }
-
-  return value.includes('@') ? 'Mensagem citada' : value;
 }
 
 function FormattedMessageText({
@@ -5849,58 +5578,9 @@ function areMessageListsEquivalent(left: MessageRecord[], right: MessageRecord[]
       current.id !== next.id ||
       current.conversationId !== next.conversationId ||
       current.direction !== next.direction ||
-      current.kind !== next.kind ||
       current.body !== next.body ||
-      current.mediaUrl !== next.mediaUrl ||
-      current.mimeType !== next.mimeType ||
-      current.fileName !== next.fileName ||
       current.timestamp !== next.timestamp ||
-	      current.author !== next.author ||
-      !areReplyTargetsEquivalent(current.replyTo, next.replyTo) ||
-      !areMessageReactionsEquivalent(current.reactions, next.reactions)
-    ) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-function areReplyTargetsEquivalent(left?: MessageRecord['replyTo'], right?: MessageRecord['replyTo']) {
-  if (!left && !right) {
-    return true;
-  }
-
-  if (!left || !right) {
-    return false;
-  }
-
-  return (
-    left.messageId === right.messageId &&
-    left.author === right.author &&
-    left.body === right.body &&
-    left.kind === right.kind
-  );
-}
-
-function areMessageReactionsEquivalent(
-  left?: MessageRecord['reactions'],
-  right?: MessageRecord['reactions'],
-) {
-  const leftReactions = left ?? [];
-  const rightReactions = right ?? [];
-
-  if (leftReactions.length !== rightReactions.length) {
-    return false;
-  }
-
-  for (let index = 0; index < leftReactions.length; index += 1) {
-    const current = leftReactions[index];
-    const next = rightReactions[index];
-    if (
-      current.emoji !== next.emoji ||
-      current.count !== next.count ||
-      Boolean(current.fromMe) !== Boolean(next.fromMe)
+      current.author !== next.author
     ) {
       return false;
     }
