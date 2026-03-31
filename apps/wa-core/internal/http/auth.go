@@ -118,7 +118,8 @@ func (a *API) handleSignOut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleListUsers(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.requireAdmin(w, r); !ok {
+	if currentAuth(r) == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
 		return
 	}
 

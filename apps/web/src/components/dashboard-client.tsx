@@ -367,7 +367,7 @@ export function DashboardClient({ initialOverview }: Props) {
       !hasLoadedInitialContactKanban ||
       !hasLoadedInitialContactBoards ||
       !hasLoadedInitialContactCRM ||
-      (isAdminUser && !hasLoadedInitialUsers));
+      !hasLoadedInitialUsers);
   const deferredContactsSearch = useDeferredValue(contactsSearch);
   const isConversationSwitching = pendingConversationId !== null;
   const isDashboardView = activeView === 'dashboard';
@@ -668,6 +668,15 @@ export function DashboardClient({ initialOverview }: Props) {
     [isDashboardView, overview.conversations],
   );
 
+  const operatorRoster = useMemo(() => {
+    const activeUsers = workspaceUsers.filter((user) => user.isActive);
+    if (activeUsers.length > 0) {
+      return activeUsers;
+    }
+
+    return authUser ? [authUser] : [];
+  }, [authUser, workspaceUsers]);
+
   const queueBreakdown = useMemo(() => {
     if (!isDashboardView) {
       return { whatsapp: 0, facebook: 0, instagram: 0 };
@@ -730,7 +739,7 @@ export function DashboardClient({ initialOverview }: Props) {
       customer: conversation.contact,
       customerAvatar: conversation.avatarUrl,
       channel: getContactChannelMeta(conversation),
-      agent: ['Alex Rivera', 'Sarah Chen', 'Marcus Thorne', 'Avery Chen', 'Liam Vance'][index] ?? 'Ops Agent',
+      agent: operatorRoster[index % Math.max(operatorRoster.length, 1)]?.name ?? authUser?.name ?? 'Operador',
       resolutionTime: ['14m 20s', '08m 15s', '22m 45s', '11m 05s', '17m 32s'][index] ?? '09m 40s',
     }));
 
@@ -747,7 +756,7 @@ export function DashboardClient({ initialOverview }: Props) {
       resolvedTickets,
       responseVelocity,
     };
-  }, [isAnalyticsView, overview.analytics, overview.conversations, overview.sessions]);
+  }, [authUser?.name, isAnalyticsView, operatorRoster, overview.analytics, overview.conversations, overview.sessions]);
 
   const safeResponseVelocity = useMemo(
     () => normalizeResponseVelocityAnalytics(analyticsModel?.responseVelocity),
@@ -1061,14 +1070,9 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [authenticatedFetch]);
 
   const loadWorkspaceUsers = useCallback(async () => {
-    if (!isAdminUser) {
-      setWorkspaceUsers([]);
-      return;
-    }
-
     const users = await listUsers();
     setWorkspaceUsers(users);
-  }, [isAdminUser]);
+  }, []);
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -1123,9 +1127,8 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [isAuthReady, loadContactCRMProfiles]);
 
   useEffect(() => {
-    if (!isAuthReady || !isAdminUser) {
+    if (!isAuthReady) {
       setWorkspaceUsers([]);
-      setHasLoadedInitialUsers(true);
       return;
     }
 
@@ -1136,7 +1139,7 @@ export function DashboardClient({ initialOverview }: Props) {
         setIsLoadingUsers(false);
         setHasLoadedInitialUsers(true);
       });
-  }, [isAdminUser, isAuthReady, loadWorkspaceUsers]);
+  }, [isAuthReady, loadWorkspaceUsers]);
 
   const fetchConversationMessages = useCallback(async (sessionId: string, conversationId: string) => {
     const response = await authenticatedFetch(
@@ -2413,7 +2416,7 @@ export function DashboardClient({ initialOverview }: Props) {
           { label: 'Kanban', ready: hasLoadedInitialContactKanban },
           { label: 'Boards', ready: hasLoadedInitialContactBoards },
           { label: 'CRM', ready: hasLoadedInitialContactCRM },
-          ...(isAdminUser ? [{ label: 'Usuarios', ready: hasLoadedInitialUsers }] : []),
+          { label: 'Equipe', ready: hasLoadedInitialUsers },
         ]}
         subtitle={`Carregando conversas, contatos e dados operacionais${authUser?.name ? ` para ${authUser.name}` : ''}.`}
         title="Preparando seu workspace"
