@@ -1216,6 +1216,20 @@ func latestPreviewMessage(messages []models.Message) models.Message {
 	return models.Message{}
 }
 
+func isMeaningfulConversationName(name, jid string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" || name == strings.TrimSpace(jid) {
+		return false
+	}
+
+	parsed, err := types.ParseJID(strings.TrimSpace(jid))
+	if err == nil && parsed.User != "" && name == parsed.User {
+		return false
+	}
+
+	return true
+}
+
 func isBusinessHoursResponseWindow(incomingAt, outgoingAt time.Time) bool {
 	incomingLocal := incomingAt.Local()
 	outgoingLocal := outgoingAt.Local()
@@ -1380,7 +1394,9 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 			contact = contactMap[chat.JID]
 		}
 		name := chat.Name
-		if contact.DisplayName != "" {
+		if !chat.IsGroup && contact.DisplayName != "" {
+			name = contact.DisplayName
+		} else if chat.IsGroup && !isMeaningfulConversationName(name, chat.JID) && contact.DisplayName != "" {
 			name = contact.DisplayName
 		}
 		if name == "" {
