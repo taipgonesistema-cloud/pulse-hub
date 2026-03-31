@@ -1588,14 +1588,66 @@ func (m *Manager) resolveAuthor(ctx context.Context, chatJID, senderJID string, 
 		return "Operador"
 	}
 	if senderJID != "" && senderJID != chatJID {
-		if sender, err := m.store.GetContact(ctx, senderJID); err == nil && sender != nil && sender.DisplayName != "" {
-			return sender.DisplayName
+		if name := m.resolveParticipantName(ctx, senderJID); name != "" {
+			return name
 		}
+		return localPart(senderJID)
 	}
 	if contact, err := m.store.GetContact(ctx, chatJID); err == nil && contact != nil && contact.DisplayName != "" {
 		return contact.DisplayName
 	}
 	return localPart(chatJID)
+}
+
+func (m *Manager) resolveParticipantName(ctx context.Context, jid string) string {
+	jid = strings.TrimSpace(jid)
+	if jid == "" {
+		return ""
+	}
+
+	candidates := []string{jid}
+	if canonical, err := m.CanonicalConversationJID(ctx, jid); err == nil && canonical != "" && canonical != jid {
+		candidates = append(candidates, canonical)
+	}
+	if resolved, err := m.ResolveConversationJID(ctx, jid); err == nil && resolved != "" && resolved != jid {
+		candidates = append(candidates, resolved)
+	}
+
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if _, exists := seen[candidate]; exists {
+			continue
+		}
+		seen[candidate] = struct{}{}
+
+		contact, err := m.store.GetContact(ctx, candidate)
+		if err != nil || contact == nil || !isMeaningfulDisplayName(contact.DisplayName, candidate) {
+			continue
+		}
+
+		if candidate != jid {
+			_ = m.store.UpsertContact(ctx, models.Contact{
+				JID:          jid,
+				Phone:        fallbackPhone(jid, contact.Phone),
+				FirstName:    contact.FirstName,
+				FullName:     contact.FullName,
+				PushName:     contact.PushName,
+				BusinessName: contact.BusinessName,
+				DisplayName:  contact.DisplayName,
+				PhotoID:      contact.PhotoID,
+				PhotoURL:     contact.PhotoURL,
+				UpdatedAt:    models.NowString(),
+			})
+		}
+
+		return contact.DisplayName
+	}
+
+	return ""
 }
 
 func (m *Manager) resolveChatName(ctx context.Context, chatJID string) string {
