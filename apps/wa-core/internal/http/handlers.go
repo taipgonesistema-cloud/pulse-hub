@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
+	"go.mau.fi/whatsmeow/types"
 	waProto "google.golang.org/protobuf/encoding/protojson"
 
 	appauth "pulsehub/wa-core/internal/auth"
@@ -255,7 +256,13 @@ func (a *API) handleSendMedia(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err)
 		return
 	}
-	respondJSON(w, http.StatusCreated, toMessageRecord(*message, message.ChatJID))
+	record, err := a.buildMessageRecord(r.Context(), *message, message.ChatJID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusCreated, record)
 }
 
 func (a *API) handleMessageMedia(w http.ResponseWriter, r *http.Request) {
@@ -495,7 +502,13 @@ func (a *API) handleConversationMessages(w http.ResponseWriter, r *http.Request)
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
-	respondJSON(w, http.StatusOK, toMessageRecords(messages, jid))
+	records, err := a.toMessageRecords(r.Context(), messages, jid)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, records)
 }
 
 func (a *API) handleConversationSend(w http.ResponseWriter, r *http.Request) {
@@ -530,7 +543,13 @@ func (a *API) handleConversationSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, toMessageRecord(*message, jid))
+	record, err := a.buildMessageRecord(r.Context(), *message, jid)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, record)
 }
 
 func (a *API) handleConversationSendMedia(w http.ResponseWriter, r *http.Request) {
@@ -557,7 +576,13 @@ func (a *API) handleConversationSendMedia(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	respondJSON(w, http.StatusOK, toMessageRecord(*message, jid))
+	record, err := a.buildMessageRecord(r.Context(), *message, jid)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, record)
 }
 
 func (a *API) handleConversationReaction(w http.ResponseWriter, r *http.Request) {
@@ -586,7 +611,13 @@ func (a *API) handleConversationReaction(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondJSON(w, http.StatusOK, toMessageRecord(*message, jid))
+	record, err := a.buildMessageRecord(r.Context(), *message, jid)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, record)
 }
 
 func (a *API) handleConversationRead(w http.ResponseWriter, r *http.Request) {
@@ -1413,7 +1444,7 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 	return conversations, nil
 }
 
-func toMessageRecords(messages []models.Message, conversationID string) []models.MessageRecord {
+func (a *API) toMessageRecords(ctx context.Context, messages []models.Message, conversationID string) ([]models.MessageRecord, error) {
 	reactionsByMessageID := buildMessageReactions(messages)
 	items := make([]models.MessageRecord, 0, len(messages))
 	for _, message := range messages {
@@ -1421,15 +1452,18 @@ func toMessageRecords(messages []models.Message, conversationID string) []models
 			continue
 		}
 
-		record := toMessageRecord(message, conversationID)
+		record, err := a.buildMessageRecord(ctx, message, conversationID)
+		if err != nil {
+			return nil, err
+		}
 		record.ReplyTo = buildMessageReplyRecord(message)
 		record.Reactions = reactionsByMessageID[message.ID]
 		items = append(items, record)
 	}
-	return items
+	return items, nil
 }
 
-func toMessageRecord(message models.Message, conversationID string) models.MessageRecord {
+func (a *API) buildMessageRecord(ctx context.Context, message models.Message, conversationID string) (models.MessageRecord, error) {
 	direction := "incoming"
 	if message.FromMe {
 		direction = "outgoing"
@@ -1438,18 +1472,119 @@ func toMessageRecord(message models.Message, conversationID string) models.Messa
 	if message.Kind != "" && message.Kind != "text" && message.Kind != "media" {
 		mediaURL = "/messages/" + url.PathEscape(message.ID) + "/media"
 	}
+	body, err := a.resolveMessageBody(ctx, message)
+	if err != nil {
+		return models.MessageRecord{}, err
+	}
 	return models.MessageRecord{
 		ID:             message.ID,
 		ConversationID: conversationID,
 		Direction:      direction,
 		Kind:           message.Kind,
-		Body:           message.Text,
+		Body:           body,
 		MediaURL:       mediaURL,
 		MimeType:       message.MimeType,
 		FileName:       message.FileName,
 		Timestamp:      message.Timestamp,
 		Author:         fallbackText(message.Author, "Contato"),
+	}, nil
+}
+
+func (a *API) resolveMessageBody(ctx context.Context, message models.Message) (string, error) {
+	body := message.Text
+	parsed := parseStoredMessageProto(message.RawJSON)
+	if parsed == nil {
+		return body, nil
 	}
+
+	contextInfo := messageContextInfo(parsed)
+	if contextInfo == nil || len(contextInfo.GetMentionedJID()) == 0 {
+		return body, nil
+	}
+
+	resolvedBody := body
+	for _, mentionedJID := range contextInfo.GetMentionedJID() {
+		replacement, handles, err := a.resolveMentionReplacement(ctx, mentionedJID)
+		if err != nil {
+			return "", err
+		}
+		if replacement == "" || len(handles) == 0 {
+			continue
+		}
+		for _, handle := range handles {
+			resolvedBody = strings.ReplaceAll(resolvedBody, handle, replacement)
+		}
+	}
+
+	return resolvedBody, nil
+}
+
+func (a *API) resolveMentionReplacement(ctx context.Context, jidText string) (string, []string, error) {
+	parsed, err := types.ParseJID(strings.TrimSpace(jidText))
+	if err != nil {
+		return "", nil, nil
+	}
+	parsed = parsed.ToNonAD()
+
+	candidates := []string{parsed.String()}
+	if canonical, err := a.manager.CanonicalConversationJID(ctx, parsed.String()); err == nil && canonical != "" && canonical != parsed.String() {
+		candidates = append(candidates, canonical)
+	}
+	if resolved, err := a.manager.ResolveConversationJID(ctx, parsed.String()); err == nil && resolved != "" && resolved != parsed.String() {
+		candidates = append(candidates, resolved)
+	}
+
+	name := ""
+	handlesSet := make(map[string]struct{})
+	handles := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+
+		candidateJID, err := types.ParseJID(candidate)
+		if err == nil && candidateJID.User != "" {
+			handle := "@" + candidateJID.User
+			if _, exists := handlesSet[handle]; !exists {
+				handlesSet[handle] = struct{}{}
+				handles = append(handles, handle)
+			}
+		}
+
+		contact, err := a.store.GetContact(ctx, candidate)
+		if err != nil {
+			return "", nil, err
+		}
+		if contact != nil && isUsableMentionDisplayName(contact.DisplayName, candidate) {
+			name = contact.DisplayName
+			break
+		}
+	}
+
+	if name == "" {
+		name = parsed.User
+	}
+	if name == "" {
+		return "", handles, nil
+	}
+
+	return "@" + name, handles, nil
+}
+
+func isUsableMentionDisplayName(name, jid string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	if name == jid {
+		return false
+	}
+	parsed, err := types.ParseJID(strings.TrimSpace(jid))
+	if err == nil && parsed.User != "" && name == parsed.User {
+		return false
+	}
+	return true
 }
 
 func buildMessageReplyRecord(message models.Message) *models.MessageReplyRecord {
