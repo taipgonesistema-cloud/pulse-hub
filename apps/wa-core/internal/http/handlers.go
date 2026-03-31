@@ -66,6 +66,8 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 		r.Get("/auth/me", api.handleMe)
 		r.Post("/auth/sign-out", api.handleSignOut)
 		r.Get("/auth/users", api.handleListUsers)
+		r.Get("/auth/users/{id}/sessions", api.handleListUserSessions)
+		r.Post("/auth/users/{id}/sessions/{sessionId}/revoke", api.handleRevokeUserSession)
 		r.Post("/auth/users", api.handleCreateUser)
 		r.Put("/auth/users/{id}", api.handleUpdateUser)
 

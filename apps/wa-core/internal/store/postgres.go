@@ -616,6 +616,59 @@ func (s *Store) CountActiveAuthSessions(ctx context.Context) (int, error) {
 	return count, nil
 }
 
+func (s *Store) ListActiveAuthSessionsByUser(ctx context.Context, userID string) ([]models.AuthSessionRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, user_id, created_at, last_seen_at, expires_at, user_agent, remote_addr, updated_at
+		FROM app_user_session
+		WHERE user_id = $1 AND revoked_at = '' AND expires_at > $2
+		ORDER BY last_seen_at DESC, created_at DESC
+	`, strings.TrimSpace(userID), models.NowString())
+	if err != nil {
+		return nil, fmt.Errorf("list active auth sessions for user %s: %w", userID, err)
+	}
+	defer rows.Close()
+
+	sessions := make([]models.AuthSessionRecord, 0)
+	for rows.Next() {
+		var session models.AuthSessionRecord
+		if err := rows.Scan(
+			&session.ID,
+			&session.UserID,
+			&session.CreatedAt,
+			&session.LastSeenAt,
+			&session.ExpiresAt,
+			&session.UserAgent,
+			&session.RemoteAddr,
+			&session.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan auth session: %w", err)
+		}
+		sessions = append(sessions, session)
+	}
+
+	return sessions, rows.Err()
+}
+
+func (s *Store) RevokeAuthSessionByID(ctx context.Context, userID, sessionID string) error {
+	userID = strings.TrimSpace(userID)
+	sessionID = strings.TrimSpace(sessionID)
+	if userID == "" || sessionID == "" {
+		return nil
+	}
+
+	now := models.NowString()
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE app_user_session
+		SET revoked_at = $1, updated_at = $2
+		WHERE id = $3 AND user_id = $4
+	`, now, now, sessionID, userID)
+	if err != nil {
+		return fmt.Errorf("revoke auth session %s: %w", sessionID, err)
+	}
+
+	return nil
+}
+
 func normalizeUserEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }

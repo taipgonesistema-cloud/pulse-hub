@@ -49,6 +49,7 @@ import {
   useTransition,
 } from 'react';
 import type {
+  AuthSessionRecord,
   AuthUser,
   ChannelRecord,
   ConversationRecord,
@@ -66,6 +67,8 @@ import {
   getStoredAuthToken,
   getStoredAuthUser,
   listUsers,
+  listUserSessions,
+  revokeUserSession,
   signOutRequest,
   updateUser,
 } from '@/lib/pulse-hub';
@@ -319,6 +322,11 @@ export function DashboardClient({ initialOverview }: Props) {
   const [settingsSection, setSettingsSection] = useState<'sessions' | 'users'>('sessions');
   const [workspaceUsers, setWorkspaceUsers] = useState<AuthUser[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [expandedUserSessionsId, setExpandedUserSessionsId] = useState<string | null>(null);
+  const [workspaceUserSessionsMap, setWorkspaceUserSessionsMap] = useState<
+    Record<string, AuthSessionRecord[]>
+  >({});
+  const [loadingUserSessionsMap, setLoadingUserSessionsMap] = useState<Record<string, boolean>>({});
   const [draggedContactKey, setDraggedContactKey] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<ContactKanbanStageId | null>(null);
   const [showCreateContactModal, setShowCreateContactModal] = useState(false);
@@ -1116,6 +1124,28 @@ export function DashboardClient({ initialOverview }: Props) {
     setWorkspaceUsers(users);
   }, []);
 
+  const loadUserSessionsForUser = useCallback(async (userId: string) => {
+    setLoadingUserSessionsMap((current) => ({ ...current, [userId]: true }));
+    try {
+      const sessions = await listUserSessions(userId);
+      setWorkspaceUserSessionsMap((current) => ({ ...current, [userId]: sessions }));
+    } finally {
+      setLoadingUserSessionsMap((current) => ({ ...current, [userId]: false }));
+    }
+  }, []);
+
+  const toggleUserSessions = useCallback(
+    (userId: string) => {
+      setExpandedUserSessionsId((current) => (current === userId ? null : userId));
+      if (workspaceUserSessionsMap[userId]) {
+        return;
+      }
+
+      void loadUserSessionsForUser(userId).catch(() => undefined);
+    },
+    [loadUserSessionsForUser, workspaceUserSessionsMap],
+  );
+
   useEffect(() => {
     if (!isAuthReady) {
       return;
@@ -1171,6 +1201,8 @@ export function DashboardClient({ initialOverview }: Props) {
   useEffect(() => {
     if (!isAuthReady) {
       setWorkspaceUsers([]);
+      setWorkspaceUserSessionsMap({});
+      setExpandedUserSessionsId(null);
       return;
     }
 
@@ -1888,6 +1920,21 @@ export function DashboardClient({ initialOverview }: Props) {
       void executeAction(handler, options);
     });
   }, [executeAction]);
+
+  const revokeWorkspaceUserSession = useCallback(
+    async (userId: string, sessionId: string) => {
+      const completed = await executeAction(async () => {
+        await revokeUserSession(userId, sessionId);
+        const sessions = await listUserSessions(userId);
+        setWorkspaceUserSessionsMap((current) => ({ ...current, [userId]: sessions }));
+      }, { successMessage: 'Sessao revogada' });
+
+      if (completed) {
+        await loadWorkspaceUsers().catch(() => undefined);
+      }
+    },
+    [executeAction, loadWorkspaceUsers],
+  );
 
   const applyOutgoingMessageUpdate = useCallback(
     (sessionId: string, conversationId: string, message: MessageRecord) => {
@@ -3351,6 +3398,9 @@ export function DashboardClient({ initialOverview }: Props) {
 
                     {!isLoadingUsers ? workspaceUsers.map((user) => {
                       const editing = editingUserId === user.id;
+                      const userSessions = workspaceUserSessionsMap[user.id] ?? [];
+                      const sessionsExpanded = expandedUserSessionsId === user.id;
+                      const isLoadingSessions = Boolean(loadingUserSessionsMap[user.id]);
 
                       return (
                         <div key={user.id} className="rounded-[24px] border border-white/8 bg-white/4 p-4">
@@ -3372,6 +3422,70 @@ export function DashboardClient({ initialOverview }: Props) {
                           <p className="mt-3 text-xs text-[var(--muted)]">
                             Ultimo login: {user.lastLoginAt ? formatTimestamp(user.lastLoginAt) : 'ainda sem login'}
                           </p>
+
+                          <div className="mt-4 rounded-[20px] border border-white/8 bg-black/10 px-3 py-3">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+                                  Sessoes ativas
+                                </p>
+                                <p className="mt-1 text-sm text-zinc-300">
+                                  {userSessions.length > 0
+                                    ? `${userSessions.length} sessoes carregadas`
+                                    : 'Carregue as sessoes deste usuario para revisar acessos ativos.'}
+                                </p>
+                              </div>
+                              <button
+                                className="rounded-full bg-white/6 px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                                onClick={() => toggleUserSessions(user.id)}
+                                type="button"
+                              >
+                                {sessionsExpanded ? 'Ocultar sessoes' : 'Ver sessoes'}
+                              </button>
+                            </div>
+
+                            {sessionsExpanded ? (
+                              <div className="mt-3 space-y-2">
+                                {isLoadingSessions ? <StackSkeleton rows={2} /> : null}
+                                {!isLoadingSessions && userSessions.length === 0 ? (
+                                  <div className="rounded-[18px] border border-dashed border-white/8 px-3 py-4 text-sm text-zinc-500">
+                                    Nenhuma sessao ativa encontrada para este usuario.
+                                  </div>
+                                ) : null}
+                                {!isLoadingSessions ? userSessions.map((session) => (
+                                  <div key={session.id} className="rounded-[18px] border border-white/8 bg-white/[0.03] px-3 py-3">
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                      <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-semibold text-white">
+                                          {formatSessionUserAgent(session.userAgent)}
+                                        </p>
+                                        <p className="mt-1 truncate text-xs text-zinc-500">
+                                          {session.remoteAddr || 'IP indisponivel'}
+                                        </p>
+                                      </div>
+                                      <button
+                                        className="rounded-full bg-rose-500/10 px-3 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/15"
+                                        onClick={() => {
+                                          void revokeWorkspaceUserSession(user.id, session.id);
+                                        }}
+                                        type="button"
+                                      >
+                                        Revogar
+                                      </button>
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-500">
+                                      <span className="rounded-full bg-white/5 px-2.5 py-1">
+                                        Ultima atividade {formatTimestamp(session.lastSeenAt)}
+                                      </span>
+                                      <span className="rounded-full bg-white/5 px-2.5 py-1">
+                                        Expira {formatTimestamp(session.expiresAt)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )) : null}
+                              </div>
+                            ) : null}
+                          </div>
 
                           {editing ? (
                             <div className="mt-4 space-y-3">
@@ -6270,6 +6384,28 @@ function formatRoleLabel(role: AuthUser['role']) {
     default:
       return 'Attendant';
   }
+}
+
+function formatSessionUserAgent(userAgent?: string) {
+  const value = userAgent?.trim();
+  if (!value) {
+    return 'Sessao web';
+  }
+
+  if (value.includes('Windows')) {
+    return 'Windows browser';
+  }
+  if (value.includes('Mac OS')) {
+    return 'macOS browser';
+  }
+  if (value.includes('Android')) {
+    return 'Android browser';
+  }
+  if (value.includes('iPhone') || value.includes('iPad')) {
+    return 'iOS browser';
+  }
+
+  return value.length > 64 ? `${value.slice(0, 64)}...` : value;
 }
 
 function formatDateLabel(timestamp: string) {

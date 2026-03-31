@@ -267,6 +267,51 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, updated)
 }
 
+func (a *API) handleListUserSessions(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin); !ok {
+		return
+	}
+
+	userID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if userID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Usuario invalido."})
+		return
+	}
+
+	sessions, err := a.store.ListActiveAuthSessionsByUser(r.Context(), userID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, sessions)
+}
+
+func (a *API) handleRevokeUserSession(w http.ResponseWriter, r *http.Request) {
+	auth, ok := a.requireRoles(w, r, models.AuthRoleAdmin)
+	if !ok {
+		return
+	}
+
+	userID := strings.TrimSpace(chi.URLParam(r, "id"))
+	sessionID := strings.TrimSpace(chi.URLParam(r, "sessionId"))
+	if userID == "" || sessionID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Sessao invalida."})
+		return
+	}
+	if auth.session.ID == sessionID {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Nao e permitido revogar sua sessao atual por esta tela."})
+		return
+	}
+
+	if err := a.store.RevokeAuthSessionByID(r.Context(), userID, sessionID); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func isAllowedRole(role models.AuthRole) bool {
 	switch role {
 	case models.AuthRoleAdmin, models.AuthRoleSupervisor, models.AuthRoleAttendant:

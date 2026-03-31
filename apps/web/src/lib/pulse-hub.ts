@@ -114,6 +114,17 @@ export type AuthUser = {
   updatedAt: string;
 };
 
+export type AuthSessionRecord = {
+  id: string;
+  userId: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  userAgent?: string;
+  remoteAddr?: string;
+  updatedAt: string;
+};
+
 export type SignInPayload = {
   email: string;
   password: string;
@@ -351,4 +362,31 @@ export async function updateUser(userId: string, payload: UpdateUserPayload) {
   }
 
   return (await response.json()) as AuthUser;
+}
+
+export async function listUserSessions(userId: string) {
+  const response = await authFetch(`${apiUrl}/auth/users/${encodeURIComponent(userId)}/sessions`, {
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(errorPayload?.message ?? 'Falha ao carregar sessoes do usuario.');
+  }
+
+  return (await response.json()) as AuthSessionRecord[];
+}
+
+export async function revokeUserSession(userId: string, sessionId: string) {
+  const response = await authFetch(
+    `${apiUrl}/auth/users/${encodeURIComponent(userId)}/sessions/${encodeURIComponent(sessionId)}/revoke`,
+    {
+      method: 'POST',
+    },
+  );
+
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(errorPayload?.message ?? 'Falha ao revogar a sessao.');
+  }
 }

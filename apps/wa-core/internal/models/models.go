@@ -173,6 +173,17 @@ type AuthSession struct {
 	UpdatedAt  string `json:"updatedAt"`
 }
 
+type AuthSessionRecord struct {
+	ID         string `json:"id"`
+	UserID     string `json:"userId"`
+	CreatedAt  string `json:"createdAt"`
+	LastSeenAt string `json:"lastSeenAt"`
+	ExpiresAt  string `json:"expiresAt"`
+	UserAgent  string `json:"userAgent,omitempty"`
+	RemoteAddr string `json:"remoteAddr,omitempty"`
+	UpdatedAt  string `json:"updatedAt"`
+}
+
 type SignInRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`

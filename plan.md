@@ -108,6 +108,13 @@ Introduce real multi-user dashboard authentication and user management without b
 - reset or replace password
 - revoke active login sessions if needed
 
+### Current Execution Focus
+
+- list active login sessions per user inside `Settings > Users`
+- show last activity and basic device/session context
+- allow admins to revoke specific active sessions
+- keep WhatsApp session shared and untouched while dashboard sessions are revoked
+
 ## Phase 4 - Shared Workspace Hardening
 
 - ensure multiple logged-in operators can stay in the same workspace safely
@@ -120,6 +127,7 @@ Introduce real multi-user dashboard authentication and user management without b
 - refine settings IA after adding user management
 - improve session status visibility for supervisors/admins
 - add clearer activity/audit feedback for user changes
+- polish active-session management UX after revoke flow lands
 - continue reducing heavy rerenders in large conversation/contact datasets
 - add virtualization where needed for long lists
 
