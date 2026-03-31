@@ -2599,11 +2599,10 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           <ConnectivityStripItem label="WhatsApp API" status="2ms" tone="good" />
           <ConnectivityStripItem label="Meta Graph" status="14ms" tone="good" />
           <ConnectivityStripItem label="AI Engine" status="110ms" tone="good" />
-          <ConnectivityStripItem label="Shopify Sync" status="Latency" tone="error" />
         </div>
       </div>
     </section>
@@ -3235,15 +3234,10 @@ export function DashboardClient({ initialOverview }: Props) {
                       type="password"
                       value={newUserForm.password}
                     />
-                    <select
-                      className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none"
-                      onChange={(event) => setNewUserForm((current) => ({ ...current, role: event.target.value as AuthUser['role'] }))}
+                    <RoleSelector
+                      onChange={(role) => setNewUserForm((current) => ({ ...current, role }))}
                       value={newUserForm.role}
-                    >
-                      <option value="admin">Admin</option>
-                      <option value="supervisor">Supervisor</option>
-                      <option value="attendant">Attendant</option>
-                    </select>
+                    />
                     <button
                       className="w-full rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
                       onClick={() => void submitNewUser()}
@@ -3313,15 +3307,10 @@ export function DashboardClient({ initialOverview }: Props) {
                                 value={editingUserForm.password}
                               />
                               <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-                                <select
-                                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none"
-                                  onChange={(event) => setEditingUserForm((current) => ({ ...current, role: event.target.value as AuthUser['role'] }))}
+                                <RoleSelector
+                                  onChange={(role) => setEditingUserForm((current) => ({ ...current, role }))}
                                   value={editingUserForm.role}
-                                >
-                                  <option value="admin">Admin</option>
-                                  <option value="supervisor">Supervisor</option>
-                                  <option value="attendant">Attendant</option>
-                                </select>
+                                />
                                 <label className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white">
                                   <input
                                     checked={editingUserForm.isActive}
@@ -4569,36 +4558,75 @@ function WorkspaceBootstrapScreen({
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,rgba(127,175,255,0.14),transparent_38%),linear-gradient(180deg,#050505_0%,#111111_100%)] px-6 text-white">
       <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_0%,rgba(255,255,255,0.03)_26%,transparent_52%)] opacity-60" />
-      <div className="relative w-full max-w-3xl overflow-hidden rounded-[2.1rem] border border-white/10 bg-white/5 p-8 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.9)] backdrop-blur-2xl md:p-10">
+      <div className="relative w-full max-w-4xl overflow-hidden rounded-[2.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(25,28,34,0.92),rgba(15,16,20,0.96))] p-8 shadow-[0_30px_90px_-46px_rgba(0,0,0,0.95)] backdrop-blur-2xl md:p-10">
         <div className="absolute -right-16 top-0 h-44 w-44 rounded-full bg-[var(--primary)]/10 blur-[80px]" />
         <div className="absolute -left-16 bottom-0 h-44 w-44 rounded-full bg-[var(--secondary)]/10 blur-[80px]" />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.04),transparent_34%,transparent_66%,rgba(255,255,255,0.02))] opacity-70" />
 
         <div className="relative">
-          <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--primary)]">
-            <span className="h-2.5 w-2.5 rounded-full bg-[var(--primary)] shadow-[0_0_14px_rgba(127,175,255,0.85)]" />
-            Pulse Hub
-          </div>
-          <h1 className="font-headline mt-5 text-3xl font-semibold text-white md:text-4xl">{title}</h1>
-          <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400 md:text-base">{subtitle}</p>
+          <div className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--primary)]">
+                <span className="h-2.5 w-2.5 rounded-full bg-[var(--primary)] shadow-[0_0_14px_rgba(127,175,255,0.85)]" />
+                Pulse Hub
+              </div>
+              <h1 className="font-headline mt-5 text-3xl font-semibold text-white md:text-5xl">{title}</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400 md:text-base">{subtitle}</p>
+            </div>
 
-          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            <div className="flex justify-center md:justify-end">
+              <div className="relative grid h-28 w-28 place-items-center rounded-full border border-white/10 bg-white/[0.03] shadow-[inset_0_0_40px_rgba(255,255,255,0.03)] md:h-32 md:w-32">
+                <div className="absolute h-24 w-24 rounded-full border border-[var(--primary)]/12 bg-[radial-gradient(circle,rgba(127,175,255,0.14),transparent_68%)] blur-sm md:h-28 md:w-28" />
+                <div className="absolute h-20 w-20 animate-spin rounded-full border-[3px] border-white/8 border-t-[var(--primary)] border-r-[var(--primary)] md:h-24 md:w-24" />
+                <div className="absolute h-12 w-12 rounded-full border border-white/10 bg-[rgba(8,10,14,0.94)] shadow-[0_0_26px_rgba(0,0,0,0.45)] md:h-14 md:w-14" />
+                <div className="absolute h-2.5 w-2.5 rounded-full bg-[var(--primary)] shadow-[0_0_16px_rgba(127,175,255,0.8)]" />
+                <span className="absolute -bottom-3 rounded-full border border-white/10 bg-[rgba(10,12,16,0.92)] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+                  Syncing
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {items.map((item) => (
               <div
                 key={item.label}
-                className={`rounded-[1.4rem] border px-4 py-4 transition ${item.ready ? 'border-[var(--secondary)]/20 bg-[var(--secondary)]/10 text-[var(--secondary)]' : 'border-white/8 bg-white/[0.03] text-zinc-400'}`}
+                className={`rounded-[1.45rem] border px-4 py-4 transition ${item.ready ? 'border-[var(--secondary)]/20 bg-[linear-gradient(135deg,rgba(93,253,138,0.12),rgba(93,253,138,0.06))] text-[var(--secondary)] shadow-[inset_0_0_0_1px_rgba(93,253,138,0.06)]' : 'border-white/8 bg-[linear-gradient(135deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] text-zinc-300'}`}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium">{item.label}</span>
-                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${item.ready ? 'bg-[var(--secondary)]/14 text-[var(--secondary)]' : 'bg-white/6 text-zinc-500'}`}>
-                    {item.ready ? 'ok' : 'loading'}
+                  <div>
+                    <span className="text-sm font-medium text-white">{item.label}</span>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {item.ready ? 'Camada pronta para uso' : 'Sincronizando dados iniciais'}
+                    </p>
+                  </div>
+                  <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${item.ready ? 'bg-[var(--secondary)]/14 text-[var(--secondary)]' : 'bg-white/6 text-zinc-400'}`}>
+                    {item.ready ? (
+                      <>
+                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                        ok
+                      </>
+                    ) : (
+                      <>
+                        <span className="h-3 w-3 animate-spin rounded-full border border-white/20 border-t-[var(--primary)]" />
+                        loading
+                      </>
+                    )}
                   </span>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="mt-8 h-2 overflow-hidden rounded-full bg-white/6">
-            <div className="h-full w-1/3 animate-[pulse_1.2s_ease-in-out_infinite] rounded-full bg-[linear-gradient(90deg,#7fafff,#64a1ff)]" />
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-[1.35rem] border border-white/8 bg-black/20 px-4 py-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Workspace Bootstrap</p>
+              <p className="mt-1 text-sm text-zinc-400">Mantendo a entrada do operador fluida enquanto o workspace hidrata conversas e CRM.</p>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/6 px-3 py-2 text-[11px] font-medium text-zinc-300">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--primary)]" />
+              Inicializando ambiente
+            </div>
           </div>
         </div>
       </div>
@@ -6052,6 +6080,35 @@ function Field({
       type={type}
       value={value}
     />
+  );
+}
+
+function RoleSelector({
+  value,
+  onChange,
+}: {
+  value: AuthUser['role'];
+  onChange: (role: AuthUser['role']) => void;
+}) {
+  const roles: AuthUser['role'][] = ['admin', 'supervisor', 'attendant'];
+
+  return (
+    <div className="grid grid-cols-3 gap-2 rounded-[1.35rem] border border-white/10 bg-white/5 p-2">
+      {roles.map((role) => {
+        const active = value === role;
+
+        return (
+          <button
+            key={role}
+            className={`rounded-2xl px-3 py-3 text-sm font-medium transition ${active ? 'bg-[linear-gradient(135deg,#7fafff,#64a1ff)] text-black shadow-[0_0_18px_rgba(127,175,255,0.22)]' : 'bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white'}`}
+            onClick={() => onChange(role)}
+            type="button"
+          >
+            {formatRoleLabel(role)}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
