@@ -34,13 +34,14 @@ import (
 )
 
 type Manager struct {
-	mu         sync.RWMutex
-	logger     *slog.Logger
-	store      *appstore.Store
-	hub        *ws.Hub
-	container  *sqlstore.Container
-	client     *whatsmeow.Client
-	connecting bool
+	mu                sync.RWMutex
+	logger            *slog.Logger
+	store             *appstore.Store
+	hub               *ws.Hub
+	container         *sqlstore.Container
+	client            *whatsmeow.Client
+	connecting        bool
+	lastGroupNameSync time.Time
 }
 
 func NewManager(
@@ -344,6 +345,42 @@ func (m *Manager) SyncContacts(ctx context.Context) error {
 	return nil
 }
 
+func (m *Manager) SyncGroupNames(ctx context.Context) error {
+	m.mu.RLock()
+	client := m.client
+	connected := client != nil && client.IsConnected()
+	m.mu.RUnlock()
+	if !connected {
+		return nil
+	}
+
+	groups, err := client.GetJoinedGroups(ctx)
+	if err != nil {
+		return fmt.Errorf("get joined groups: %w", err)
+	}
+
+	for _, group := range groups {
+		if group == nil || group.JID.IsEmpty() {
+			continue
+		}
+
+		name := normalizePreferredName(group.Name)
+		if name == "" || !isMeaningfulDisplayName(name, group.JID.String()) {
+			continue
+		}
+
+		if err := m.upsertConversationIdentity(ctx, group.JID.String(), name, true); err != nil {
+			m.logger.Warn("sync joined group name failed", "jid", group.JID.String(), "error", err)
+		}
+	}
+
+	m.mu.Lock()
+	m.lastGroupNameSync = time.Now()
+	m.mu.Unlock()
+
+	return nil
+}
+
 func (m *Manager) ListContacts(ctx context.Context) ([]models.Contact, error) {
 	if err := m.SyncContacts(ctx); err != nil {
 		m.logger.Warn("sync contacts failed", "error", err)
@@ -385,7 +422,46 @@ func (m *Manager) GetProfilePhoto(ctx context.Context, jid string, forceRefresh 
 }
 
 func (m *Manager) ListChats(ctx context.Context) ([]models.Chat, error) {
-	return m.store.ListChats(ctx)
+	chats, err := m.store.ListChats(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if m.shouldRefreshGroupNames(chats) {
+		if err := m.SyncGroupNames(ctx); err != nil {
+			m.logger.Warn("sync group names before list chats failed", "error", err)
+		} else {
+			refreshedChats, refreshErr := m.store.ListChats(ctx)
+			if refreshErr == nil {
+				chats = refreshedChats
+			}
+		}
+	}
+
+	return chats, nil
+}
+
+func (m *Manager) shouldRefreshGroupNames(chats []models.Chat) bool {
+	m.mu.RLock()
+	lastSync := m.lastGroupNameSync
+	client := m.client
+	connected := client != nil && client.IsConnected()
+	m.mu.RUnlock()
+
+	if !connected || time.Since(lastSync) < 5*time.Minute {
+		return false
+	}
+
+	for _, chat := range chats {
+		if !strings.HasSuffix(chat.JID, "@g.us") {
+			continue
+		}
+		if !isMeaningfulDisplayName(chat.Name, chat.JID) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (m *Manager) ListMessages(ctx context.Context, chatJID string) ([]models.Message, error) {
@@ -1208,6 +1284,9 @@ func (m *Manager) handleConnected() {
 	})
 	if err := m.SyncContacts(ctx); err != nil {
 		m.logger.Warn("sync contacts after connect failed", "error", err)
+	}
+	if err := m.SyncGroupNames(ctx); err != nil {
+		m.logger.Warn("sync group names after connect failed", "error", err)
 	}
 	m.broadcast(models.RealtimeEvent{Kind: "connection", Status: string(models.SessionStatusActive), OccurredAt: models.NowString()})
 }
