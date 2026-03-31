@@ -7,6 +7,8 @@ const DefaultSessionID = "default"
 type SessionStatus string
 
 type AuthRole string
+type QuickReplyVisibilityScope string
+type QuickReplyStatus string
 
 const (
 	SessionStatusIdle         SessionStatus = "idle"
@@ -20,6 +22,12 @@ const (
 	AuthRoleAdmin      AuthRole = "admin"
 	AuthRoleSupervisor AuthRole = "supervisor"
 	AuthRoleAttendant  AuthRole = "attendant"
+
+	QuickReplyVisibilityAll  QuickReplyVisibilityScope = "all"
+	QuickReplyVisibilityUser QuickReplyVisibilityScope = "user"
+
+	QuickReplyStatusActive   QuickReplyStatus = "active"
+	QuickReplyStatusInactive QuickReplyStatus = "inactive"
 )
 
 type Session struct {
@@ -207,6 +215,33 @@ type UpdateUserRequest struct {
 	Password string   `json:"password,omitempty"`
 	Role     AuthRole `json:"role"`
 	IsActive *bool    `json:"isActive,omitempty"`
+}
+
+type QuickReplyRecord struct {
+	ID               string                    `json:"id"`
+	Name             string                    `json:"name"`
+	Shortcut         string                    `json:"shortcut"`
+	Content          string                    `json:"content"`
+	Category         string                    `json:"category,omitempty"`
+	VisibilityScope  QuickReplyVisibilityScope `json:"visibilityScope"`
+	VisibilityUserID string                    `json:"visibilityUserId,omitempty"`
+	Status           QuickReplyStatus          `json:"status"`
+	CreatedByUserID  string                    `json:"createdByUserId,omitempty"`
+	CreatedBy        string                    `json:"createdBy,omitempty"`
+	UpdatedByUserID  string                    `json:"updatedByUserId,omitempty"`
+	UpdatedBy        string                    `json:"updatedBy,omitempty"`
+	CreatedAt        string                    `json:"createdAt"`
+	UpdatedAt        string                    `json:"updatedAt"`
+}
+
+type SaveQuickReplyRequest struct {
+	Name             string                    `json:"name"`
+	Shortcut         string                    `json:"shortcut"`
+	Content          string                    `json:"content"`
+	Category         string                    `json:"category,omitempty"`
+	VisibilityScope  QuickReplyVisibilityScope `json:"visibilityScope"`
+	VisibilityUserID string                    `json:"visibilityUserId,omitempty"`
+	Status           QuickReplyStatus          `json:"status"`
 }
 
 type ChannelRecord struct {

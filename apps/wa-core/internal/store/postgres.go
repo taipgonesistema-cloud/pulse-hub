@@ -179,6 +179,23 @@ func (s *Store) migrate(ctx context.Context) error {
 		CONSTRAINT fk_app_user FOREIGN KEY(user_id) REFERENCES app_user(id) ON DELETE CASCADE
 	);
 
+	CREATE TABLE IF NOT EXISTS quick_reply (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		shortcut TEXT NOT NULL,
+		content TEXT NOT NULL,
+		category TEXT NOT NULL DEFAULT '',
+		visibility_scope TEXT NOT NULL,
+		visibility_user_id TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL,
+		created_by_user_id TEXT NOT NULL DEFAULT '',
+		created_by TEXT NOT NULL DEFAULT '',
+		updated_by_user_id TEXT NOT NULL DEFAULT '',
+		updated_by TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	);
+
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'text';
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT '';
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT NOT NULL DEFAULT '';
@@ -192,6 +209,11 @@ func (s *Store) migrate(ctx context.Context) error {
 	CREATE INDEX IF NOT EXISTS idx_app_user_role ON app_user(role);
 	CREATE INDEX IF NOT EXISTS idx_app_user_session_user_id ON app_user_session(user_id);
 	CREATE INDEX IF NOT EXISTS idx_app_user_session_expires_at ON app_user_session(expires_at);
+	CREATE INDEX IF NOT EXISTS idx_quick_reply_name ON quick_reply(name);
+	CREATE INDEX IF NOT EXISTS idx_quick_reply_shortcut ON quick_reply(shortcut);
+	CREATE INDEX IF NOT EXISTS idx_quick_reply_visibility ON quick_reply(visibility_scope, visibility_user_id);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_quick_reply_shortcut_all_unique ON quick_reply (LOWER(shortcut)) WHERE visibility_scope = 'all';
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_quick_reply_shortcut_user_unique ON quick_reply (visibility_user_id, LOWER(shortcut)) WHERE visibility_scope = 'user';
 	`
 
 	if _, err := s.db.ExecContext(ctx, query); err != nil {
@@ -667,6 +689,181 @@ func (s *Store) RevokeAuthSessionByID(ctx context.Context, userID, sessionID str
 	}
 
 	return nil
+}
+
+func (s *Store) ListQuickReplies(ctx context.Context, search string) ([]models.QuickReplyRecord, error) {
+	return s.listQuickReplies(ctx, search, false, false, "")
+}
+
+func (s *Store) ListVisibleQuickReplies(ctx context.Context, userID, search string, activeOnly bool) ([]models.QuickReplyRecord, error) {
+	return s.listQuickReplies(ctx, search, true, activeOnly, userID)
+}
+
+func (s *Store) listQuickReplies(ctx context.Context, search string, restrictVisibility bool, activeOnly bool, userID string) ([]models.QuickReplyRecord, error) {
+	filters := make([]string, 0, 3)
+	args := make([]any, 0, 4)
+
+	if restrictVisibility {
+		args = append(args, strings.TrimSpace(userID))
+		filters = append(filters, fmt.Sprintf("(visibility_scope = 'all' OR (visibility_scope = 'user' AND visibility_user_id = $%d))", len(args)))
+	}
+	if activeOnly {
+		filters = append(filters, "status = 'active'")
+	}
+	if trimmedSearch := strings.TrimSpace(search); trimmedSearch != "" {
+		args = append(args, "%"+trimmedSearch+"%")
+		filters = append(filters, fmt.Sprintf("(name ILIKE $%d OR shortcut ILIKE $%d OR content ILIKE $%d)", len(args), len(args), len(args)))
+	}
+
+	query := `
+		SELECT id, name, shortcut, content, category, visibility_scope, visibility_user_id,
+			status, created_by_user_id, created_by, updated_by_user_id, updated_by, created_at, updated_at
+		FROM quick_reply
+	`
+	if len(filters) > 0 {
+		query += " WHERE " + strings.Join(filters, " AND ")
+	}
+	query += " ORDER BY LOWER(name) ASC, created_at DESC"
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list quick replies: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]models.QuickReplyRecord, 0)
+	for rows.Next() {
+		var item models.QuickReplyRecord
+		if err := rows.Scan(
+			&item.ID,
+			&item.Name,
+			&item.Shortcut,
+			&item.Content,
+			&item.Category,
+			&item.VisibilityScope,
+			&item.VisibilityUserID,
+			&item.Status,
+			&item.CreatedByUserID,
+			&item.CreatedBy,
+			&item.UpdatedByUserID,
+			&item.UpdatedBy,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan quick reply: %w", err)
+		}
+		items = append(items, item)
+	}
+
+	return items, rows.Err()
+}
+
+func (s *Store) GetQuickReply(ctx context.Context, id string) (*models.QuickReplyRecord, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, name, shortcut, content, category, visibility_scope, visibility_user_id,
+			status, created_by_user_id, created_by, updated_by_user_id, updated_by, created_at, updated_at
+		FROM quick_reply
+		WHERE id = $1
+	`, strings.TrimSpace(id))
+
+	var item models.QuickReplyRecord
+	if err := row.Scan(
+		&item.ID,
+		&item.Name,
+		&item.Shortcut,
+		&item.Content,
+		&item.Category,
+		&item.VisibilityScope,
+		&item.VisibilityUserID,
+		&item.Status,
+		&item.CreatedByUserID,
+		&item.CreatedBy,
+		&item.UpdatedByUserID,
+		&item.UpdatedBy,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get quick reply %s: %w", id, err)
+	}
+
+	return &item, nil
+}
+
+func (s *Store) SaveQuickReply(ctx context.Context, item models.QuickReplyRecord) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO quick_reply (
+			id, name, shortcut, content, category, visibility_scope, visibility_user_id,
+			status, created_by_user_id, created_by, updated_by_user_id, updated_by, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		ON CONFLICT (id) DO UPDATE SET
+			name = excluded.name,
+			shortcut = excluded.shortcut,
+			content = excluded.content,
+			category = excluded.category,
+			visibility_scope = excluded.visibility_scope,
+			visibility_user_id = excluded.visibility_user_id,
+			status = excluded.status,
+			updated_by_user_id = excluded.updated_by_user_id,
+			updated_by = excluded.updated_by,
+			updated_at = excluded.updated_at
+	`,
+		item.ID,
+		item.Name,
+		item.Shortcut,
+		item.Content,
+		item.Category,
+		string(item.VisibilityScope),
+		item.VisibilityUserID,
+		string(item.Status),
+		item.CreatedByUserID,
+		item.CreatedBy,
+		item.UpdatedByUserID,
+		item.UpdatedBy,
+		item.CreatedAt,
+		item.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("save quick reply %s: %w", item.ID, err)
+	}
+	return nil
+}
+
+func (s *Store) DeleteQuickReply(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM quick_reply WHERE id = $1`, strings.TrimSpace(id))
+	if err != nil {
+		return fmt.Errorf("delete quick reply %s: %w", id, err)
+	}
+	return nil
+}
+
+func (s *Store) QuickReplyShortcutExists(ctx context.Context, shortcut string, scope models.QuickReplyVisibilityScope, visibilityUserID, excludeID string) (bool, error) {
+	filters := []string{"LOWER(shortcut) = LOWER($1)", "visibility_scope = $2"}
+	args := []any{strings.TrimSpace(shortcut), string(scope)}
+
+	if scope == models.QuickReplyVisibilityUser {
+		args = append(args, strings.TrimSpace(visibilityUserID))
+		filters = append(filters, fmt.Sprintf("visibility_user_id = $%d", len(args)))
+	}
+	if trimmedExcludeID := strings.TrimSpace(excludeID); trimmedExcludeID != "" {
+		args = append(args, trimmedExcludeID)
+		filters = append(filters, fmt.Sprintf("id <> $%d", len(args)))
+	}
+
+	row := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM quick_reply
+		WHERE `+strings.Join(filters, " AND "), args...)
+
+	var count int
+	if err := row.Scan(&count); err != nil {
+		return false, fmt.Errorf("check quick reply shortcut: %w", err)
+	}
+
+	return count > 0, nil
 }
 
 func normalizeUserEmail(email string) string {

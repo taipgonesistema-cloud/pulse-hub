@@ -55,6 +55,8 @@ import type {
   ConversationRecord,
   DashboardOverview,
   MessageRecord,
+  QuickReplyRecord,
+  SaveQuickReplyPayload,
   SessionRecord,
 } from '@/lib/pulse-hub';
 import {
@@ -62,16 +64,28 @@ import {
   authFetch,
   buildAuthenticatedWebSocketUrl,
   clearStoredAuthSession,
+  createQuickReply,
   createUser,
+  deleteQuickReply,
+  autocompleteQuickReplies,
   getCurrentUser,
   getStoredAuthToken,
   getStoredAuthUser,
+  listQuickReplies,
   listUsers,
   listUserSessions,
   revokeUserSession,
   signOutRequest,
+  updateQuickReply,
   updateUser,
 } from '@/lib/pulse-hub';
+import {
+  QuickReplyAutocomplete,
+  QuickReplyDeleteModal,
+  QuickReplyFormModal,
+  QuickReplyPreviewModal,
+  QuickRepliesSettingsPanel,
+} from '@/components/quick-replies';
 
 const statusLabel: Record<SessionRecord['status'], string> = {
   demo: 'Demo',
@@ -94,12 +108,6 @@ const statusTone: Record<SessionRecord['status'], string> = {
   disconnected: 'bg-zinc-800 text-zinc-400',
   error: 'bg-rose-500/15 text-rose-300',
 };
-
-const quickReplies = [
-  'Check inventory',
-  'Send pricing guide',
-  'Confirm appointment',
-];
 
 const composerEmojis = ['🙂', '😂', '😍', '🙏', '🎉', '🔥', '✅', '❤️'];
 
@@ -214,7 +222,8 @@ type RealtimeSocketEvent = {
     | 'message.ack'
     | 'kanban.stage.updated'
     | 'kanban.board.updated'
-    | 'kanban.contact.updated';
+    | 'kanban.contact.updated'
+    | 'quick_reply.updated';
   direction?: 'incoming' | 'outgoing';
   text?: string;
   payload?: string;
@@ -319,7 +328,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [isLoadingContactKanban, setIsLoadingContactKanban] = useState(true);
   const [isLoadingContactBoards, setIsLoadingContactBoards] = useState(true);
   const [isLoadingContactCRM, setIsLoadingContactCRM] = useState(true);
-  const [settingsSection, setSettingsSection] = useState<'sessions' | 'users'>('sessions');
+  const [settingsSection, setSettingsSection] = useState<'sessions' | 'users' | 'quickReplies'>('sessions');
   const [workspaceUsers, setWorkspaceUsers] = useState<AuthUser[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [expandedUserSessionsId, setExpandedUserSessionsId] = useState<string | null>(null);
@@ -327,6 +336,26 @@ export function DashboardClient({ initialOverview }: Props) {
     Record<string, AuthSessionRecord[]>
   >({});
   const [loadingUserSessionsMap, setLoadingUserSessionsMap] = useState<Record<string, boolean>>({});
+  const [quickReplies, setQuickReplies] = useState<QuickReplyRecord[]>([]);
+  const [isLoadingQuickReplies, setIsLoadingQuickReplies] = useState(false);
+  const [hasLoadedInitialQuickReplies, setHasLoadedInitialQuickReplies] = useState(false);
+  const [quickReplySearchTerm, setQuickReplySearchTerm] = useState('');
+  const [selectedQuickReplyIds, setSelectedQuickReplyIds] = useState<string[]>([]);
+  const [showQuickReplyFormModal, setShowQuickReplyFormModal] = useState(false);
+  const [quickReplyFormMode, setQuickReplyFormMode] = useState<'create' | 'edit'>('create');
+  const [editingQuickReplyId, setEditingQuickReplyId] = useState<string | null>(null);
+  const [quickReplyFormState, setQuickReplyFormState] = useState<SaveQuickReplyPayload>({
+    name: '',
+    shortcut: '',
+    content: '',
+    category: '',
+    visibilityScope: 'all',
+    visibilityUserId: '',
+    status: 'active',
+  });
+  const [previewQuickReply, setPreviewQuickReply] = useState<QuickReplyRecord | null>(null);
+  const [quickReplyToDelete, setQuickReplyToDelete] = useState<QuickReplyRecord | null>(null);
+  const [composerQuickReplyResults, setComposerQuickReplyResults] = useState<QuickReplyRecord[]>([]);
   const [draggedContactKey, setDraggedContactKey] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<ContactKanbanStageId | null>(null);
   const [showCreateContactModal, setShowCreateContactModal] = useState(false);
@@ -386,14 +415,17 @@ export function DashboardClient({ initialOverview }: Props) {
   const canAccessSettings = authUser?.role === 'admin' || authUser?.role === 'supervisor';
   const canManageBoards = canManageWorkspaceSessions;
   const canCreateManualContacts = canManageWorkspaceSessions;
+  const canManageQuickReplies = authUser?.role === 'admin' || authUser?.role === 'supervisor';
   const isWorkspaceBootstrapPending =
     isAuthReady &&
     (!hasLoadedInitialOverview ||
       !hasLoadedInitialContactKanban ||
       !hasLoadedInitialContactBoards ||
       !hasLoadedInitialContactCRM ||
-      !hasLoadedInitialUsers);
+      !hasLoadedInitialUsers ||
+      !hasLoadedInitialQuickReplies);
   const deferredContactsSearch = useDeferredValue(contactsSearch);
+  const deferredQuickReplySearch = useDeferredValue(quickReplySearchTerm);
   const isConversationSwitching = pendingConversationId !== null;
   const isDashboardView = activeView === 'dashboard';
   const isAnalyticsView = activeView === 'analytics';
@@ -1000,10 +1032,15 @@ export function DashboardClient({ initialOverview }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!isAdminUser && settingsSection !== 'sessions') {
+    if (settingsSection === 'users' && !isAdminUser) {
+      setSettingsSection('sessions');
+      return;
+    }
+
+    if (settingsSection === 'quickReplies' && !canManageQuickReplies) {
       setSettingsSection('sessions');
     }
-  }, [isAdminUser, settingsSection]);
+  }, [canManageQuickReplies, isAdminUser, settingsSection]);
 
   useEffect(() => {
     if (!canManageBoards && showCreateBoardModal) {
@@ -1016,6 +1053,16 @@ export function DashboardClient({ initialOverview }: Props) {
       setShowCreateContactModal(false);
     }
   }, [canCreateManualContacts, showCreateContactModal]);
+
+  useEffect(() => {
+    if (!canManageQuickReplies && showQuickReplyFormModal) {
+      setShowQuickReplyFormModal(false);
+    }
+  }, [canManageQuickReplies, showQuickReplyFormModal]);
+
+  useEffect(() => {
+    setSelectedQuickReplyIds((current) => current.filter((id) => quickReplies.some((item) => item.id === id)));
+  }, [quickReplies]);
 
   useEffect(() => {
     const rawBoard = window.localStorage.getItem(contactsKanbanBoardStorageKey);
@@ -1124,6 +1171,16 @@ export function DashboardClient({ initialOverview }: Props) {
     setWorkspaceUsers(users);
   }, []);
 
+  const loadQuickRepliesList = useCallback(async (query = '') => {
+    const items = await listQuickReplies(query);
+    setQuickReplies(items);
+  }, []);
+
+  const loadComposerQuickReplies = useCallback(async (query = '') => {
+    const items = await autocompleteQuickReplies(query);
+    setComposerQuickReplyResults(items);
+  }, []);
+
   const loadUserSessionsForUser = useCallback(async (userId: string) => {
     setLoadingUserSessionsMap((current) => ({ ...current, [userId]: true }));
     try {
@@ -1214,6 +1271,36 @@ export function DashboardClient({ initialOverview }: Props) {
         setHasLoadedInitialUsers(true);
       });
   }, [isAuthReady, loadWorkspaceUsers]);
+
+  useEffect(() => {
+    if (!isAuthReady) {
+      setQuickReplies([]);
+      setComposerQuickReplyResults([]);
+      return;
+    }
+
+    setIsLoadingQuickReplies(true);
+    void Promise.all([
+      loadQuickRepliesList(),
+      loadComposerQuickReplies(),
+    ])
+      .catch(() => undefined)
+      .finally(() => {
+        setIsLoadingQuickReplies(false);
+        setHasLoadedInitialQuickReplies(true);
+      });
+  }, [isAuthReady, loadComposerQuickReplies, loadQuickRepliesList]);
+
+  useEffect(() => {
+    if (!isAuthReady || !canManageQuickReplies) {
+      return;
+    }
+
+    setIsLoadingQuickReplies(true);
+    void loadQuickRepliesList(deferredQuickReplySearch)
+      .catch(() => undefined)
+      .finally(() => setIsLoadingQuickReplies(false));
+  }, [canManageQuickReplies, deferredQuickReplySearch, isAuthReady, loadQuickRepliesList]);
 
   const fetchConversationMessages = useCallback(async (sessionId: string, conversationId: string) => {
     const response = await authenticatedFetch(
@@ -1359,6 +1446,8 @@ export function DashboardClient({ initialOverview }: Props) {
   const loadContactBoardsRef = useRef(loadContactBoards);
   const loadContactCRMProfilesRef = useRef(loadContactCRMProfiles);
   const loadContactKanbanStagesRef = useRef(loadContactKanbanStages);
+  const loadQuickRepliesListRef = useRef(loadQuickRepliesList);
+  const loadComposerQuickRepliesRef = useRef(loadComposerQuickReplies);
   const markConversationAsReadRef = useRef(markConversationAsRead);
   const isConversationActivelyViewedRef = useRef(isConversationActivelyViewed);
 
@@ -1389,6 +1478,14 @@ export function DashboardClient({ initialOverview }: Props) {
   useEffect(() => {
     loadContactKanbanStagesRef.current = loadContactKanbanStages;
   }, [loadContactKanbanStages]);
+
+  useEffect(() => {
+    loadQuickRepliesListRef.current = loadQuickRepliesList;
+  }, [loadQuickRepliesList]);
+
+  useEffect(() => {
+    loadComposerQuickRepliesRef.current = loadComposerQuickReplies;
+  }, [loadComposerQuickReplies]);
 
   useEffect(() => {
     markConversationAsReadRef.current = markConversationAsRead;
@@ -1777,6 +1874,11 @@ export function DashboardClient({ initialOverview }: Props) {
           } else {
             void loadContactCRMProfilesRef.current().catch(() => undefined);
           }
+        }
+
+        if (payload.kind === 'quick_reply.updated') {
+          void loadQuickRepliesListRef.current().catch(() => undefined);
+          void loadComposerQuickRepliesRef.current().catch(() => undefined);
         }
 
         const { isConversationsView, activeSessionId, activeConversationId } = realtimeContextRef.current;
@@ -2340,6 +2442,99 @@ export function DashboardClient({ initialOverview }: Props) {
     }
   }, [authUser?.id, editingUserForm.isActive, editingUserForm.name, editingUserForm.password, editingUserForm.role, editingUserId, executeAction, loadWorkspaceUsers, pushToast]);
 
+  const openCreateQuickReplyModal = useCallback(() => {
+    setQuickReplyFormMode('create');
+    setEditingQuickReplyId(null);
+    setQuickReplyFormState({
+      name: '',
+      shortcut: '',
+      content: '',
+      category: '',
+      visibilityScope: 'all',
+      visibilityUserId: '',
+      status: 'active',
+    });
+    setShowQuickReplyFormModal(true);
+  }, []);
+
+  const openEditQuickReplyModal = useCallback((item: QuickReplyRecord) => {
+    setQuickReplyFormMode('edit');
+    setEditingQuickReplyId(item.id);
+    setQuickReplyFormState({
+      name: item.name,
+      shortcut: item.shortcut,
+      content: item.content,
+      category: item.category ?? '',
+      visibilityScope: item.visibilityScope,
+      visibilityUserId: item.visibilityUserId ?? '',
+      status: item.status,
+    });
+    setShowQuickReplyFormModal(true);
+  }, []);
+
+  const submitQuickReplyForm = useCallback(async () => {
+    if (!canManageQuickReplies) {
+      return;
+    }
+
+    const payload = {
+      name: quickReplyFormState.name.trim(),
+      shortcut: quickReplyFormState.shortcut.trim(),
+      content: quickReplyFormState.content.trim(),
+      category: quickReplyFormState.category?.trim() ?? '',
+      visibilityScope: quickReplyFormState.visibilityScope,
+      visibilityUserId: quickReplyFormState.visibilityUserId?.trim() ?? '',
+      status: quickReplyFormState.status,
+    } satisfies SaveQuickReplyPayload;
+
+    if (!payload.name || !payload.shortcut || !payload.content) {
+      pushToast({
+        tone: 'error',
+        title: 'Campos obrigatorios',
+        description: 'Nome, atalho e conteudo devem ser preenchidos.',
+      });
+      return;
+    }
+
+    const saved = await executeAction(async () => {
+      const record = quickReplyFormMode === 'create'
+        ? await createQuickReply(payload)
+        : await updateQuickReply(editingQuickReplyId ?? '', payload);
+      setQuickReplies((current) => [record, ...current.filter((item) => item.id !== record.id)]);
+      setShowQuickReplyFormModal(false);
+      setEditingQuickReplyId(null);
+    }, { successMessage: quickReplyFormMode === 'create' ? 'Resposta rapida criada' : 'Resposta rapida atualizada' });
+
+    if (saved) {
+      await loadQuickRepliesList(deferredQuickReplySearch).catch(() => undefined);
+      await loadComposerQuickReplies().catch(() => undefined);
+    }
+  }, [canManageQuickReplies, deferredQuickReplySearch, editingQuickReplyId, executeAction, loadComposerQuickReplies, loadQuickRepliesList, pushToast, quickReplyFormMode, quickReplyFormState]);
+
+  const confirmDeleteQuickReply = useCallback(async () => {
+    if (!quickReplyToDelete) {
+      return;
+    }
+
+    const deleted = await executeAction(async () => {
+      await deleteQuickReply(quickReplyToDelete.id);
+      setQuickReplyToDelete(null);
+    }, { successMessage: 'Resposta rapida excluida' });
+
+    if (deleted) {
+      await loadQuickRepliesList(deferredQuickReplySearch).catch(() => undefined);
+      await loadComposerQuickReplies().catch(() => undefined);
+    }
+  }, [deferredQuickReplySearch, executeAction, loadComposerQuickReplies, loadQuickRepliesList, quickReplyToDelete]);
+
+  const toggleQuickReplySelection = useCallback((id: string) => {
+    setSelectedQuickReplyIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }, []);
+
+  const toggleAllQuickReplySelections = useCallback(() => {
+    setSelectedQuickReplyIds((current) => current.length === quickReplies.length ? [] : quickReplies.map((item) => item.id));
+  }, [quickReplies]);
+
   const createSession = () => {
     if (!canManageWorkspaceSessions) {
       return;
@@ -2533,6 +2728,7 @@ export function DashboardClient({ initialOverview }: Props) {
           { label: 'Boards', ready: hasLoadedInitialContactBoards },
           { label: 'CRM', ready: hasLoadedInitialContactCRM },
           { label: 'Equipe', ready: hasLoadedInitialUsers },
+          { label: 'Quick replies', ready: hasLoadedInitialQuickReplies },
         ]}
         subtitle={`Carregando conversas, contatos e dados operacionais${authUser?.name ? ` para ${authUser.name}` : ''}.`}
         title="Preparando seu workspace"
@@ -3299,12 +3495,18 @@ export function DashboardClient({ initialOverview }: Props) {
               Workspace administration
             </p>
             <h2 className="font-headline mt-2 text-2xl font-semibold text-white">
-              {settingsSection === 'users' ? 'Gerenciar usuarios do workspace' : 'Conectar e gerenciar sessoes'}
+              {settingsSection === 'users'
+                ? 'Gerenciar usuarios do workspace'
+                : settingsSection === 'quickReplies'
+                  ? 'Respostas rapidas'
+                  : 'Conectar e gerenciar sessoes'}
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
               {settingsSection === 'users'
                 ? 'Controle acessos por role sem derrubar a sessao compartilhada do WhatsApp.'
-                : 'Crie uma sessao operacional, gere QR code, reconecte numeros e acompanhe o estado da autenticacao sem sair do painel.'}
+                : settingsSection === 'quickReplies'
+                  ? 'Cadastre atalhos reutilizaveis para acelerar o atendimento e acione autocomplete no chat ao digitar /.'
+                  : 'Crie uma sessao operacional, gere QR code, reconecte numeros e acompanhe o estado da autenticacao sem sair do painel.'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -3325,10 +3527,19 @@ export function DashboardClient({ initialOverview }: Props) {
                   Users
                 </button>
               ) : null}
+              {canManageQuickReplies ? (
+                <button
+                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'quickReplies' ? 'bg-[var(--tertiary)] text-black' : 'text-[var(--muted)] hover:text-white'}`}
+                  onClick={() => setSettingsSection('quickReplies')}
+                  type="button"
+                >
+                  Quick replies
+                </button>
+              ) : null}
             </div>
             <button
               className="rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white"
-              onClick={() => runAction(settingsSection === 'users' ? loadWorkspaceUsers : loadOverview)}
+              onClick={() => runAction(settingsSection === 'users' ? loadWorkspaceUsers : settingsSection === 'quickReplies' ? () => loadQuickRepliesList(quickReplySearchTerm) : loadOverview)}
               type="button"
             >
               Refresh {settingsSection}
@@ -3336,7 +3547,29 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
         </div>
 
-        {settingsSection === 'users' ? (
+        {settingsSection === 'quickReplies' ? (
+          canManageQuickReplies ? (
+            <QuickRepliesSettingsPanel
+              isLoading={isLoadingQuickReplies}
+              items={quickReplies}
+              onDelete={setQuickReplyToDelete}
+              onEdit={openEditQuickReplyModal}
+              onOpenCreate={openCreateQuickReplyModal}
+              onPreview={setPreviewQuickReply}
+              onSearchChange={setQuickReplySearchTerm}
+              onToggleAll={toggleAllQuickReplySelections}
+              onToggleSelection={toggleQuickReplySelection}
+              searchTerm={quickReplySearchTerm}
+              selectedIds={selectedQuickReplyIds}
+              users={workspaceUsers}
+            />
+          ) : (
+            <EmptyStateCard
+              description="Apenas administradores e supervisores podem gerenciar respostas rapidas."
+              title="Acesso restrito"
+            />
+          )
+        ) : settingsSection === 'users' ? (
           isAdminUser ? (
             <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
               <div className="space-y-6">
@@ -3992,9 +4225,12 @@ export function DashboardClient({ initialOverview }: Props) {
                 defaultSignatureName={authUser?.name ?? 'Operador'}
                 disabled={!selectedConversation || isPending}
                 onCancelReply={() => setReplyTargetMessage(null)}
+                onQuickReplySearch={(query) => {
+                  void loadComposerQuickReplies(query).catch(() => undefined);
+                }}
                 onSendMedia={sendMedia}
                 onSend={sendMessage}
-                quickReplies={quickReplies}
+                quickReplies={composerQuickReplyResults}
                 replyToMessage={replyTargetMessage}
                 signatureStorageKey={`pulse-hub.composer-signature:${authUser?.id ?? 'guest'}`}
               />
@@ -4125,6 +4361,36 @@ export function DashboardClient({ initialOverview }: Props) {
           <ToastCard key={toast.id} toast={toast} onDismiss={dismissToast} />
         ))}
       </div>
+      {showQuickReplyFormModal ? (
+        <QuickReplyFormModal
+          isBusy={isPending}
+          mode={quickReplyFormMode}
+          onChange={setQuickReplyFormState}
+          onClose={() => setShowQuickReplyFormModal(false)}
+          onSubmit={() => {
+            void submitQuickReplyForm();
+          }}
+          users={workspaceUsers.filter((user) => user.isActive)}
+          value={quickReplyFormState}
+        />
+      ) : null}
+      {previewQuickReply ? (
+        <QuickReplyPreviewModal
+          item={previewQuickReply}
+          onClose={() => setPreviewQuickReply(null)}
+          users={workspaceUsers}
+        />
+      ) : null}
+      {quickReplyToDelete ? (
+        <QuickReplyDeleteModal
+          isBusy={isPending}
+          item={quickReplyToDelete}
+          onClose={() => setQuickReplyToDelete(null)}
+          onConfirm={() => {
+            void confirmDeleteQuickReply();
+          }}
+        />
+      ) : null}
       {showCreateBoardModal ? (
         <KanbanModal
           description="Salve os filtros atuais como um novo board para acessar esse recorte do CRM com um clique."
@@ -5413,6 +5679,7 @@ function AvatarBadge({
 function ConversationComposer({
   defaultSignatureName,
   disabled,
+  onQuickReplySearch,
   onSend,
   onSendMedia,
   onCancelReply,
@@ -5422,10 +5689,11 @@ function ConversationComposer({
 }: {
   defaultSignatureName: string;
   disabled: boolean;
+  onQuickReplySearch: (query: string) => void;
   onSend: (text: string) => Promise<boolean>;
   onSendMedia: (file: File, options?: { sticker?: boolean; caption?: string }) => Promise<boolean>;
   onCancelReply: () => void;
-  quickReplies: string[];
+  quickReplies: QuickReplyRecord[];
   replyToMessage: MessageRecord | null;
   signatureStorageKey: string;
 }) {
@@ -5438,10 +5706,26 @@ function ConversationComposer({
   const [isDragging, setIsDragging] = useState(false);
   const [isSendingText, setIsSendingText] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [quickReplyActiveIndex, setQuickReplyActiveIndex] = useState(0);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
   const stickerInputRef = useRef<HTMLInputElement | null>(null);
+  const composerInputRef = useRef<HTMLInputElement | null>(null);
 
   const composerBusy = disabled || isSendingText || isUploading;
+  const slashContext = useMemo(() => getQuickReplySlashContext(draft), [draft]);
+  const slashAutocompleteOpen = Boolean(slashContext) && !composerBusy;
+
+  useEffect(() => {
+    setQuickReplyActiveIndex(0);
+  }, [slashContext?.query]);
+
+  useEffect(() => {
+    if (!slashContext) {
+      return;
+    }
+
+    onQuickReplySearch(slashContext.query);
+  }, [onQuickReplySearch, slashContext]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -5507,6 +5791,35 @@ function ConversationComposer({
     },
     [signatureEnabled, signatureName],
   );
+
+  const insertQuickReply = useCallback(
+    (reply: QuickReplyRecord) => {
+      const content = reply.content.trim();
+      if (!content) {
+        return;
+      }
+
+      setDraft((current) => {
+        const context = getQuickReplySlashContext(current);
+        if (!context) {
+          return content;
+        }
+
+        const before = current.slice(0, context.start);
+        const after = current.slice(context.end);
+        return `${before}${content}${after}`;
+      });
+
+      window.requestAnimationFrame(() => {
+        composerInputRef.current?.focus();
+      });
+    },
+    [],
+  );
+
+  const handleDraftChange = useCallback((value: string) => {
+    setDraft(value);
+  }, []);
 
   const queueAttachment = useCallback((file: File, options?: { sticker?: boolean }) => {
     const sticker = options?.sticker ?? false;
@@ -5629,14 +5942,14 @@ function ConversationComposer({
         type="file"
       />
       <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-        {quickReplies.map((reply) => (
+        {quickReplies.slice(0, 6).map((reply) => (
           <button
-            key={reply}
+            key={reply.id}
             className="shrink-0 rounded-full bg-[var(--surface-highest)] px-4 py-2 text-[11px] font-medium text-zinc-300 transition hover:text-white"
-            onClick={() => setDraft(reply)}
+            onClick={() => insertQuickReply(reply)}
             type="button"
           >
-            {reply}
+            /{reply.shortcut}
           </button>
         ))}
       </div>
@@ -5752,6 +6065,17 @@ function ConversationComposer({
         </div>
       ) : null}
 
+      <div className="relative">
+        <QuickReplyAutocomplete
+          activeIndex={quickReplyActiveIndex}
+          items={quickReplies}
+          onHover={setQuickReplyActiveIndex}
+          onSelect={insertQuickReply}
+          open={slashAutocompleteOpen}
+          query={slashContext?.query ?? ''}
+        />
+      </div>
+
       <div className="mb-3 flex flex-wrap items-center gap-3 rounded-[24px] border border-white/10 bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.9)]">
         <button
           aria-pressed={signatureEnabled}
@@ -5837,10 +6161,40 @@ function ConversationComposer({
           <Smile className="h-5 w-5" strokeWidth={2.1} />
         </button>
         <input
+          ref={composerInputRef}
           className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
           disabled={composerBusy}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => handleDraftChange(event.target.value)}
           onKeyDown={(event) => {
+            if (slashAutocompleteOpen && quickReplies.length > 0) {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                setQuickReplyActiveIndex((current) => (current + 1) % quickReplies.length);
+                return;
+              }
+
+              if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                setQuickReplyActiveIndex((current) => (current - 1 + quickReplies.length) % quickReplies.length);
+                return;
+              }
+
+              if ((event.key === 'Enter' || event.key === 'Tab') && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                const selectedQuickReply = quickReplies[quickReplyActiveIndex] ?? quickReplies[0];
+                if (selectedQuickReply) {
+                  insertQuickReply(selectedQuickReply);
+                }
+                return;
+              }
+
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                setDraft((current) => removeQuickReplySlashQuery(current));
+                return;
+              }
+            }
+
             if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
               return;
             }
@@ -6406,6 +6760,28 @@ function formatSessionUserAgent(userAgent?: string) {
   }
 
   return value.length > 64 ? `${value.slice(0, 64)}...` : value;
+}
+
+function getQuickReplySlashContext(value: string) {
+  const match = /(^|\s)\/([^\s]*)$/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    query: match[2] ?? '',
+    start: match.index + match[1].length,
+    end: value.length,
+  };
+}
+
+function removeQuickReplySlashQuery(value: string) {
+  const context = getQuickReplySlashContext(value);
+  if (!context) {
+    return value;
+  }
+
+  return `${value.slice(0, context.start)}${value.slice(context.end)}`;
 }
 
 function formatDateLabel(timestamp: string) {

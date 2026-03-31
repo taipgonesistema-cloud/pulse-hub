@@ -150,6 +150,36 @@ export type UpdateUserPayload = {
   isActive?: boolean;
 };
 
+export type QuickReplyVisibilityScope = 'all' | 'user';
+export type QuickReplyStatus = 'active' | 'inactive';
+
+export type QuickReplyRecord = {
+  id: string;
+  name: string;
+  shortcut: string;
+  content: string;
+  category?: string;
+  visibilityScope: QuickReplyVisibilityScope;
+  visibilityUserId?: string;
+  status: QuickReplyStatus;
+  createdByUserId?: string;
+  createdBy?: string;
+  updatedByUserId?: string;
+  updatedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SaveQuickReplyPayload = {
+  name: string;
+  shortcut: string;
+  content: string;
+  category?: string;
+  visibilityScope: QuickReplyVisibilityScope;
+  visibilityUserId?: string;
+  status: QuickReplyStatus;
+};
+
 export const fallbackOverview: DashboardOverview = {
   product: 'Pulse Hub',
   phase: 'whatsapp-core',
@@ -388,5 +418,86 @@ export async function revokeUserSession(userId: string, sessionId: string) {
   if (!response.ok) {
     const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
     throw new Error(errorPayload?.message ?? 'Falha ao revogar a sessao.');
+  }
+}
+
+export async function listQuickReplies(query?: string) {
+  const url = new URL(`${apiUrl}/whatsapp/quick-replies`);
+  if (query?.trim()) {
+    url.searchParams.set('q', query.trim());
+  }
+
+  const response = await authFetch(url.toString(), {
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(errorPayload?.message ?? 'Falha ao carregar respostas rapidas.');
+  }
+
+  return (await response.json()) as QuickReplyRecord[];
+}
+
+export async function autocompleteQuickReplies(query: string) {
+  const url = new URL(`${apiUrl}/whatsapp/quick-replies/autocomplete`);
+  if (query.trim()) {
+    url.searchParams.set('q', query.trim());
+  }
+
+  const response = await authFetch(url.toString(), {
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(errorPayload?.message ?? 'Falha ao buscar respostas rapidas.');
+  }
+
+  return (await response.json()) as QuickReplyRecord[];
+}
+
+export async function createQuickReply(payload: SaveQuickReplyPayload) {
+  const response = await authFetch(`${apiUrl}/whatsapp/quick-replies`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(errorPayload?.message ?? 'Falha ao criar resposta rapida.');
+  }
+
+  return (await response.json()) as QuickReplyRecord;
+}
+
+export async function updateQuickReply(quickReplyId: string, payload: SaveQuickReplyPayload) {
+  const response = await authFetch(`${apiUrl}/whatsapp/quick-replies/${encodeURIComponent(quickReplyId)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(errorPayload?.message ?? 'Falha ao atualizar resposta rapida.');
+  }
+
+  return (await response.json()) as QuickReplyRecord;
+}
+
+export async function deleteQuickReply(quickReplyId: string) {
+  const response = await authFetch(`${apiUrl}/whatsapp/quick-replies/${encodeURIComponent(quickReplyId)}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(errorPayload?.message ?? 'Falha ao excluir resposta rapida.');
   }
 }

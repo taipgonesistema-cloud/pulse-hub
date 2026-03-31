@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Saudacao inicial",
+    "shortcut": "ola",
+    "content": "Ola! Como posso te ajudar hoje?",
+    "category": "Atendimento",
+    "visibilityScope": "all",
+    "status": "active"
+  },
+  {
+    "name": "Pedido em analise",
+    "shortcut": "analise",
+    "content": "Seu pedido esta em analise e retornaremos em breve.",
+    "category": "Pedidos",
+    "visibilityScope": "all",
+    "status": "active"
+  },
+  {
+    "name": "Encerramento cordial",
+    "shortcut": "encerrar",
+    "content": "Se precisar de mais alguma coisa, fico a disposicao.",
+    "category": "Atendimento",
+    "visibilityScope": "user",
+    "visibilityUserId": "REPLACE_WITH_USER_ID",
+    "status": "active"
+  }
+]

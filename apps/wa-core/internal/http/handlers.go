@@ -17,6 +17,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 	waE2E "go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	waProto "google.golang.org/protobuf/encoding/protojson"
@@ -88,6 +89,11 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 			r.Get("/contacts/boards", api.handleListContactKanbanBoards)
 			r.Post("/contacts/boards", api.handleCreateContactKanbanBoard)
 			r.Delete("/contacts/boards/{id}", api.handleDeleteContactKanbanBoard)
+			r.Get("/quick-replies", api.handleListQuickReplies)
+			r.Get("/quick-replies/autocomplete", api.handleQuickReplyAutocomplete)
+			r.Post("/quick-replies", api.handleCreateQuickReply)
+			r.Put("/quick-replies/{id}", api.handleUpdateQuickReply)
+			r.Delete("/quick-replies/{id}", api.handleDeleteQuickReply)
 			r.Get("/contacts/crm", api.handleListContactCRMProfiles)
 			r.Put("/contacts/crm", api.handleUpdateContactCRMProfile)
 			r.Get("/contacts/kanban", api.handleListContactKanbanStages)
@@ -736,6 +742,219 @@ func (a *API) handleDeleteContactKanbanBoard(w http.ResponseWriter, r *http.Requ
 	})
 
 	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *API) handleListQuickReplies(w http.ResponseWriter, r *http.Request) {
+	auth := currentAuth(r)
+	if auth == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
+		return
+	}
+
+	search := strings.TrimSpace(r.URL.Query().Get("q"))
+	var (
+		items []models.QuickReplyRecord
+		err   error
+	)
+	if auth.user.Role == models.AuthRoleAdmin || auth.user.Role == models.AuthRoleSupervisor {
+		items, err = a.store.ListQuickReplies(r.Context(), search)
+	} else {
+		items, err = a.store.ListVisibleQuickReplies(r.Context(), auth.user.ID, search, true)
+	}
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, items)
+}
+
+func (a *API) handleQuickReplyAutocomplete(w http.ResponseWriter, r *http.Request) {
+	auth := currentAuth(r)
+	if auth == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
+		return
+	}
+
+	items, err := a.store.ListVisibleQuickReplies(r.Context(), auth.user.ID, strings.TrimSpace(r.URL.Query().Get("q")), true)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if len(items) > 12 {
+		items = items[:12]
+	}
+
+	respondJSON(w, http.StatusOK, items)
+}
+
+func (a *API) handleCreateQuickReply(w http.ResponseWriter, r *http.Request) {
+	auth, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor)
+	if !ok {
+		return
+	}
+
+	var request models.SaveQuickReplyRequest
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	record, err := a.buildQuickReplyRecord(r.Context(), request, "", auth.user)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	record.ID = uuid.NewString()
+	if err := a.store.SaveQuickReply(r.Context(), record); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	a.hub.Broadcast(models.RealtimeEvent{Kind: "quick_reply.updated", Text: record.ID, OccurredAt: record.UpdatedAt})
+	respondJSON(w, http.StatusCreated, record)
+}
+
+func (a *API) handleUpdateQuickReply(w http.ResponseWriter, r *http.Request) {
+	auth, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor)
+	if !ok {
+		return
+	}
+
+	quickReplyID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if quickReplyID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Resposta rapida invalida."})
+		return
+	}
+
+	var request models.SaveQuickReplyRequest
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	record, err := a.buildQuickReplyRecord(r.Context(), request, quickReplyID, auth.user)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := a.store.SaveQuickReply(r.Context(), record); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	a.hub.Broadcast(models.RealtimeEvent{Kind: "quick_reply.updated", Text: record.ID, OccurredAt: record.UpdatedAt})
+	respondJSON(w, http.StatusOK, record)
+}
+
+func (a *API) handleDeleteQuickReply(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
+	quickReplyID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if quickReplyID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Resposta rapida invalida."})
+		return
+	}
+
+	if err := a.store.DeleteQuickReply(r.Context(), quickReplyID); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	a.hub.Broadcast(models.RealtimeEvent{Kind: "quick_reply.updated", Text: quickReplyID, OccurredAt: models.NowString()})
+	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *API) buildQuickReplyRecord(ctx context.Context, request models.SaveQuickReplyRequest, quickReplyID string, authUser models.AuthUser) (models.QuickReplyRecord, error) {
+	request.Name = strings.TrimSpace(request.Name)
+	request.Shortcut = normalizeQuickReplyShortcut(request.Shortcut)
+	request.Content = strings.TrimSpace(request.Content)
+	request.Category = strings.TrimSpace(request.Category)
+	request.VisibilityUserID = strings.TrimSpace(request.VisibilityUserID)
+	request.VisibilityScope = normalizeQuickReplyVisibilityScope(request.VisibilityScope)
+	request.Status = normalizeQuickReplyStatus(request.Status)
+
+	if request.Name == "" || request.Shortcut == "" || request.Content == "" {
+		return models.QuickReplyRecord{}, errors.New("nome, atalho e conteudo sao obrigatorios")
+	}
+	if request.VisibilityScope == models.QuickReplyVisibilityUser {
+		if request.VisibilityUserID == "" {
+			return models.QuickReplyRecord{}, errors.New("selecione o usuario visivel para este atalho")
+		}
+		user, err := a.store.GetAuthUserByID(ctx, request.VisibilityUserID)
+		if err != nil {
+			return models.QuickReplyRecord{}, err
+		}
+		if user == nil {
+			return models.QuickReplyRecord{}, errors.New("usuario de visibilidade nao encontrado")
+		}
+	}
+
+	exists, err := a.store.QuickReplyShortcutExists(ctx, request.Shortcut, request.VisibilityScope, request.VisibilityUserID, quickReplyID)
+	if err != nil {
+		return models.QuickReplyRecord{}, err
+	}
+	if exists {
+		return models.QuickReplyRecord{}, errors.New("ja existe uma resposta rapida com este atalho neste escopo")
+	}
+
+	now := models.NowString()
+	record := models.QuickReplyRecord{
+		ID:               quickReplyID,
+		Name:             request.Name,
+		Shortcut:         request.Shortcut,
+		Content:          request.Content,
+		Category:         request.Category,
+		VisibilityScope:  request.VisibilityScope,
+		VisibilityUserID: request.VisibilityUserID,
+		Status:           request.Status,
+		UpdatedByUserID:  authUser.ID,
+		UpdatedBy:        authUser.Name,
+		UpdatedAt:        now,
+	}
+
+	if quickReplyID != "" {
+		existing, err := a.store.GetQuickReply(ctx, quickReplyID)
+		if err != nil {
+			return models.QuickReplyRecord{}, err
+		}
+		if existing == nil {
+			return models.QuickReplyRecord{}, errors.New("resposta rapida nao encontrada")
+		}
+		record.CreatedAt = existing.CreatedAt
+		record.CreatedBy = existing.CreatedBy
+		record.CreatedByUserID = existing.CreatedByUserID
+	} else {
+		record.CreatedAt = now
+		record.CreatedBy = authUser.Name
+		record.CreatedByUserID = authUser.ID
+	}
+
+	return record, nil
+}
+
+func normalizeQuickReplyShortcut(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	value = strings.TrimPrefix(value, "/")
+	return value
+}
+
+func normalizeQuickReplyVisibilityScope(scope models.QuickReplyVisibilityScope) models.QuickReplyVisibilityScope {
+	if scope == models.QuickReplyVisibilityUser {
+		return scope
+	}
+	return models.QuickReplyVisibilityAll
+}
+
+func normalizeQuickReplyStatus(status models.QuickReplyStatus) models.QuickReplyStatus {
+	if status == models.QuickReplyStatusInactive {
+		return status
+	}
+	return models.QuickReplyStatusActive
 }
 
 func (a *API) handleListContactCRMProfiles(w http.ResponseWriter, r *http.Request) {
