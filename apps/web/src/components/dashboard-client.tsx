@@ -265,6 +265,11 @@ export function DashboardClient({ initialOverview }: Props) {
   const [overview, setOverview] = useState(() => sanitizeOverview(initialOverview));
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [hasLoadedInitialOverview, setHasLoadedInitialOverview] = useState(false);
+  const [hasLoadedInitialContactKanban, setHasLoadedInitialContactKanban] = useState(false);
+  const [hasLoadedInitialContactBoards, setHasLoadedInitialContactBoards] = useState(false);
+  const [hasLoadedInitialContactCRM, setHasLoadedInitialContactCRM] = useState(false);
+  const [hasLoadedInitialUsers, setHasLoadedInitialUsers] = useState(false);
   const [activeView, setActiveView] = useState<WorkspaceView>(
     initialOverview.sessions.length > 0 ? 'dashboard' : 'settings',
   );
@@ -356,6 +361,13 @@ export function DashboardClient({ initialOverview }: Props) {
   const shouldShowContactsSkeleton =
     shouldShowInitialSkeleton || isLoadingContactKanban || isLoadingContactBoards || isLoadingContactCRM;
   const isAdminUser = authUser?.role === 'admin';
+  const isWorkspaceBootstrapPending =
+    isAuthReady &&
+    (!hasLoadedInitialOverview ||
+      !hasLoadedInitialContactKanban ||
+      !hasLoadedInitialContactBoards ||
+      !hasLoadedInitialContactCRM ||
+      (isAdminUser && !hasLoadedInitialUsers));
   const deferredContactsSearch = useDeferredValue(contactsSearch);
   const isConversationSwitching = pendingConversationId !== null;
   const isDashboardView = activeView === 'dashboard';
@@ -1063,7 +1075,9 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
-    void loadOverview().catch(() => undefined);
+    void loadOverview()
+      .catch(() => undefined)
+      .finally(() => setHasLoadedInitialOverview(true));
   }, [isAuthReady, loadOverview]);
 
   useEffect(() => {
@@ -1074,7 +1088,10 @@ export function DashboardClient({ initialOverview }: Props) {
     setIsLoadingContactKanban(true);
     void loadContactKanbanStages()
       .catch(() => undefined)
-      .finally(() => setIsLoadingContactKanban(false));
+      .finally(() => {
+        setIsLoadingContactKanban(false);
+        setHasLoadedInitialContactKanban(true);
+      });
   }, [isAuthReady, loadContactKanbanStages]);
 
   useEffect(() => {
@@ -1085,7 +1102,10 @@ export function DashboardClient({ initialOverview }: Props) {
     setIsLoadingContactBoards(true);
     void loadContactBoards()
       .catch(() => undefined)
-      .finally(() => setIsLoadingContactBoards(false));
+      .finally(() => {
+        setIsLoadingContactBoards(false);
+        setHasLoadedInitialContactBoards(true);
+      });
   }, [isAuthReady, loadContactBoards]);
 
   useEffect(() => {
@@ -1096,19 +1116,26 @@ export function DashboardClient({ initialOverview }: Props) {
     setIsLoadingContactCRM(true);
     void loadContactCRMProfiles()
       .catch(() => undefined)
-      .finally(() => setIsLoadingContactCRM(false));
+      .finally(() => {
+        setIsLoadingContactCRM(false);
+        setHasLoadedInitialContactCRM(true);
+      });
   }, [isAuthReady, loadContactCRMProfiles]);
 
   useEffect(() => {
     if (!isAuthReady || !isAdminUser) {
       setWorkspaceUsers([]);
+      setHasLoadedInitialUsers(true);
       return;
     }
 
     setIsLoadingUsers(true);
     void loadWorkspaceUsers()
       .catch(() => undefined)
-      .finally(() => setIsLoadingUsers(false));
+      .finally(() => {
+        setIsLoadingUsers(false);
+        setHasLoadedInitialUsers(true);
+      });
   }, [isAdminUser, isAuthReady, loadWorkspaceUsers]);
 
   const fetchConversationMessages = useCallback(async (sessionId: string, conversationId: string) => {
@@ -2367,11 +2394,30 @@ export function DashboardClient({ initialOverview }: Props) {
 
   if (!isAuthReady) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#050505_0%,#111111_100%)] px-6 text-white">
-        <div className="rounded-[2rem] border border-white/10 bg-white/5 px-6 py-5 text-sm text-white/70 backdrop-blur-xl">
-          Validando sua sessao...
-        </div>
-      </main>
+      <WorkspaceBootstrapScreen
+        items={[
+          { label: 'Autenticacao', ready: false },
+          { label: 'Workspace', ready: false },
+        ]}
+        subtitle="Validando credenciais e restaurando sua sessao de acesso."
+        title="Entrando no workspace"
+      />
+    );
+  }
+
+  if (isWorkspaceBootstrapPending) {
+    return (
+      <WorkspaceBootstrapScreen
+        items={[
+          { label: 'Dashboard', ready: hasLoadedInitialOverview },
+          { label: 'Kanban', ready: hasLoadedInitialContactKanban },
+          { label: 'Boards', ready: hasLoadedInitialContactBoards },
+          { label: 'CRM', ready: hasLoadedInitialContactCRM },
+          ...(isAdminUser ? [{ label: 'Usuarios', ready: hasLoadedInitialUsers }] : []),
+        ]}
+        subtitle={`Carregando conversas, contatos e dados operacionais${authUser?.name ? ` para ${authUser.name}` : ''}.`}
+        title="Preparando seu workspace"
+      />
     );
   }
 
@@ -4508,6 +4554,55 @@ function WorkspaceLoadingScreen({ targetView }: { targetView: WorkspaceView }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function WorkspaceBootstrapScreen({
+  title,
+  subtitle,
+  items,
+}: {
+  title: string;
+  subtitle: string;
+  items: Array<{ label: string; ready: boolean }>;
+}) {
+  return (
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,rgba(127,175,255,0.14),transparent_38%),linear-gradient(180deg,#050505_0%,#111111_100%)] px-6 text-white">
+      <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_0%,rgba(255,255,255,0.03)_26%,transparent_52%)] opacity-60" />
+      <div className="relative w-full max-w-3xl overflow-hidden rounded-[2.1rem] border border-white/10 bg-white/5 p-8 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.9)] backdrop-blur-2xl md:p-10">
+        <div className="absolute -right-16 top-0 h-44 w-44 rounded-full bg-[var(--primary)]/10 blur-[80px]" />
+        <div className="absolute -left-16 bottom-0 h-44 w-44 rounded-full bg-[var(--secondary)]/10 blur-[80px]" />
+
+        <div className="relative">
+          <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--primary)]">
+            <span className="h-2.5 w-2.5 rounded-full bg-[var(--primary)] shadow-[0_0_14px_rgba(127,175,255,0.85)]" />
+            Pulse Hub
+          </div>
+          <h1 className="font-headline mt-5 text-3xl font-semibold text-white md:text-4xl">{title}</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400 md:text-base">{subtitle}</p>
+
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            {items.map((item) => (
+              <div
+                key={item.label}
+                className={`rounded-[1.4rem] border px-4 py-4 transition ${item.ready ? 'border-[var(--secondary)]/20 bg-[var(--secondary)]/10 text-[var(--secondary)]' : 'border-white/8 bg-white/[0.03] text-zinc-400'}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium">{item.label}</span>
+                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${item.ready ? 'bg-[var(--secondary)]/14 text-[var(--secondary)]' : 'bg-white/6 text-zinc-500'}`}>
+                    {item.ready ? 'ok' : 'loading'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 h-2 overflow-hidden rounded-full bg-white/6">
+            <div className="h-full w-1/3 animate-[pulse_1.2s_ease-in-out_infinite] rounded-full bg-[linear-gradient(90deg,#7fafff,#64a1ff)]" />
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }
 
