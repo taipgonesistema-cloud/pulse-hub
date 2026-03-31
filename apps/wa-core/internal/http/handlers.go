@@ -130,6 +130,10 @@ func (a *API) handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (a *API) handleSessionInit(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
 	var request models.SessionInitRequest
 	if err := decodeJSON(r, &request); err != nil && !errors.Is(err, errEmptyBody) {
 		respondError(w, http.StatusBadRequest, err)
@@ -350,6 +354,10 @@ func (a *API) handleListSessions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleCreateSession(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
 	var request models.SessionInitRequest
 	if err := decodeJSON(r, &request); err != nil {
 		respondError(w, http.StatusBadRequest, err)
@@ -372,6 +380,10 @@ func (a *API) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleConnectSession(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
 	if !a.isDefaultSession(chi.URLParam(r, "id")) {
 		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
 		return
@@ -393,6 +405,10 @@ func (a *API) handleConnectSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleDisconnectSession(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
 	if !a.isDefaultSession(chi.URLParam(r, "id")) {
 		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
 		return
@@ -602,6 +618,10 @@ func (a *API) handleListContactKanbanBoards(w http.ResponseWriter, r *http.Reque
 }
 
 func (a *API) handleCreateContactKanbanBoard(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
 	var request models.CreateContactKanbanBoardRequest
 	if err := decodeJSON(r, &request); err != nil {
 		respondError(w, http.StatusBadRequest, err)
@@ -661,6 +681,10 @@ func (a *API) handleCreateContactKanbanBoard(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *API) handleDeleteContactKanbanBoard(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
 	boardID := strings.TrimSpace(chi.URLParam(r, "id"))
 	if boardID == "" {
 		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "id do board obrigatorio."})
@@ -799,6 +823,10 @@ func (a *API) handleUpdateContactKanbanStage(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *API) handleCreateManualContact(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
 	var request models.CreateManualContactRequest
 	if err := decodeJSON(r, &request); err != nil {
 		respondError(w, http.StatusBadRequest, err)

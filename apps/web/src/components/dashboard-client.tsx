@@ -176,6 +176,18 @@ const navigationItems: Array<{
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
+function canAccessWorkspaceView(role: AuthUser['role'] | undefined, view: WorkspaceView) {
+  if (view === 'analytics') {
+    return role === 'admin' || role === 'supervisor';
+  }
+
+  if (view === 'settings') {
+    return role === 'admin' || role === 'supervisor';
+  }
+
+  return true;
+}
+
 type WorkspaceView =
   | 'dashboard'
   | 'conversations'
@@ -361,6 +373,11 @@ export function DashboardClient({ initialOverview }: Props) {
   const shouldShowContactsSkeleton =
     shouldShowInitialSkeleton || isLoadingContactKanban || isLoadingContactBoards || isLoadingContactCRM;
   const isAdminUser = authUser?.role === 'admin';
+  const canManageWorkspaceSessions = authUser?.role === 'admin' || authUser?.role === 'supervisor';
+  const canViewAnalytics = authUser?.role === 'admin' || authUser?.role === 'supervisor';
+  const canAccessSettings = authUser?.role === 'admin' || authUser?.role === 'supervisor';
+  const canManageBoards = canManageWorkspaceSessions;
+  const canCreateManualContacts = canManageWorkspaceSessions;
   const isWorkspaceBootstrapPending =
     isAuthReady &&
     (!hasLoadedInitialOverview ||
@@ -374,6 +391,11 @@ export function DashboardClient({ initialOverview }: Props) {
   const isAnalyticsView = activeView === 'analytics';
   const isContactsView = activeView === 'contacts';
   const isConversationsView = activeView === 'conversations';
+
+  const availableNavigationItems = useMemo(
+    () => navigationItems.filter((item) => canAccessWorkspaceView(authUser?.role, item.id)),
+    [authUser?.role],
+  );
 
   const selectedSession = useMemo(
     () =>
@@ -947,6 +969,14 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [activeView, isAuthReady, overview.sessions, selectedSessionId]);
 
   useEffect(() => {
+    if (!isAuthReady || canAccessWorkspaceView(authUser?.role, activeView)) {
+      return;
+    }
+
+    navigateToView('dashboard');
+  }, [activeView, authUser?.role, isAuthReady, navigateToView]);
+
+  useEffect(() => {
     const toastTimers = toastTimersRef.current;
 
     return () => {
@@ -966,6 +996,18 @@ export function DashboardClient({ initialOverview }: Props) {
       setSettingsSection('sessions');
     }
   }, [isAdminUser, settingsSection]);
+
+  useEffect(() => {
+    if (!canManageBoards && showCreateBoardModal) {
+      setShowCreateBoardModal(false);
+    }
+  }, [canManageBoards, showCreateBoardModal]);
+
+  useEffect(() => {
+    if (!canCreateManualContacts && showCreateContactModal) {
+      setShowCreateContactModal(false);
+    }
+  }, [canCreateManualContacts, showCreateContactModal]);
 
   useEffect(() => {
     const rawBoard = window.localStorage.getItem(contactsKanbanBoardStorageKey);
@@ -1450,7 +1492,7 @@ export function DashboardClient({ initialOverview }: Props) {
         ['1', '2', '3', '4', '5'].includes(event.key)
       ) {
         event.preventDefault();
-        const nextView = navigationItems[Number(event.key) - 1]?.id;
+        const nextView = availableNavigationItems[Number(event.key) - 1]?.id;
         if (nextView) {
           navigateToView(nextView);
         }
@@ -1489,6 +1531,7 @@ export function DashboardClient({ initialOverview }: Props) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    availableNavigationItems,
     isConversationsView,
     navigateToView,
     openConversation,
@@ -1935,6 +1978,10 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   const createContactsBoard = useCallback(async () => {
+    if (!canManageBoards) {
+      return;
+    }
+
     const label = newBoardForm.label.trim();
     const description = newBoardForm.description.trim() || 'Board personalizado do CRM';
     if (!label) {
@@ -2000,6 +2047,7 @@ export function DashboardClient({ initialOverview }: Props) {
     activateContactsBoard,
     authUser?.email,
     authUser?.name,
+    canManageBoards,
     contactsAudienceFilter,
     contactsChannelFilter,
     contactsFilter,
@@ -2013,6 +2061,10 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const removeContactsBoard = useCallback(
     async (boardId: ContactsBoardId) => {
+      if (!canManageBoards) {
+        return;
+      }
+
       const removedBoards = customContactsBoards.filter((board) => board.id !== boardId);
       if (activeContactsBoard === boardId) {
         setActiveContactsBoard('contacts');
@@ -2034,10 +2086,14 @@ export function DashboardClient({ initialOverview }: Props) {
         setActiveContactsBoard(boardId);
       }
     },
-    [activeContactsBoard, authenticatedFetch, customContactsBoards, executeAction],
+    [activeContactsBoard, authenticatedFetch, canManageBoards, customContactsBoards, executeAction],
   );
 
   const createManualContact = useCallback(async () => {
+    if (!canCreateManualContacts) {
+      return;
+    }
+
     const name = newContactForm.name.trim();
     const phone = newContactForm.phone.trim();
     const sessionId = selectedSession?.id ?? overview.sessions[0]?.id ?? 'default';
@@ -2080,6 +2136,7 @@ export function DashboardClient({ initialOverview }: Props) {
     authUser?.email,
     authUser?.name,
     authenticatedFetch,
+    canCreateManualContacts,
     createContactStage,
     executeAction,
     loadContactKanbanStages,
@@ -2237,6 +2294,10 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [authUser?.id, editingUserForm.isActive, editingUserForm.name, editingUserForm.password, editingUserForm.role, editingUserId, executeAction, loadWorkspaceUsers, pushToast]);
 
   const createSession = () => {
+    if (!canManageWorkspaceSessions) {
+      return;
+    }
+
     runAction(async () => {
       const response = await authenticatedFetch(`${apiUrl}/whatsapp/sessions`, {
         method: 'POST',
@@ -2258,6 +2319,10 @@ export function DashboardClient({ initialOverview }: Props) {
   };
 
   const connectSession = (sessionId: string) => {
+    if (!canManageWorkspaceSessions) {
+      return;
+    }
+
     runAction(async () => {
       const response = await authenticatedFetch(
         `${apiUrl}/whatsapp/sessions/${sessionId}/connect`,
@@ -2273,6 +2338,10 @@ export function DashboardClient({ initialOverview }: Props) {
   };
 
   const disconnectSession = (sessionId: string) => {
+    if (!canManageWorkspaceSessions) {
+      return;
+    }
+
     runAction(async () => {
       const response = await authenticatedFetch(
         `${apiUrl}/whatsapp/sessions/${sessionId}/disconnect`,
@@ -2565,9 +2634,9 @@ export function DashboardClient({ initialOverview }: Props) {
                 ))
               ) : (
                 <EmptyStateCard
-                  actionLabel="Abrir configuracoes"
+                  actionLabel={canAccessSettings ? 'Abrir configuracoes' : 'Abrir conversas'}
                   description="Conecte uma sessao do WhatsApp e troque mensagens reais para alimentar o feed operacional ao vivo."
-                  onAction={() => navigateToView('settings')}
+                  onAction={() => navigateToView(canAccessSettings ? 'settings' : 'conversations')}
                   title="Ainda nao ha atividade recente"
                 />
               )}
@@ -2592,13 +2661,15 @@ export function DashboardClient({ initialOverview }: Props) {
                 />
               )}
             </div>
-            <button
-              className="mt-8 w-full rounded-[1.2rem] border border-white/5 bg-[var(--surface-highest)] py-4 text-xs font-bold uppercase tracking-[0.24em] text-white transition hover:bg-white/5"
-              onClick={() => navigateToView('analytics')}
-              type="button"
-            >
-              Full Performance Audit
-            </button>
+            {canViewAnalytics ? (
+              <button
+                className="mt-8 w-full rounded-[1.2rem] border border-white/5 bg-[var(--surface-highest)] py-4 text-xs font-bold uppercase tracking-[0.24em] text-white transition hover:bg-white/5"
+                onClick={() => navigateToView('analytics')}
+                type="button"
+              >
+                Full Performance Audit
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -2622,13 +2693,15 @@ export function DashboardClient({ initialOverview }: Props) {
               </p>
               <h2 className="mt-2 font-headline text-2xl font-bold text-white">Contacts</h2>
             </div>
-            <button
-              className="grid h-10 w-10 place-items-center rounded-full bg-[var(--primary)] text-black shadow-[0_0_20px_rgba(127,175,255,0.24)]"
-              onClick={() => setShowCreateBoardModal(true)}
-              type="button"
-            >
-              <Plus className="h-4 w-4" strokeWidth={2.6} />
-            </button>
+            {canManageBoards ? (
+              <button
+                className="grid h-10 w-10 place-items-center rounded-full bg-[var(--primary)] text-black shadow-[0_0_20px_rgba(127,175,255,0.24)]"
+                onClick={() => setShowCreateBoardModal(true)}
+                type="button"
+              >
+                <Plus className="h-4 w-4" strokeWidth={2.6} />
+              </button>
+            ) : null}
           </div>
 
           <div className="mt-5 space-y-2">
@@ -2659,7 +2732,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${activeContactsBoard === board.id ? 'bg-[var(--primary)]/14 text-[var(--primary)]' : 'bg-white/5 text-zinc-400'}`}>
                       {board.count}
                     </span>
-                    {board.isCustom ? (
+                    {board.isCustom && canManageBoards ? (
                       <button
                         aria-label={`Remover board ${board.label}`}
                         className="grid h-7 w-7 place-items-center rounded-full bg-white/5 text-zinc-500 transition hover:bg-white/10 hover:text-white"
@@ -2700,17 +2773,19 @@ export function DashboardClient({ initialOverview }: Props) {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <button
-                  className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
-                  onClick={() => {
-                    setCreateContactStage('new');
-                    setShowCreateContactModal(true);
-                  }}
-                  type="button"
-                >
-                  <Plus className="h-4 w-4" strokeWidth={2.1} />
-                  Novo contato
-                </button>
+                {canCreateManualContacts ? (
+                  <button
+                    className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+                    onClick={() => {
+                      setCreateContactStage('new');
+                      setShowCreateContactModal(true);
+                    }}
+                    type="button"
+                  >
+                    <Plus className="h-4 w-4" strokeWidth={2.1} />
+                    Novo contato
+                  </button>
+                ) : null}
                 <button
                   className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
                   onClick={() => setContactsAudienceFilter((current) => (current === 'verified' ? 'all' : 'verified'))}
@@ -2895,17 +2970,19 @@ export function DashboardClient({ initialOverview }: Props) {
                         </div>
                       ) : null}
 
-                      <button
-                        className="flex w-full items-center justify-center gap-2 rounded-[20px] border border-dashed border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-zinc-400 transition hover:border-white/12 hover:bg-white/[0.05] hover:text-white"
-                        onClick={() => {
-                          setCreateContactStage(column.id);
-                          setShowCreateContactModal(true);
-                        }}
-                        type="button"
-                      >
-                        <Plus className="h-4 w-4" strokeWidth={2.1} />
-                        Adicionar contato
-                      </button>
+                      {canCreateManualContacts ? (
+                        <button
+                          className="flex w-full items-center justify-center gap-2 rounded-[20px] border border-dashed border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-zinc-400 transition hover:border-white/12 hover:bg-white/[0.05] hover:text-white"
+                          onClick={() => {
+                            setCreateContactStage(column.id);
+                            setShowCreateContactModal(true);
+                          }}
+                          type="button"
+                        >
+                          <Plus className="h-4 w-4" strokeWidth={2.1} />
+                          Adicionar contato
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -3813,9 +3890,9 @@ export function DashboardClient({ initialOverview }: Props) {
           <div className="grid flex-1 place-items-center p-6">
             <div className="space-y-4 text-center">
               <EmptyStateCard
-                actionLabel="Abrir configuracoes"
+                actionLabel={canAccessSettings ? 'Abrir configuracoes' : 'Voltar ao dashboard'}
                 description="Crie ou restaure uma sessao do WhatsApp para liberar a lista de conversas e a timeline operacional."
-                onAction={() => navigateToView('settings')}
+                onAction={() => navigateToView(canAccessSettings ? 'settings' : 'dashboard')}
                 title="Nenhuma sessao ativa para conversar"
               />
             </div>
@@ -3875,29 +3952,31 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
             </ProfileSection>
 
-            <ProfileSection title="Session Control">
-              <div className="space-y-3">
-                <button
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
-                  onClick={() => {
-                    navigateToView('settings');
-                    connectSession(selectedSession.id);
-                  }}
-                  type="button"
-                >
-                  <QrCode className="h-4 w-4" strokeWidth={2.1} />
-                  Generate QR / reconnect
-                </button>
-                <button
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--surface-highest)] px-4 py-3 text-sm font-semibold text-white"
-                  onClick={() => disconnectSession(selectedSession.id)}
-                  type="button"
-                >
-                  <Wifi className="h-4 w-4" strokeWidth={2.1} />
-                  Disconnect session
-                </button>
-              </div>
-            </ProfileSection>
+            {canManageWorkspaceSessions ? (
+              <ProfileSection title="Session Control">
+                <div className="space-y-3">
+                  <button
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
+                    onClick={() => {
+                      navigateToView('settings');
+                      connectSession(selectedSession.id);
+                    }}
+                    type="button"
+                  >
+                    <QrCode className="h-4 w-4" strokeWidth={2.1} />
+                    Generate QR / reconnect
+                  </button>
+                  <button
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--surface-highest)] px-4 py-3 text-sm font-semibold text-white"
+                    onClick={() => disconnectSession(selectedSession.id)}
+                    type="button"
+                  >
+                    <Wifi className="h-4 w-4" strokeWidth={2.1} />
+                    Disconnect session
+                  </button>
+                </div>
+              </ProfileSection>
+            ) : null}
 
             {selectedSession.qrCodeDataUrl ? (
               <ProfileSection title="QR Code">
@@ -4034,7 +4113,7 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
 
           <nav className="flex-1 space-y-1">
-            {navigationItems.map(({ id, label, icon: Icon }, index) => (
+            {availableNavigationItems.map(({ id, label, icon: Icon }, index) => (
               <button
                 key={id}
                 aria-label={label}
@@ -4059,21 +4138,23 @@ export function DashboardClient({ initialOverview }: Props) {
             <button
               aria-label="New Message"
               className="mb-4 flex w-full items-center justify-center rounded-xl bg-[var(--primary-container)] px-3 py-3 text-[var(--on-primary-container)] transition-transform active:scale-95"
-              onClick={() => navigateToView(selectedSession ? 'conversations' : 'settings')}
+              onClick={() => navigateToView(selectedSession ? 'conversations' : canAccessSettings ? 'settings' : 'dashboard')}
               title="New Message"
               type="button"
             >
               <MessageSquarePlus className="h-4 w-4" strokeWidth={2.2} />
             </button>
-            <button
-              aria-label="Support"
-              className="flex w-full items-center justify-center rounded-xl px-3 py-3 text-zinc-500 transition-all hover:bg-zinc-800/50 hover:text-zinc-300"
-              onClick={() => navigateToView('settings')}
-              title="Support"
-              type="button"
-            >
-              <CircleHelp className="h-5 w-5" strokeWidth={2.1} />
-            </button>
+            {canAccessSettings ? (
+              <button
+                aria-label="Support"
+                className="flex w-full items-center justify-center rounded-xl px-3 py-3 text-zinc-500 transition-all hover:bg-zinc-800/50 hover:text-zinc-300"
+                onClick={() => navigateToView('settings')}
+                title="Support"
+                type="button"
+              >
+                <CircleHelp className="h-5 w-5" strokeWidth={2.1} />
+              </button>
+            ) : null}
             <button
               aria-label="Sign Out"
               className="flex w-full items-center justify-center rounded-xl px-3 py-3 text-[var(--error-dim)] transition-all hover:bg-white/5"

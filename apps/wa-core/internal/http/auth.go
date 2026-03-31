@@ -83,16 +83,29 @@ func currentAuth(r *http.Request) *authContextValue {
 }
 
 func (a *API) requireAdmin(w http.ResponseWriter, r *http.Request) (*authContextValue, bool) {
+	return a.requireRoles(w, r, models.AuthRoleAdmin)
+}
+
+func (a *API) requireRoles(w http.ResponseWriter, r *http.Request, roles ...models.AuthRole) (*authContextValue, bool) {
 	auth := currentAuth(r)
 	if auth == nil {
 		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
 		return nil, false
 	}
-	if auth.user.Role != models.AuthRoleAdmin {
-		respondJSON(w, http.StatusForbidden, map[string]any{"message": "Acesso restrito a administradores."})
+	if !hasAnyRole(auth.user.Role, roles...) {
+		respondJSON(w, http.StatusForbidden, map[string]any{"message": "Voce nao tem permissao para esta acao."})
 		return nil, false
 	}
 	return auth, true
+}
+
+func hasAnyRole(role models.AuthRole, allowed ...models.AuthRole) bool {
+	for _, candidate := range allowed {
+		if role == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +145,7 @@ func (a *API) handleListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleCreateUser(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.requireAdmin(w, r); !ok {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin); !ok {
 		return
 	}
 
@@ -189,7 +202,7 @@ func (a *API) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
-	auth, ok := a.requireAdmin(w, r)
+	auth, ok := a.requireRoles(w, r, models.AuthRoleAdmin)
 	if !ok {
 		return
 	}
