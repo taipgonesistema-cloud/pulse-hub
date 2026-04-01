@@ -2479,7 +2479,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
     const payload = {
       name: quickReplyFormState.name.trim(),
-      shortcut: quickReplyFormState.shortcut.trim(),
+      shortcut: quickReplyFormState.shortcut.replaceAll('/', '').trim().toLowerCase(),
       content: quickReplyFormState.content.trim(),
       category: quickReplyFormState.category?.trim() ?? '',
       visibilityScope: quickReplyFormState.visibilityScope,
@@ -2492,6 +2492,15 @@ export function DashboardClient({ initialOverview }: Props) {
         tone: 'error',
         title: 'Campos obrigatorios',
         description: 'Nome, atalho e conteudo devem ser preenchidos.',
+      });
+      return;
+    }
+
+    if (payload.visibilityScope === 'user' && !payload.visibilityUserId) {
+      pushToast({
+        tone: 'error',
+        title: 'Selecione o usuario',
+        description: 'Respostas com visibilidade por usuario precisam de um destinatario definido.',
       });
       return;
     }
@@ -4221,7 +4230,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
             <div className="border-t border-white/5 bg-[var(--surface-low)]/45 px-3 py-3 backdrop-blur-xl md:px-4">
               <ConversationComposer
-                key={`${selectedSession.id}:${selectedConversation?.id ?? 'none'}`}
+                key={`${selectedSession.id}:${selectedConversation?.id ?? 'none'}:${authUser?.id ?? 'guest'}`}
                 defaultSignatureName={authUser?.name ?? 'Operador'}
                 disabled={!selectedConversation || isPending}
                 onCancelReply={() => setReplyTargetMessage(null)}
@@ -5697,9 +5706,13 @@ function ConversationComposer({
   replyToMessage: MessageRecord | null;
   signatureStorageKey: string;
 }) {
+  const initialSignaturePreference = useMemo(
+    () => readComposerSignaturePreference(signatureStorageKey, defaultSignatureName),
+    [defaultSignatureName, signatureStorageKey],
+  );
   const [draft, setDraft] = useState('');
-  const [signatureEnabled, setSignatureEnabled] = useState(true);
-  const [signatureName, setSignatureName] = useState(defaultSignatureName.trim() || 'Operador');
+  const [signatureEnabled, setSignatureEnabled] = useState(initialSignaturePreference.enabled);
+  const [signatureName, setSignatureName] = useState(initialSignaturePreference.name);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState<ComposerAttachment | null>(null);
@@ -5709,15 +5722,11 @@ function ConversationComposer({
   const [quickReplyActiveIndex, setQuickReplyActiveIndex] = useState(0);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
   const stickerInputRef = useRef<HTMLInputElement | null>(null);
-  const composerInputRef = useRef<HTMLInputElement | null>(null);
+  const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const composerBusy = disabled || isSendingText || isUploading;
   const slashContext = useMemo(() => getQuickReplySlashContext(draft), [draft]);
   const slashAutocompleteOpen = Boolean(slashContext) && !composerBusy;
-
-  useEffect(() => {
-    setQuickReplyActiveIndex(0);
-  }, [slashContext?.query]);
 
   useEffect(() => {
     if (!slashContext) {
@@ -5732,31 +5741,6 @@ function ConversationComposer({
       return;
     }
 
-    const rawValue = window.localStorage.getItem(signatureStorageKey);
-    if (!rawValue) {
-      setSignatureEnabled(true);
-      setSignatureName(defaultSignatureName.trim() || 'Operador');
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(rawValue) as {
-        enabled?: boolean;
-        name?: string;
-      };
-      setSignatureEnabled(parsed.enabled !== false);
-      setSignatureName(parsed.name?.trim() || defaultSignatureName.trim() || 'Operador');
-    } catch {
-      setSignatureEnabled(true);
-      setSignatureName(defaultSignatureName.trim() || 'Operador');
-    }
-  }, [defaultSignatureName, signatureStorageKey]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
     window.localStorage.setItem(
       signatureStorageKey,
       JSON.stringify({
@@ -5765,6 +5749,16 @@ function ConversationComposer({
       }),
     );
   }, [defaultSignatureName, signatureEnabled, signatureName, signatureStorageKey]);
+
+  useLayoutEffect(() => {
+    const composer = composerInputRef.current;
+    if (!composer) {
+      return;
+    }
+
+    composer.style.height = '0px';
+    composer.style.height = `${Math.min(composer.scrollHeight, 224)}px`;
+  }, [draft]);
 
   const clearAttachment = useCallback(() => {
     setSelectedAttachment((current) => {
@@ -5802,13 +5796,14 @@ function ConversationComposer({
       setDraft((current) => {
         const context = getQuickReplySlashContext(current);
         if (!context) {
-          return content;
+          return appendQuickReplyContent(current, content);
         }
 
         const before = current.slice(0, context.start);
         const after = current.slice(context.end);
         return `${before}${content}${after}`;
       });
+      setQuickReplyActiveIndex(0);
 
       window.requestAnimationFrame(() => {
         composerInputRef.current?.focus();
@@ -5818,6 +5813,7 @@ function ConversationComposer({
   );
 
   const handleDraftChange = useCallback((value: string) => {
+    setQuickReplyActiveIndex(0);
     setDraft(value);
   }, []);
 
@@ -5941,19 +5937,6 @@ function ConversationComposer({
         }}
         type="file"
       />
-      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
-        {quickReplies.slice(0, 6).map((reply) => (
-          <button
-            key={reply.id}
-            className="shrink-0 rounded-full bg-[var(--surface-highest)] px-4 py-2 text-[11px] font-medium text-zinc-300 transition hover:text-white"
-            onClick={() => insertQuickReply(reply)}
-            type="button"
-          >
-            /{reply.shortcut}
-          </button>
-        ))}
-      </div>
-
       {selectedAttachment ? (
         <div className="mb-3 overflow-hidden rounded-[26px] border border-white/10 bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.9)]">
           <div className="flex items-start gap-3">
@@ -6092,7 +6075,7 @@ function ConversationComposer({
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
             Assinatura do operador
           </p>
-          <div className="mt-2 flex flex-col gap-2 md:flex-row md:items-center">
+          <div className="mt-2">
             <input
               className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none transition focus:border-[var(--primary)]/40"
               disabled={composerBusy}
@@ -6100,9 +6083,6 @@ function ConversationComposer({
               placeholder="Nome da assinatura"
               value={signatureName}
             />
-            <span className="rounded-full bg-black/20 px-3 py-2 text-xs text-zinc-400">
-              Preview: {signatureEnabled && signatureName.trim() ? `*${signatureName.trim()}:*` : 'desativada'}
-            </span>
           </div>
         </div>
       </div>
@@ -6160,9 +6140,9 @@ function ConversationComposer({
         >
           <Smile className="h-5 w-5" strokeWidth={2.1} />
         </button>
-        <input
+        <textarea
           ref={composerInputRef}
-          className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+          className="max-h-56 min-h-[24px] flex-1 resize-none overflow-y-auto bg-transparent py-1 text-sm leading-6 text-white outline-none placeholder:text-zinc-500"
           disabled={composerBusy}
           onChange={(event) => handleDraftChange(event.target.value)}
           onKeyDown={(event) => {
@@ -6195,6 +6175,10 @@ function ConversationComposer({
               }
             }
 
+            if (event.key === 'Enter' && event.shiftKey) {
+              return;
+            }
+
             if (event.key !== 'Enter' || event.nativeEvent.isComposing) {
               return;
             }
@@ -6203,15 +6187,9 @@ function ConversationComposer({
             void submit();
           }}
           placeholder={disabled ? 'Selecione uma conversa...' : selectedAttachment ? 'Adicione uma legenda opcional...' : 'Type a message...'}
+          rows={1}
           value={draft}
         />
-        <button
-          className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]"
-          disabled
-          type="button"
-        >
-          <Mic className="h-5 w-5" strokeWidth={2.1} />
-        </button>
         <button
           className="grid h-12 w-12 place-items-center rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] text-black shadow-[0_0_22px_rgba(127,175,255,0.32)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
           disabled={composerBusy || (!draft.trim() && !selectedAttachment)}
@@ -6782,6 +6760,49 @@ function removeQuickReplySlashQuery(value: string) {
   }
 
   return `${value.slice(0, context.start)}${value.slice(context.end)}`;
+}
+
+function appendQuickReplyContent(current: string, content: string) {
+  const trimmedCurrent = current.trimEnd();
+  if (!trimmedCurrent) {
+    return content;
+  }
+
+  return `${trimmedCurrent}\n${content}`;
+}
+
+function readComposerSignaturePreference(signatureStorageKey: string, defaultSignatureName: string) {
+  const fallbackName = defaultSignatureName.trim() || 'Operador';
+  if (typeof window === 'undefined') {
+    return {
+      enabled: true,
+      name: fallbackName,
+    };
+  }
+
+  const rawValue = window.localStorage.getItem(signatureStorageKey);
+  if (!rawValue) {
+    return {
+      enabled: true,
+      name: fallbackName,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as {
+      enabled?: boolean;
+      name?: string;
+    };
+    return {
+      enabled: parsed.enabled !== false,
+      name: parsed.name?.trim() || fallbackName,
+    };
+  } catch {
+    return {
+      enabled: true,
+      name: fallbackName,
+    };
+  }
 }
 
 function formatDateLabel(timestamp: string) {

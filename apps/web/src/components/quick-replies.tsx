@@ -166,7 +166,12 @@ export function QuickReplyFormModal({
     <QuickReplyModalShell onClose={onClose} title={mode === 'create' ? 'Nova resposta rapida' : 'Editar resposta rapida'}>
       <div className="space-y-4">
         <LabeledInput label="Nome" value={value.name} onChange={(name) => onChange({ ...value, name })} />
-        <LabeledInput label="Atalho" prefix="/" value={value.shortcut} onChange={(shortcut) => onChange({ ...value, shortcut })} />
+        <LabeledInput
+          label="Atalho"
+          prefix="/"
+          value={value.shortcut}
+          onChange={(shortcut) => onChange({ ...value, shortcut: sanitizeQuickReplyShortcut(shortcut) })}
+        />
         <LabeledTextarea label="Conteudo" value={value.content} onChange={(content) => onChange({ ...value, content })} />
         <LabeledInput label="Categoria" value={value.category ?? ''} onChange={(category) => onChange({ ...value, category })} />
 
@@ -478,4 +483,8 @@ function formatTimestamp(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function sanitizeQuickReplyShortcut(value: string) {
+  return value.replaceAll('/', '').trimStart().toLowerCase();
 }
