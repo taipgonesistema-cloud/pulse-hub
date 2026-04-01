@@ -722,26 +722,15 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   const dashboardLeaderboard = useMemo(
-    () =>
-      (isDashboardView ? overview.conversations.slice(0, 3) : []).map((conversation, index) => ({
-        id: conversation.id,
-        label: conversation.contact,
-        avatarUrl: conversation.avatarUrl,
-        score: [94, 88, 82][index] ?? 79,
-        closed: [142, 128, 115][index] ?? 96,
-        rank: index + 1,
-      })),
-    [isDashboardView, overview.conversations],
+    () => buildDashboardLeaderboard({
+      authUserName: authUser?.name,
+      conversations: overview.conversations,
+      crmProfileMap: contactCrmProfileMap,
+      stageMap: contactKanbanStageMap,
+      users: workspaceUsers,
+    }).slice(0, 3),
+    [authUser?.name, contactCrmProfileMap, contactKanbanStageMap, overview.conversations, workspaceUsers],
   );
-
-  const operatorRoster = useMemo(() => {
-    const activeUsers = workspaceUsers.filter((user) => user.isActive);
-    if (activeUsers.length > 0) {
-      return activeUsers;
-    }
-
-    return authUser ? [authUser] : [];
-  }, [authUser, workspaceUsers]);
 
   const queueBreakdown = useMemo(() => {
     if (!isDashboardView) {
@@ -756,6 +745,19 @@ export function DashboardClient({ initialOverview }: Props) {
     return channels;
   }, [isDashboardView, overview.conversations]);
 
+  const dashboardSnapshot = useMemo(() => {
+    const onlineUsers = overview.metrics.onlineUsers;
+    const activeSessions = overview.metrics.activeSessions;
+    const recentConversations = countRecentConversations(overview.conversations, 24);
+
+    return {
+      activeSessions,
+      onlineUsers,
+      recentConversations,
+      teamCount: dashboardLeaderboard.length,
+    };
+  }, [dashboardLeaderboard.length, overview.conversations, overview.metrics.activeSessions, overview.metrics.onlineUsers]);
+
   const analyticsModel = useMemo(() => {
     if (!isAnalyticsView) {
       return null;
@@ -766,63 +768,55 @@ export function DashboardClient({ initialOverview }: Props) {
     const totalConversations = conversations.length;
     const unreadVolume = conversations.reduce((sum, conversation) => sum + conversation.unread, 0);
     const waitingVolume = overview.sessions.reduce((sum, session) => sum + session.waiting, 0);
-    const resolvedRate = totalConversations === 0
-      ? 94.2
-      : Number((Math.max(totalConversations - unreadVolume, 0) / totalConversations * 100).toFixed(1));
-    const csat = Math.min(4.9, Math.max(4.2, 4.5 + resolvedRate / 200));
     const responseSeconds = Math.max(responseVelocity.averageSeconds || 0, 0);
     const responseMinutes = Number((responseSeconds / 60).toFixed(1));
+    const resolvedConversations = conversations
+      .map((conversation) => {
+        const profile = contactCrmProfileMap[buildContactKanbanKey(conversation)];
+        if (!isResolvedConversation(conversation, contactKanbanStageMap)) {
+          return null;
+        }
 
-    const channelTotals = {
-      whatsapp: 0,
-      instagram: 0,
-      facebook: 0,
-    };
-    for (const conversation of conversations) {
-      channelTotals[getContactChannelKey(conversation)] += 1;
-    }
-
-    const weeklyChannelSeries = [
-      { day: 'MON', channel: 'whatsapp', value: Math.max(30, Math.min(95, channelTotals.whatsapp + 18)) },
-      { day: 'TUE', channel: 'whatsapp', value: Math.max(24, Math.min(88, channelTotals.whatsapp + 5)) },
-      { day: 'WED', channel: 'whatsapp', value: Math.max(42, Math.min(100, channelTotals.whatsapp + 28)) },
-      { day: 'THU', channel: 'instagram', value: Math.max(18, Math.min(72, channelTotals.instagram + 26)) },
-      { day: 'FRI', channel: 'whatsapp', value: Math.max(28, Math.min(92, channelTotals.whatsapp + 12)) },
-      { day: 'SAT', channel: 'instagram', value: Math.max(14, Math.min(60, channelTotals.instagram + 18)) },
-      { day: 'SUN', channel: 'instagram', value: Math.max(12, Math.min(48, channelTotals.instagram + 10)) },
-    ];
-
-    const heatmapRows = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((day, dayIndex) => ({
-      day,
-      values: Array.from({ length: 12 }, (_, slotIndex) => {
-        const seed = (dayIndex * 17 + slotIndex * 13 + totalConversations * 3) % 100;
-        return Math.max(6, Math.min(100, dayIndex < 5 ? seed + 12 : seed - 8));
-      }),
-    }));
-
-    const resolvedTickets = conversations.slice(0, 5).map((conversation, index) => ({
-      id: `#TKT-${98421 + index}`,
-      customer: conversation.contact,
-      customerAvatar: conversation.avatarUrl,
-      channel: getContactChannelMeta(conversation),
-      agent: operatorRoster[index % Math.max(operatorRoster.length, 1)]?.name ?? authUser?.name ?? 'Operador',
-      resolutionTime: ['14m 20s', '08m 15s', '22m 45s', '11m 05s', '17m 32s'][index] ?? '09m 40s',
-    }));
+        return {
+          id: buildAnalyticsConversationId(conversation),
+          customer: conversation.contact,
+          customerAvatar: conversation.avatarUrl,
+          channel: getContactChannelMeta(conversation),
+          agent: resolveConversationOperatorName(conversation, profile, authUser?.name),
+          activityLabel: formatRelativePulse(conversation.lastMessageAt).primary,
+          statusLabel: resolveConversationOutcomeLabel(conversation, contactKanbanStageMap),
+          updatedAt: conversation.lastMessageAt,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
+    const resolvedRate = totalConversations === 0
+      ? 0
+      : Number((resolvedConversations.length / totalConversations * 100).toFixed(1));
+    const healthScore = calculateWorkspaceHealthScore({
+      responseSeconds,
+      targetSeconds: responseVelocity.targetSeconds,
+      totalConversations,
+      unreadVolume,
+      resolvedRate,
+    });
+    const activityAnalytics = buildConversationActivityAnalytics(conversations);
 
     return {
-      csat: Number(csat.toFixed(1)),
+      healthScore,
       responseMinutes,
       resolvedRate,
       responseSeconds,
       totalConversations,
       unreadVolume,
       waitingVolume,
-      weeklyChannelSeries,
-      heatmapRows,
-      resolvedTickets,
+      channelTotals: activityAnalytics.channelTotals,
+      weeklyChannelSeries: activityAnalytics.weeklyChannelSeries,
+      heatmapRows: activityAnalytics.heatmapRows,
+      resolvedTickets: resolvedConversations.slice(0, 5),
       responseVelocity,
     };
-  }, [authUser?.name, isAnalyticsView, operatorRoster, overview.analytics, overview.conversations, overview.sessions]);
+  }, [authUser?.name, contactCrmProfileMap, contactKanbanStageMap, isAnalyticsView, overview.analytics, overview.conversations, overview.sessions]);
 
   const safeResponseVelocity = useMemo(
     () => normalizeResponseVelocityAnalytics(analyticsModel?.responseVelocity),
@@ -844,24 +838,20 @@ export function DashboardClient({ initialOverview }: Props) {
   const contactInfo = useMemo(() => {
     if (!isConversationsView) {
       return {
-        email: 'contact@pulsehub.local',
+        email: 'Nao informado',
         phone: selectedSession?.phoneNumber ?? 'No phone linked',
       };
     }
 
     if (!selectedConversation) {
       return {
-        email: 'contact@pulsehub.local',
+        email: 'Nao informado',
         phone: selectedSession?.phoneNumber ?? 'No phone linked',
       };
     }
 
-    const safeName = selectedConversation.contact
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '.');
-
     return {
-      email: `${safeName}@pulsehub.local`,
+      email: 'Nao informado',
       phone: selectedConversation.participantId,
     };
   }, [isConversationsView, selectedConversation, selectedSession?.phoneNumber]);
@@ -2786,7 +2776,7 @@ export function DashboardClient({ initialOverview }: Props) {
             </h1>
             <p className="mt-2 flex items-center gap-3 text-sm text-[var(--muted)] md:text-base">
               <span className="h-3 w-3 rounded-full bg-[var(--secondary)] shadow-[0_0_8px_#5dfd8a]" />
-              System nominal. {overview.metrics.onlineUsers || 42} active agents processing {Math.max(overview.metrics.waitingConversations, 12) / 10}k events/hr.
+              {dashboardSnapshot.onlineUsers.toLocaleString('pt-BR')} operadores online acompanhando {dashboardSnapshot.recentConversations.toLocaleString('pt-BR')} conversas com atividade nas ultimas 24h.
             </p>
           </div>
 
@@ -2802,7 +2792,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 />
               ))}
               <div className="grid h-8 w-8 place-items-center rounded-full border-2 border-[var(--surface-low)] bg-[var(--primary-container)] text-[11px] font-bold text-black">
-                +{Math.max(overview.metrics.onlineUsers, 8)}
+                {dashboardSnapshot.teamCount.toLocaleString('pt-BR')}
               </div>
             </div>
             <span className="text-lg font-semibold text-white">Active Teams</span>
@@ -2823,7 +2813,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       {overview.metrics.waitingConversations.toLocaleString('pt-BR')}
                     </p>
                     <p className="mt-2 text-xl font-semibold text-[var(--primary)] md:text-2xl">
-                      +12% from last hour
+                      {dashboardSnapshot.activeSessions.toLocaleString('pt-BR')} sessoes online · {dashboardSnapshot.onlineUsers.toLocaleString('pt-BR')} operadores ativos
                     </p>
                   </div>
                   <LayoutGrid className="h-9 w-9 text-zinc-700" strokeWidth={1.8} />
@@ -3346,7 +3336,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   <BadgeCheck className="h-16 w-16 text-white/15" strokeWidth={1.8} />
                 </div>
                 <h3 className="mb-8 text-sm font-semibold uppercase tracking-[0.24em] text-[var(--muted)]">
-                  Global CSAT Score
+                  Workspace Health Score
                 </h3>
                 <div className="relative mx-auto flex h-48 w-48 items-center justify-center">
                   <svg className="h-full w-full -rotate-90" viewBox="0 0 200 200">
@@ -3358,7 +3348,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       r="88"
                       stroke="currentColor"
                       strokeDasharray="552.92"
-                      strokeDashoffset={552.92 - (analyticsModel.csat / 5) * 552.92}
+                      strokeDashoffset={552.92 - (analyticsModel.healthScore / 5) * 552.92}
                       strokeLinecap="round"
                       strokeWidth="12"
                       className="text-[var(--primary-fixed)] drop-shadow-[0_0_12px_rgba(100,161,255,0.6)]"
@@ -3366,10 +3356,10 @@ export function DashboardClient({ initialOverview }: Props) {
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className="font-headline text-4xl font-black text-white md:text-5xl">
-                      {analyticsModel.csat.toFixed(1)}
+                      {analyticsModel.healthScore.toFixed(1)}
                     </span>
                     <span className="mt-1 text-sm font-bold text-[var(--secondary)]">
-                      +12% vs last month
+                      Resposta, fila e pipeline em tempo real
                     </span>
                   </div>
                 </div>
@@ -3393,21 +3383,22 @@ export function DashboardClient({ initialOverview }: Props) {
                     Conversations per Channel
                   </h3>
                   <p className="mt-1 font-headline text-3xl font-bold text-white md:text-4xl">
-                    {(analyticsModel.totalConversations / 10).toFixed(1)}k Total
+                    {analyticsModel.totalConversations.toLocaleString('pt-BR')} Total
                   </p>
                 </div>
                 <div className="flex gap-3 text-xs text-[var(--muted)]">
-                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[var(--primary)]" />WhatsApp</span>
-                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[var(--tertiary)]" />Instagram</span>
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[var(--primary)]" />WhatsApp {analyticsModel.channelTotals.whatsapp}</span>
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[var(--tertiary)]" />Instagram {analyticsModel.channelTotals.instagram}</span>
+                  <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[var(--secondary)]" />Facebook {analyticsModel.channelTotals.facebook}</span>
                 </div>
               </div>
 
               <div className="flex h-48 items-end justify-between gap-4 px-4">
                 {analyticsModel.weeklyChannelSeries.map((item) => (
                   <div key={item.day} className="flex-1 space-y-2">
-                    <div className={`relative h-32 w-full rounded-t-lg ${item.channel === 'whatsapp' ? 'bg-[var(--primary)]/20' : 'bg-[var(--tertiary)]/20'}`}>
+                    <div className={`relative h-32 w-full rounded-t-lg ${item.channel === 'whatsapp' ? 'bg-[var(--primary)]/20' : item.channel === 'instagram' ? 'bg-[var(--tertiary)]/20' : 'bg-[var(--secondary)]/20'}`}>
                       <div
-                        className={`absolute bottom-0 w-full rounded-t-lg transition-all duration-300 ${item.channel === 'whatsapp' ? 'bg-[var(--primary)]' : 'bg-[var(--tertiary)]'}`}
+                        className={`absolute bottom-0 w-full rounded-t-lg transition-all duration-300 ${item.channel === 'whatsapp' ? 'bg-[var(--primary)]' : item.channel === 'instagram' ? 'bg-[var(--tertiary)]' : 'bg-[var(--secondary)]'}`}
                         style={{ height: `${item.value}%` }}
                       />
                     </div>
@@ -3424,7 +3415,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     Peak Service Hours
                   </h3>
                   <p className="mt-1 text-xs italic text-[var(--muted)]">
-                    Average customer engagement intensity by hour and day.
+                    Distribuicao real das ultimas conversas sincronizadas por dia e horario.
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -3469,15 +3460,11 @@ export function DashboardClient({ initialOverview }: Props) {
             <div className="col-span-12 overflow-hidden rounded-[1.25rem] bg-[var(--surface-low)]">
               <div className="flex flex-col gap-4 border-b border-white/5 p-6 md:flex-row md:items-center md:justify-between">
                 <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--muted)]">
-                  Recent Resolved Tickets
+                  Recent Resolved Conversations
                 </h3>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button className="rounded-lg bg-[var(--surface-highest)] px-4 py-2 text-xs text-white">All Channels</button>
-                  <button className="rounded-lg bg-[var(--surface-highest)] px-4 py-2 text-xs text-white">All Agents</button>
-                  <button className="grid h-8 w-8 place-items-center rounded-lg hover:bg-white/5" type="button">
-                    <SlidersHorizontal className="h-4 w-4" strokeWidth={2.1} />
-                  </button>
-                </div>
+                <span className="rounded-full bg-[var(--surface-highest)] px-4 py-2 text-xs text-zinc-300">
+                  {analyticsModel.resolvedTickets.length.toLocaleString('pt-BR')} itens recentes
+                </span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -3487,12 +3474,18 @@ export function DashboardClient({ initialOverview }: Props) {
                       <th className="px-6 py-4">Customer</th>
                       <th className="px-6 py-4">Channel</th>
                       <th className="px-6 py-4">Agent</th>
-                      <th className="px-6 py-4">Resolution Time</th>
+                      <th className="px-6 py-4">Last Activity</th>
                       <th className="px-6 py-4">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {analyticsModel.resolvedTickets.map((ticket) => (
+                    {analyticsModel.resolvedTickets.length === 0 ? (
+                      <tr>
+                        <td className="px-6 py-6 text-sm text-zinc-500" colSpan={6}>
+                          Nenhuma conversa resolvida apareceu ainda no pipeline atual.
+                        </td>
+                      </tr>
+                    ) : analyticsModel.resolvedTickets.map((ticket) => (
                       <tr key={ticket.id} className="transition-colors hover:bg-white/5">
                         <td className="px-6 py-4 font-mono text-xs text-white">{ticket.id}</td>
                         <td className="px-6 py-4">
@@ -3508,10 +3501,10 @@ export function DashboardClient({ initialOverview }: Props) {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-white">{ticket.agent}</td>
-                        <td className="px-6 py-4 text-white">{ticket.resolutionTime}</td>
+                        <td className="px-6 py-4 text-white">{ticket.activityLabel}</td>
                         <td className="px-6 py-4">
                           <span className="rounded-full border border-[var(--secondary)]/20 bg-[var(--secondary)]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--secondary)]">
-                            Resolved
+                            {ticket.statusLabel}
                           </span>
                         </td>
                       </tr>
@@ -4901,7 +4894,8 @@ function DashboardPerformerItem({
     label: string;
     avatarUrl?: string | null;
     score: number;
-    closed: number;
+    volume: number;
+    volumeLabel: string;
     rank: number;
   };
 }) {
@@ -4922,8 +4916,8 @@ function DashboardPerformerItem({
         </div>
       </div>
       <div className="text-right">
-        <p className="text-xs font-bold text-white">{performer.score}% CSAT</p>
-        <p className="text-[10px] text-zinc-500">{performer.closed} closed</p>
+        <p className="text-xs font-bold text-white">{performer.score}% health</p>
+        <p className="text-[10px] text-zinc-500">{performer.volume} {performer.volumeLabel}</p>
       </div>
     </div>
   );
@@ -6945,26 +6939,341 @@ function getContactChannelMeta(contact: ConversationRecord) {
   }
 }
 
+function countRecentConversations(conversations: ConversationRecord[], hours: number) {
+  const threshold = Date.now() - hours * 60 * 60 * 1000;
+
+  return conversations.reduce((count, conversation) => {
+    const timestamp = Date.parse(conversation.lastMessageAt);
+    return Number.isFinite(timestamp) && timestamp >= threshold ? count + 1 : count;
+  }, 0);
+}
+
+function buildDashboardLeaderboard({
+  authUserName,
+  conversations,
+  crmProfileMap,
+  stageMap,
+  users,
+}: {
+  authUserName?: string | null;
+  conversations: ConversationRecord[];
+  crmProfileMap: Record<string, ContactCRMProfileRecord>;
+  stageMap: Record<string, ContactKanbanStageId>;
+  users: AuthUser[];
+}) {
+  const stats = new Map<string, {
+    id: string;
+    label: string;
+    avatarUrl?: string | null;
+    assigned: number;
+    resolved: number;
+    unread: number;
+    waitMinutes: number;
+  }>();
+
+  for (const conversation of conversations) {
+    const profile = crmProfileMap[buildContactKanbanKey(conversation)];
+    const operatorName = resolveConversationOperatorName(conversation, profile, authUserName);
+    if (!operatorName) {
+      continue;
+    }
+
+    const current = stats.get(operatorName) ?? {
+      id: operatorName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      label: operatorName,
+      avatarUrl: undefined,
+      assigned: 0,
+      resolved: 0,
+      unread: 0,
+      waitMinutes: 0,
+    };
+
+    current.assigned += 1;
+    current.unread += conversation.unread > 0 ? 1 : 0;
+    current.waitMinutes += estimateWaitingMinutes(conversation.waitingTime);
+    if (!current.avatarUrl) {
+      current.avatarUrl = conversation.avatarUrl;
+    }
+    if (isResolvedConversation(conversation, stageMap)) {
+      current.resolved += 1;
+    }
+
+    stats.set(operatorName, current);
+  }
+
+  if (stats.size === 0) {
+    return users
+      .filter((user) => user.isActive)
+      .slice(0, 3)
+      .map((user, index) => ({
+        id: user.id,
+        label: user.name,
+        avatarUrl: null,
+        score: 0,
+        volume: 0,
+        volumeLabel: 'assigned',
+        rank: index + 1,
+      }));
+  }
+
+  return Array.from(stats.values())
+    .map((item) => {
+      const assigned = Math.max(item.assigned, 1);
+      const resolvedRatio = item.resolved / assigned;
+      const unreadRatio = item.unread / assigned;
+      const averageWaitMinutes = item.waitMinutes / assigned;
+      const waitPenalty = Math.min(averageWaitMinutes / 240, 1);
+      const score = Math.round(Math.max(0, Math.min(100, 45 + resolvedRatio * 35 + (1 - unreadRatio) * 15 + (1 - waitPenalty) * 5)));
+      const volume = item.resolved > 0 ? item.resolved : item.assigned;
+
+      return {
+        id: item.id,
+        label: item.label,
+        avatarUrl: item.avatarUrl,
+        score,
+        volume,
+        volumeLabel: item.resolved > 0 ? 'won' : 'assigned',
+      };
+    })
+    .sort((left, right) => right.score - left.score || right.volume - left.volume || left.label.localeCompare(right.label))
+    .map((item, index) => ({
+      ...item,
+      rank: index + 1,
+    }));
+}
+
+function resolveConversationOperatorName(
+  conversation: ConversationRecord,
+  profile?: ContactCRMProfileRecord,
+  fallbackName?: string | null,
+) {
+  const candidates = [profile?.assignee, conversation.owner, fallbackName];
+
+  for (const candidate of candidates) {
+    const normalized = stringsToDefinedLabel(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return '';
+}
+
+function stringsToDefinedLabel(value?: string | null) {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return '';
+  }
+
+  const lowered = normalized.toLowerCase();
+  if (['unknown', 'unassigned', 'sem responsavel', 'n/a', '-'].includes(lowered)) {
+    return '';
+  }
+
+  return normalized;
+}
+
+function estimateWaitingMinutes(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return 0;
+  }
+
+  if (normalized.includes('agora') || normalized.includes('now')) {
+    return 0;
+  }
+  if (normalized.includes('ontem')) {
+    return 24 * 60;
+  }
+
+  const match = normalized.match(/(\d+)/);
+  const numericValue = match ? Number.parseInt(match[1] ?? '0', 10) : 0;
+  if (normalized.includes('dia')) {
+    return numericValue * 24 * 60;
+  }
+  if (normalized.includes('hora') || normalized.includes('hr') || normalized.includes('h')) {
+    return numericValue * 60;
+  }
+  if (normalized.includes('min')) {
+    return numericValue;
+  }
+
+  return numericValue;
+}
+
+function formatCompactDuration(totalMinutes: number) {
+  if (totalMinutes >= 24 * 60) {
+    return `${Math.floor(totalMinutes / (24 * 60))}d`;
+  }
+  if (totalMinutes >= 60) {
+    return `${Math.floor(totalMinutes / 60)}h`;
+  }
+  return `${Math.max(totalMinutes, 0)}m`;
+}
+
+function isResolvedConversation(
+  conversation: ConversationRecord,
+  stageMap: Record<string, ContactKanbanStageId>,
+) {
+  const stage = resolveContactKanbanStage(conversation, stageMap);
+  const normalizedStatus = conversation.status.toLowerCase();
+
+  return stage === 'won' || normalizedStatus.includes('closed') || normalizedStatus.includes('resolved');
+}
+
+function resolveConversationOutcomeLabel(
+  conversation: ConversationRecord,
+  stageMap: Record<string, ContactKanbanStageId>,
+) {
+  return resolveContactKanbanStage(conversation, stageMap) === 'won' ? 'Won' : 'Resolved';
+}
+
+function buildAnalyticsConversationId(conversation: ConversationRecord) {
+  return `#${conversation.id.replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase() || 'CONV'}`;
+}
+
+function calculateWorkspaceHealthScore({
+  responseSeconds,
+  targetSeconds,
+  totalConversations,
+  unreadVolume,
+  resolvedRate,
+}: {
+  responseSeconds: number;
+  targetSeconds: number;
+  totalConversations: number;
+  unreadVolume: number;
+  resolvedRate: number;
+}) {
+  if (totalConversations === 0) {
+    return 0;
+  }
+
+  const safeTargetSeconds = targetSeconds > 0 ? targetSeconds : 120;
+  const responseComponent = Math.max(0, Math.min(100, 100 - (responseSeconds / safeTargetSeconds) * 55));
+  const backlogComponent = Math.max(0, Math.min(100, 100 - (unreadVolume / totalConversations) * 100));
+  const composite = responseComponent * 0.45 + backlogComponent * 0.2 + resolvedRate * 0.35;
+
+  return Number((composite / 20).toFixed(1));
+}
+
+function buildConversationActivityAnalytics(conversations: ConversationRecord[]) {
+  const channelTotals = {
+    whatsapp: 0,
+    instagram: 0,
+    facebook: 0,
+  };
+  const dailyBuckets = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (6 - index));
+
+    return {
+      key: buildLocalDateKey(date),
+      day: formatShortWeekday(date),
+      total: 0,
+      whatsapp: 0,
+      instagram: 0,
+      facebook: 0,
+    };
+  });
+  const dailyBucketMap = new Map(dailyBuckets.map((bucket) => [bucket.key, bucket]));
+  const heatmapDayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+  const heatmapCounts = heatmapDayLabels.map(() => Array.from({ length: 12 }, () => 0));
+
+  for (const conversation of conversations) {
+    const channelKey = getContactChannelKey(conversation);
+    channelTotals[channelKey] += 1;
+
+    const timestamp = Date.parse(conversation.lastMessageAt);
+    if (!Number.isFinite(timestamp)) {
+      continue;
+    }
+
+    const date = new Date(timestamp);
+    const dailyBucket = dailyBucketMap.get(buildLocalDateKey(date));
+    if (dailyBucket) {
+      dailyBucket.total += 1;
+      dailyBucket[channelKey] += 1;
+    }
+
+    const dayIndex = toMondayFirstIndex(date.getDay());
+    const slotIndex = Math.floor(date.getHours() / 2);
+    heatmapCounts[dayIndex]![slotIndex] += 1;
+  }
+
+  const maxDailyTotal = Math.max(...dailyBuckets.map((bucket) => bucket.total), 0);
+  const maxHeatValue = Math.max(...heatmapCounts.flat(), 0);
+
+  return {
+    channelTotals,
+    weeklyChannelSeries: dailyBuckets.map((bucket) => ({
+      day: bucket.day,
+      channel: resolveDominantChannel(bucket),
+      value: maxDailyTotal === 0 ? 0 : Math.round((bucket.total / maxDailyTotal) * 100),
+    })),
+    heatmapRows: heatmapDayLabels.map((day, dayIndex) => ({
+      day,
+      values: heatmapCounts[dayIndex]!.map((value) => maxHeatValue === 0 ? 0 : Math.round((value / maxHeatValue) * 100)),
+    })),
+  };
+}
+
+function resolveDominantChannel(bucket: { whatsapp: number; instagram: number; facebook: number }) {
+  if (bucket.instagram > bucket.whatsapp && bucket.instagram >= bucket.facebook) {
+    return 'instagram';
+  }
+  if (bucket.facebook > bucket.whatsapp && bucket.facebook > bucket.instagram) {
+    return 'facebook';
+  }
+  return 'whatsapp';
+}
+
+function buildLocalDateKey(date: Date) {
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
+function formatShortWeekday(date: Date) {
+  return date
+    .toLocaleDateString('en-US', { weekday: 'short' })
+    .slice(0, 3)
+    .toUpperCase();
+}
+
+function toMondayFirstIndex(dayIndex: number) {
+  return dayIndex === 0 ? 6 : dayIndex - 1;
+}
+
 function getContactInteractionMetric(contact: ConversationRecord) {
+  const interactionCount = Array.isArray(contact.messages) ? contact.messages.length : 0;
+  if (interactionCount > 0) {
+    return {
+      value: interactionCount.toLocaleString('pt-BR'),
+      label: contact.unread > 0 ? `${contact.unread} nao lidas` : 'historico sincronizado',
+      tone: contact.unread > 0 ? 'text-[var(--secondary)]' : 'text-[var(--muted)]',
+    };
+  }
+
   if (contact.unread > 0) {
     return {
       value: contact.unread.toLocaleString('pt-BR'),
-      label: `+${Math.max(contact.unread, 1)}%`,
+      label: `${contact.unread.toLocaleString('pt-BR')} pendentes`,
       tone: 'text-[var(--secondary)]',
     };
   }
 
-  if (isGroupConversation(contact)) {
+  const waitingMinutes = estimateWaitingMinutes(contact.waitingTime);
+  if (waitingMinutes > 0) {
     return {
-      value: '842',
-      label: 'Steady',
+      value: formatCompactDuration(waitingMinutes),
+      label: 'em acompanhamento',
       tone: 'text-[var(--muted)]',
     };
   }
 
   return {
-    value: '512',
-    label: 'Stable',
+    value: '0',
+    label: 'sem interacoes sincronizadas',
     tone: 'text-[var(--muted)]',
   };
 }
