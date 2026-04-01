@@ -86,6 +86,23 @@ export type DashboardOverview = {
     onlineUsers: number;
     waitingConversations: number;
   };
+  dashboard: {
+    snapshot: {
+      activeSessions: number;
+      onlineUsers: number;
+      recentConversations: number;
+      teamCount: number;
+    };
+    leaderboard: Array<{
+      id: string;
+      label: string;
+      avatarUrl?: string | null;
+      score: number;
+      volume: number;
+      volumeLabel: string;
+      rank: number;
+    }>;
+  };
   analytics: {
     responseVelocity: {
       averageSeconds: number;
@@ -97,6 +114,34 @@ export type DashboardOverview = {
         averageSeconds: number;
       }>;
     };
+    healthScore: number;
+    resolvedRate: number;
+    totalConversations: number;
+    unreadVolume: number;
+    waitingVolume: number;
+    channelTotals: {
+      whatsapp: number;
+      instagram: number;
+      facebook: number;
+    };
+    weeklyChannelSeries: Array<{
+      day: string;
+      channel: 'whatsapp' | 'instagram' | 'facebook';
+      value: number;
+    }>;
+    heatmapRows: Array<{
+      day: string;
+      values: number[];
+    }>;
+    resolvedTickets: Array<{
+      id: string;
+      customer: string;
+      customerAvatar?: string | null;
+      channel: 'whatsapp' | 'instagram' | 'facebook';
+      agent: string;
+      lastActivityAt: string;
+      statusLabel: string;
+    }>;
   };
   channels: ChannelRecord[];
   sessions: SessionRecord[];
@@ -189,6 +234,15 @@ export const fallbackOverview: DashboardOverview = {
     onlineUsers: 0,
     waitingConversations: 0,
   },
+  dashboard: {
+    snapshot: {
+      activeSessions: 0,
+      onlineUsers: 0,
+      recentConversations: 0,
+      teamCount: 0,
+    },
+    leaderboard: [],
+  },
   analytics: {
     responseVelocity: {
       averageSeconds: 102,
@@ -204,6 +258,19 @@ export const fallbackOverview: DashboardOverview = {
         { label: '06:00 PM', averageSeconds: 102 },
       ],
     },
+    healthScore: 0,
+    resolvedRate: 0,
+    totalConversations: 0,
+    unreadVolume: 0,
+    waitingVolume: 0,
+    channelTotals: {
+      whatsapp: 0,
+      instagram: 0,
+      facebook: 0,
+    },
+    weeklyChannelSeries: [],
+    heatmapRows: [],
+    resolvedTickets: [],
   },
   channels: [],
   sessions: [],

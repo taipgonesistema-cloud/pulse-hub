@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1254,6 +1255,18 @@ func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOver
 	if err != nil {
 		return nil, err
 	}
+	crmProfiles, err := a.store.ListContactCRMProfiles(ctx)
+	if err != nil {
+		return nil, err
+	}
+	kanbanStages, err := a.store.ListContactKanbanStages(ctx)
+	if err != nil {
+		return nil, err
+	}
+	users, err := a.store.ListAuthUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	overview := &models.DashboardOverview{
 		Product:       "Pulse Hub",
@@ -1262,6 +1275,8 @@ func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOver
 		Conversations: conversations,
 	}
 	overview.Analytics.ResponseVelocity = responseVelocity
+	crmProfileMap := buildCRMProfileMap(crmProfiles)
+	kanbanStageMap := buildKanbanStageMap(kanbanStages)
 
 	connectedNumbers := 0
 	activeSessions := 0
@@ -1282,6 +1297,31 @@ func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOver
 	overview.Metrics.ActiveSessions = activeSessions
 	overview.Metrics.OnlineUsers = onlineUsers
 	overview.Metrics.WaitingConversations = waitingConversations
+	totalConversations := len(conversations)
+	unreadVolume := sumConversationUnread(conversations)
+	resolvedCount := countResolvedConversations(conversations, kanbanStageMap)
+	overview.Dashboard.Leaderboard = buildDashboardLeaderboardRows(conversations, crmProfileMap, kanbanStageMap, users)
+	overview.Dashboard.Snapshot = models.DashboardSnapshot{
+		ActiveSessions:      activeSessions,
+		OnlineUsers:         onlineUsers,
+		RecentConversations: countRecentConversations(conversations, 24*time.Hour),
+		TeamCount:           len(overview.Dashboard.Leaderboard),
+	}
+	activityAnalytics := buildDashboardActivityAnalytics(conversations)
+	resolvedTickets := buildResolvedConversationRows(conversations, crmProfileMap, kanbanStageMap)
+	resolvedRate := 0.0
+	if totalConversations > 0 {
+		resolvedRate = math.Round((float64(resolvedCount)/float64(totalConversations)*100)*10) / 10
+	}
+	overview.Analytics.HealthScore = calculateDashboardHealthScore(responseVelocity, totalConversations, unreadVolume, resolvedCount)
+	overview.Analytics.ResolvedRate = resolvedRate
+	overview.Analytics.TotalConversations = totalConversations
+	overview.Analytics.UnreadVolume = unreadVolume
+	overview.Analytics.WaitingVolume = waitingConversations
+	overview.Analytics.ChannelTotals = activityAnalytics.ChannelTotals
+	overview.Analytics.WeeklySeries = activityAnalytics.WeeklySeries
+	overview.Analytics.HeatmapRows = activityAnalytics.HeatmapRows
+	overview.Analytics.ResolvedTickets = resolvedTickets
 
 	if len(sessions) > 0 {
 		overview.Channels = []models.ChannelRecord{{
@@ -1295,6 +1335,515 @@ func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOver
 	}
 
 	return overview, nil
+}
+
+type dashboardActivityAnalytics struct {
+	ChannelTotals models.DashboardChannelTotals
+	WeeklySeries  []models.DashboardWeeklyChannelSeriesPoint
+	HeatmapRows   []models.DashboardHeatmapRow
+}
+
+type dashboardLeaderboardStat struct {
+	ID          string
+	Label       string
+	AvatarURL   string
+	Assigned    int
+	Resolved    int
+	Unread      int
+	WaitMinutes int
+}
+
+type dashboardDailyBucket struct {
+	Key       string
+	Day       string
+	Total     int
+	WhatsApp  int
+	Instagram int
+	Facebook  int
+}
+
+func buildCRMProfileMap(items []models.ContactCRMProfileRecord) map[string]models.ContactCRMProfileRecord {
+	result := make(map[string]models.ContactCRMProfileRecord, len(items))
+	for _, item := range items {
+		result[dashboardConversationKey(item.SessionID, item.ConversationID)] = item
+	}
+	return result
+}
+
+func buildKanbanStageMap(items []models.ContactKanbanStageRecord) map[string]models.ContactKanbanStageRecord {
+	result := make(map[string]models.ContactKanbanStageRecord, len(items))
+	for _, item := range items {
+		result[dashboardConversationKey(item.SessionID, item.ConversationID)] = item
+	}
+	return result
+}
+
+func dashboardConversationKey(sessionID, conversationID string) string {
+	return sessionID + ":" + conversationID
+}
+
+func countRecentConversations(conversations []models.ConversationRecord, window time.Duration) int {
+	threshold := time.Now().Add(-window)
+	count := 0
+	for _, conversation := range conversations {
+		timestamp, err := time.Parse(time.RFC3339, conversation.LastMessageAt)
+		if err != nil {
+			continue
+		}
+		if !timestamp.Before(threshold) {
+			count++
+		}
+	}
+	return count
+}
+
+func sumConversationUnread(conversations []models.ConversationRecord) int {
+	total := 0
+	for _, conversation := range conversations {
+		total += conversation.Unread
+	}
+	return total
+}
+
+func countResolvedConversations(
+	conversations []models.ConversationRecord,
+	kanbanStages map[string]models.ContactKanbanStageRecord,
+) int {
+	total := 0
+	for _, conversation := range conversations {
+		if isResolvedConversation(conversation, kanbanStages) {
+			total++
+		}
+	}
+	return total
+}
+
+func buildDashboardLeaderboardRows(
+	conversations []models.ConversationRecord,
+	crmProfiles map[string]models.ContactCRMProfileRecord,
+	kanbanStages map[string]models.ContactKanbanStageRecord,
+	users []models.AuthUser,
+) []models.DashboardLeaderboardRow {
+	stats := make(map[string]*dashboardLeaderboardStat)
+
+	for _, conversation := range conversations {
+		profile := crmProfiles[dashboardConversationKey(conversation.SessionID, conversation.ID)]
+		operatorName := resolveConversationOperatorName(conversation, profile)
+		if operatorName == "" {
+			continue
+		}
+
+		current, ok := stats[operatorName]
+		if !ok {
+			current = &dashboardLeaderboardStat{
+				ID:    normalizeLeaderboardID(operatorName),
+				Label: operatorName,
+			}
+			stats[operatorName] = current
+		}
+
+		current.Assigned++
+		if conversation.Unread > 0 {
+			current.Unread++
+		}
+		current.WaitMinutes += estimateWaitingMinutes(conversation.WaitingTime)
+		if current.AvatarURL == "" {
+			current.AvatarURL = conversation.AvatarURL
+		}
+		if isResolvedConversation(conversation, kanbanStages) {
+			current.Resolved++
+		}
+	}
+
+	if len(stats) == 0 {
+		rows := make([]models.DashboardLeaderboardRow, 0, 3)
+		for _, user := range users {
+			if !user.IsActive {
+				continue
+			}
+			rows = append(rows, models.DashboardLeaderboardRow{
+				ID:          user.ID,
+				Label:       user.Name,
+				Score:       0,
+				Volume:      0,
+				VolumeLabel: "assigned",
+				Rank:        len(rows) + 1,
+			})
+			if len(rows) == 3 {
+				break
+			}
+		}
+		return rows
+	}
+
+	rows := make([]models.DashboardLeaderboardRow, 0, len(stats))
+	for _, item := range stats {
+		assigned := max(item.Assigned, 1)
+		resolvedRatio := float64(item.Resolved) / float64(assigned)
+		unreadRatio := float64(item.Unread) / float64(assigned)
+		averageWaitMinutes := float64(item.WaitMinutes) / float64(assigned)
+		waitPenalty := math.Min(averageWaitMinutes/240, 1)
+		score := int(math.Round(math.Max(0, math.Min(100, 45+resolvedRatio*35+(1-unreadRatio)*15+(1-waitPenalty)*5))))
+		volume := item.Assigned
+		volumeLabel := "assigned"
+		if item.Resolved > 0 {
+			volume = item.Resolved
+			volumeLabel = "won"
+		}
+
+		rows = append(rows, models.DashboardLeaderboardRow{
+			ID:          item.ID,
+			Label:       item.Label,
+			AvatarURL:   item.AvatarURL,
+			Score:       score,
+			Volume:      volume,
+			VolumeLabel: volumeLabel,
+		})
+	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Score != rows[j].Score {
+			return rows[i].Score > rows[j].Score
+		}
+		if rows[i].Volume != rows[j].Volume {
+			return rows[i].Volume > rows[j].Volume
+		}
+		return rows[i].Label < rows[j].Label
+	})
+	for index := range rows {
+		rows[index].Rank = index + 1
+	}
+
+	return rows
+}
+
+func buildResolvedConversationRows(
+	conversations []models.ConversationRecord,
+	crmProfiles map[string]models.ContactCRMProfileRecord,
+	kanbanStages map[string]models.ContactKanbanStageRecord,
+) []models.DashboardResolvedConversation {
+	rows := make([]models.DashboardResolvedConversation, 0)
+	for _, conversation := range conversations {
+		if !isResolvedConversation(conversation, kanbanStages) {
+			continue
+		}
+		profile := crmProfiles[dashboardConversationKey(conversation.SessionID, conversation.ID)]
+		rows = append(rows, models.DashboardResolvedConversation{
+			ID:             buildAnalyticsConversationID(conversation.ID),
+			Customer:       conversation.Contact,
+			CustomerAvatar: conversation.AvatarURL,
+			Channel:        conversationChannelKey(conversation),
+			Agent:          fallbackText(resolveConversationOperatorName(conversation, profile), "Operador"),
+			LastActivityAt: conversation.LastMessageAt,
+			StatusLabel:    resolveConversationOutcomeLabel(conversation, kanbanStages),
+		})
+	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].LastActivityAt > rows[j].LastActivityAt
+	})
+	if len(rows) > 5 {
+		rows = rows[:5]
+	}
+
+	return rows
+}
+
+func calculateDashboardHealthScore(
+	responseVelocity models.DashboardResponseVelocityAnalytics,
+	totalConversations int,
+	unreadVolume int,
+	resolvedCount int,
+) float64 {
+	if totalConversations == 0 {
+		return 0
+	}
+
+	targetSeconds := responseVelocity.TargetSeconds
+	if targetSeconds <= 0 {
+		targetSeconds = 120
+	}
+	resolvedRate := float64(resolvedCount) / float64(totalConversations) * 100
+	responseComponent := math.Max(0, math.Min(100, 100-(float64(responseVelocity.AverageSeconds)/float64(targetSeconds))*55))
+	backlogComponent := math.Max(0, math.Min(100, 100-(float64(unreadVolume)/float64(totalConversations))*100))
+	composite := responseComponent*0.45 + backlogComponent*0.20 + resolvedRate*0.35
+
+	return math.Round((composite/20)*10) / 10
+}
+
+func buildDashboardActivityAnalytics(conversations []models.ConversationRecord) dashboardActivityAnalytics {
+	analytics := dashboardActivityAnalytics{}
+	dailyBuckets := make([]dashboardDailyBucket, 0, 7)
+	dailyBucketMap := make(map[string]*dashboardDailyBucket, 7)
+	now := time.Now()
+	for index := 0; index < 7; index++ {
+		date := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, -(6 - index))
+		bucket := dashboardDailyBucket{
+			Key: buildLocalDateKey(date),
+			Day: strings.ToUpper(date.Format("Mon")),
+		}
+		dailyBuckets = append(dailyBuckets, bucket)
+		dailyBucketMap[bucket.Key] = &dailyBuckets[len(dailyBuckets)-1]
+	}
+
+	heatmapDayLabels := []string{"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"}
+	heatmapCounts := make([][]int, len(heatmapDayLabels))
+	for index := range heatmapCounts {
+		heatmapCounts[index] = make([]int, 12)
+	}
+
+	for _, conversation := range conversations {
+		channelKey := conversationChannelKey(conversation)
+		switch channelKey {
+		case "instagram":
+			analytics.ChannelTotals.Instagram++
+		case "facebook":
+			analytics.ChannelTotals.Facebook++
+		default:
+			analytics.ChannelTotals.WhatsApp++
+		}
+
+		timestamp, err := time.Parse(time.RFC3339, conversation.LastMessageAt)
+		if err != nil {
+			continue
+		}
+		localTimestamp := timestamp.In(time.Local)
+		if bucket := dailyBucketMap[buildLocalDateKey(localTimestamp)]; bucket != nil {
+			bucket.Total++
+			switch channelKey {
+			case "instagram":
+				bucket.Instagram++
+			case "facebook":
+				bucket.Facebook++
+			default:
+				bucket.WhatsApp++
+			}
+		}
+
+		dayIndex := mondayFirstIndex(localTimestamp.Weekday())
+		slotIndex := localTimestamp.Hour() / 2
+		heatmapCounts[dayIndex][slotIndex]++
+	}
+
+	maxDailyTotal := 0
+	for _, bucket := range dailyBuckets {
+		if bucket.Total > maxDailyTotal {
+			maxDailyTotal = bucket.Total
+		}
+	}
+	maxHeatValue := 0
+	for _, row := range heatmapCounts {
+		for _, value := range row {
+			if value > maxHeatValue {
+				maxHeatValue = value
+			}
+		}
+	}
+
+	analytics.WeeklySeries = make([]models.DashboardWeeklyChannelSeriesPoint, 0, len(dailyBuckets))
+	for _, bucket := range dailyBuckets {
+		value := 0
+		if maxDailyTotal > 0 {
+			value = int(math.Round(float64(bucket.Total) / float64(maxDailyTotal) * 100))
+		}
+		analytics.WeeklySeries = append(analytics.WeeklySeries, models.DashboardWeeklyChannelSeriesPoint{
+			Day:     bucket.Day,
+			Channel: dominantBucketChannel(bucket),
+			Value:   value,
+		})
+	}
+
+	analytics.HeatmapRows = make([]models.DashboardHeatmapRow, 0, len(heatmapDayLabels))
+	for dayIndex, day := range heatmapDayLabels {
+		values := make([]int, 0, len(heatmapCounts[dayIndex]))
+		for _, rawValue := range heatmapCounts[dayIndex] {
+			value := 0
+			if maxHeatValue > 0 {
+				value = int(math.Round(float64(rawValue) / float64(maxHeatValue) * 100))
+			}
+			values = append(values, value)
+		}
+		analytics.HeatmapRows = append(analytics.HeatmapRows, models.DashboardHeatmapRow{
+			Day:    day,
+			Values: values,
+		})
+	}
+
+	return analytics
+}
+
+func normalizeLeaderboardID(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return "operator"
+	}
+	var builder strings.Builder
+	lastDash := false
+	for _, char := range value {
+		if (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') {
+			builder.WriteRune(char)
+			lastDash = false
+			continue
+		}
+		if !lastDash {
+			builder.WriteRune('-')
+			lastDash = true
+		}
+	}
+	result := strings.Trim(builder.String(), "-")
+	if result == "" {
+		return "operator"
+	}
+	return result
+}
+
+func resolveConversationOperatorName(
+	conversation models.ConversationRecord,
+	profile models.ContactCRMProfileRecord,
+) string {
+	for _, candidate := range []string{profile.Assignee, conversation.Owner} {
+		candidate = normalizeOperatorLabel(candidate)
+		if candidate != "" {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func normalizeOperatorLabel(value string) string {
+	normalized := strings.TrimSpace(value)
+	if normalized == "" {
+		return ""
+	}
+	lowered := strings.ToLower(normalized)
+	switch lowered {
+	case "unknown", "unassigned", "sem responsavel", "n/a", "-", "livre":
+		return ""
+	default:
+		return normalized
+	}
+}
+
+func estimateWaitingMinutes(value string) int {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	if normalized == "" {
+		return 0
+	}
+	if strings.Contains(normalized, "agora") || strings.Contains(normalized, "now") {
+		return 0
+	}
+	if strings.Contains(normalized, "ontem") {
+		return 24 * 60
+	}
+
+	match := digitsOnly(normalized)
+	numericValue := 0
+	if match != "" {
+		numericValue, _ = strconv.Atoi(match)
+	}
+	if strings.Contains(normalized, "dia") {
+		return numericValue * 24 * 60
+	}
+	if strings.Contains(normalized, "hora") || strings.Contains(normalized, "hr") || strings.Contains(normalized, "h") {
+		return numericValue * 60
+	}
+	if strings.Contains(normalized, "min") || strings.HasSuffix(normalized, "m") {
+		return numericValue
+	}
+	return numericValue
+}
+
+func resolveContactKanbanStage(
+	conversation models.ConversationRecord,
+	kanbanStages map[string]models.ContactKanbanStageRecord,
+) string {
+	if record, ok := kanbanStages[dashboardConversationKey(conversation.SessionID, conversation.ID)]; ok && isValidContactKanbanStage(record.Stage) {
+		return record.Stage
+	}
+
+	normalizedStatus := strings.ToLower(conversation.Status)
+	waiting := strings.ToLower(conversation.WaitingTime)
+	if strings.Contains(normalizedStatus, "closed") || strings.Contains(normalizedStatus, "resolved") {
+		return "won"
+	}
+	if conversation.Unread >= 3 {
+		return "new"
+	}
+	if conversation.Unread > 0 || strings.Contains(waiting, "novo") {
+		return "qualified"
+	}
+	if strings.Contains(normalizedStatus, "follow") || strings.Contains(waiting, "ontem") {
+		return "followup"
+	}
+	return "active"
+}
+
+func isResolvedConversation(
+	conversation models.ConversationRecord,
+	kanbanStages map[string]models.ContactKanbanStageRecord,
+) bool {
+	stage := resolveContactKanbanStage(conversation, kanbanStages)
+	normalizedStatus := strings.ToLower(conversation.Status)
+	return stage == "won" || strings.Contains(normalizedStatus, "closed") || strings.Contains(normalizedStatus, "resolved")
+}
+
+func resolveConversationOutcomeLabel(
+	conversation models.ConversationRecord,
+	kanbanStages map[string]models.ContactKanbanStageRecord,
+) string {
+	if resolveContactKanbanStage(conversation, kanbanStages) == "won" {
+		return "Won"
+	}
+	return "Resolved"
+}
+
+func buildAnalyticsConversationID(value string) string {
+	var builder strings.Builder
+	for _, char := range value {
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') {
+			builder.WriteRune(char)
+		}
+	}
+	cleaned := builder.String()
+	if len(cleaned) > 6 {
+		cleaned = cleaned[len(cleaned)-6:]
+	}
+	if cleaned == "" {
+		cleaned = "CONV"
+	}
+	return "#" + strings.ToUpper(cleaned)
+}
+
+func conversationChannelKey(conversation models.ConversationRecord) string {
+	value := strings.ToLower(conversation.ChannelName + " " + conversation.Status + " " + conversation.Contact)
+	if strings.Contains(value, "insta") {
+		return "instagram"
+	}
+	if strings.Contains(value, "face") || strings.Contains(value, "messenger") {
+		return "facebook"
+	}
+	return "whatsapp"
+}
+
+func dominantBucketChannel(bucket dashboardDailyBucket) string {
+	if bucket.Instagram > bucket.WhatsApp && bucket.Instagram >= bucket.Facebook {
+		return "instagram"
+	}
+	if bucket.Facebook > bucket.WhatsApp && bucket.Facebook > bucket.Instagram {
+		return "facebook"
+	}
+	return "whatsapp"
+}
+
+func buildLocalDateKey(date time.Time) string {
+	return fmt.Sprintf("%04d-%02d-%02d", date.Year(), date.Month(), date.Day())
+}
+
+func mondayFirstIndex(day time.Weekday) int {
+	if day == time.Sunday {
+		return 6
+	}
+	return int(day) - 1
 }
 
 func (a *API) buildResponseVelocityAnalytics(ctx context.Context) (models.DashboardResponseVelocityAnalytics, error) {

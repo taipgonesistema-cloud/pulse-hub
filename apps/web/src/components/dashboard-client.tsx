@@ -722,14 +722,8 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   const dashboardLeaderboard = useMemo(
-    () => buildDashboardLeaderboard({
-      authUserName: authUser?.name,
-      conversations: overview.conversations,
-      crmProfileMap: contactCrmProfileMap,
-      stageMap: contactKanbanStageMap,
-      users: workspaceUsers,
-    }).slice(0, 3),
-    [authUser?.name, contactCrmProfileMap, contactKanbanStageMap, overview.conversations, workspaceUsers],
+    () => (Array.isArray(overview.dashboard?.leaderboard) ? overview.dashboard.leaderboard.slice(0, 3) : []),
+    [overview.dashboard?.leaderboard],
   );
 
   const queueBreakdown = useMemo(() => {
@@ -746,17 +740,13 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [isDashboardView, overview.conversations]);
 
   const dashboardSnapshot = useMemo(() => {
-    const onlineUsers = overview.metrics.onlineUsers;
-    const activeSessions = overview.metrics.activeSessions;
-    const recentConversations = countRecentConversations(overview.conversations, 24);
-
     return {
-      activeSessions,
-      onlineUsers,
-      recentConversations,
-      teamCount: dashboardLeaderboard.length,
+      activeSessions: overview.dashboard?.snapshot?.activeSessions ?? overview.metrics.activeSessions,
+      onlineUsers: overview.dashboard?.snapshot?.onlineUsers ?? overview.metrics.onlineUsers,
+      recentConversations: overview.dashboard?.snapshot?.recentConversations ?? 0,
+      teamCount: overview.dashboard?.snapshot?.teamCount ?? dashboardLeaderboard.length,
     };
-  }, [dashboardLeaderboard.length, overview.conversations, overview.metrics.activeSessions, overview.metrics.onlineUsers]);
+  }, [dashboardLeaderboard.length, overview.dashboard?.snapshot, overview.metrics.activeSessions, overview.metrics.onlineUsers]);
 
   const analyticsModel = useMemo(() => {
     if (!isAnalyticsView) {
@@ -764,59 +754,25 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     const responseVelocity = normalizeResponseVelocityAnalytics(overview.analytics?.responseVelocity);
-    const conversations = overview.conversations;
-    const totalConversations = conversations.length;
-    const unreadVolume = conversations.reduce((sum, conversation) => sum + conversation.unread, 0);
-    const waitingVolume = overview.sessions.reduce((sum, session) => sum + session.waiting, 0);
     const responseSeconds = Math.max(responseVelocity.averageSeconds || 0, 0);
     const responseMinutes = Number((responseSeconds / 60).toFixed(1));
-    const resolvedConversations = conversations
-      .map((conversation) => {
-        const profile = contactCrmProfileMap[buildContactKanbanKey(conversation)];
-        if (!isResolvedConversation(conversation, contactKanbanStageMap)) {
-          return null;
-        }
-
-        return {
-          id: buildAnalyticsConversationId(conversation),
-          customer: conversation.contact,
-          customerAvatar: conversation.avatarUrl,
-          channel: getContactChannelMeta(conversation),
-          agent: resolveConversationOperatorName(conversation, profile, authUser?.name),
-          activityLabel: formatRelativePulse(conversation.lastMessageAt).primary,
-          statusLabel: resolveConversationOutcomeLabel(conversation, contactKanbanStageMap),
-          updatedAt: conversation.lastMessageAt,
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item))
-      .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
-    const resolvedRate = totalConversations === 0
-      ? 0
-      : Number((resolvedConversations.length / totalConversations * 100).toFixed(1));
-    const healthScore = calculateWorkspaceHealthScore({
-      responseSeconds,
-      targetSeconds: responseVelocity.targetSeconds,
-      totalConversations,
-      unreadVolume,
-      resolvedRate,
-    });
-    const activityAnalytics = buildConversationActivityAnalytics(conversations);
+    const resolvedTickets = Array.isArray(overview.analytics?.resolvedTickets) ? overview.analytics.resolvedTickets : [];
 
     return {
-      healthScore,
+      healthScore: overview.analytics?.healthScore ?? 0,
       responseMinutes,
-      resolvedRate,
+      resolvedRate: overview.analytics?.resolvedRate ?? 0,
       responseSeconds,
-      totalConversations,
-      unreadVolume,
-      waitingVolume,
-      channelTotals: activityAnalytics.channelTotals,
-      weeklyChannelSeries: activityAnalytics.weeklyChannelSeries,
-      heatmapRows: activityAnalytics.heatmapRows,
-      resolvedTickets: resolvedConversations.slice(0, 5),
+      totalConversations: overview.analytics?.totalConversations ?? overview.conversations.length,
+      unreadVolume: overview.analytics?.unreadVolume ?? 0,
+      waitingVolume: overview.analytics?.waitingVolume ?? 0,
+      channelTotals: overview.analytics?.channelTotals ?? { whatsapp: 0, instagram: 0, facebook: 0 },
+      weeklyChannelSeries: Array.isArray(overview.analytics?.weeklyChannelSeries) ? overview.analytics.weeklyChannelSeries : [],
+      heatmapRows: Array.isArray(overview.analytics?.heatmapRows) ? overview.analytics.heatmapRows : [],
+      resolvedTickets,
       responseVelocity,
     };
-  }, [authUser?.name, contactCrmProfileMap, contactKanbanStageMap, isAnalyticsView, overview.analytics, overview.conversations, overview.sessions]);
+  }, [isAnalyticsView, overview.analytics, overview.conversations]);
 
   const safeResponseVelocity = useMemo(
     () => normalizeResponseVelocityAnalytics(analyticsModel?.responseVelocity),
@@ -3496,12 +3452,12 @@ export function DashboardClient({ initialOverview }: Props) {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2 text-white">
-                            <span className={`h-2 w-2 rounded-full ${ticket.channel.label === 'WhatsApp' ? 'bg-[var(--secondary)]' : ticket.channel.label === 'Instagram' ? 'bg-[var(--tertiary)]' : 'bg-[var(--primary)]'}`} />
-                            <span>{ticket.channel.label}</span>
+                            <span className={`h-2 w-2 rounded-full ${ticket.channel === 'whatsapp' ? 'bg-[var(--secondary)]' : ticket.channel === 'instagram' ? 'bg-[var(--tertiary)]' : 'bg-[var(--primary)]'}`} />
+                            <span>{ticket.channel === 'whatsapp' ? 'WhatsApp' : ticket.channel === 'instagram' ? 'Instagram' : 'Facebook'}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-white">{ticket.agent}</td>
-                        <td className="px-6 py-4 text-white">{ticket.activityLabel}</td>
+                        <td className="px-6 py-4 text-white">{formatRelativePulse(ticket.lastActivityAt).primary}</td>
                         <td className="px-6 py-4">
                           <span className="rounded-full border border-[var(--secondary)]/20 bg-[var(--secondary)]/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--secondary)]">
                             {ticket.statusLabel}
@@ -6939,140 +6895,6 @@ function getContactChannelMeta(contact: ConversationRecord) {
   }
 }
 
-function countRecentConversations(conversations: ConversationRecord[], hours: number) {
-  const threshold = Date.now() - hours * 60 * 60 * 1000;
-
-  return conversations.reduce((count, conversation) => {
-    const timestamp = Date.parse(conversation.lastMessageAt);
-    return Number.isFinite(timestamp) && timestamp >= threshold ? count + 1 : count;
-  }, 0);
-}
-
-function buildDashboardLeaderboard({
-  authUserName,
-  conversations,
-  crmProfileMap,
-  stageMap,
-  users,
-}: {
-  authUserName?: string | null;
-  conversations: ConversationRecord[];
-  crmProfileMap: Record<string, ContactCRMProfileRecord>;
-  stageMap: Record<string, ContactKanbanStageId>;
-  users: AuthUser[];
-}) {
-  const stats = new Map<string, {
-    id: string;
-    label: string;
-    avatarUrl?: string | null;
-    assigned: number;
-    resolved: number;
-    unread: number;
-    waitMinutes: number;
-  }>();
-
-  for (const conversation of conversations) {
-    const profile = crmProfileMap[buildContactKanbanKey(conversation)];
-    const operatorName = resolveConversationOperatorName(conversation, profile, authUserName);
-    if (!operatorName) {
-      continue;
-    }
-
-    const current = stats.get(operatorName) ?? {
-      id: operatorName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      label: operatorName,
-      avatarUrl: undefined,
-      assigned: 0,
-      resolved: 0,
-      unread: 0,
-      waitMinutes: 0,
-    };
-
-    current.assigned += 1;
-    current.unread += conversation.unread > 0 ? 1 : 0;
-    current.waitMinutes += estimateWaitingMinutes(conversation.waitingTime);
-    if (!current.avatarUrl) {
-      current.avatarUrl = conversation.avatarUrl;
-    }
-    if (isResolvedConversation(conversation, stageMap)) {
-      current.resolved += 1;
-    }
-
-    stats.set(operatorName, current);
-  }
-
-  if (stats.size === 0) {
-    return users
-      .filter((user) => user.isActive)
-      .slice(0, 3)
-      .map((user, index) => ({
-        id: user.id,
-        label: user.name,
-        avatarUrl: null,
-        score: 0,
-        volume: 0,
-        volumeLabel: 'assigned',
-        rank: index + 1,
-      }));
-  }
-
-  return Array.from(stats.values())
-    .map((item) => {
-      const assigned = Math.max(item.assigned, 1);
-      const resolvedRatio = item.resolved / assigned;
-      const unreadRatio = item.unread / assigned;
-      const averageWaitMinutes = item.waitMinutes / assigned;
-      const waitPenalty = Math.min(averageWaitMinutes / 240, 1);
-      const score = Math.round(Math.max(0, Math.min(100, 45 + resolvedRatio * 35 + (1 - unreadRatio) * 15 + (1 - waitPenalty) * 5)));
-      const volume = item.resolved > 0 ? item.resolved : item.assigned;
-
-      return {
-        id: item.id,
-        label: item.label,
-        avatarUrl: item.avatarUrl,
-        score,
-        volume,
-        volumeLabel: item.resolved > 0 ? 'won' : 'assigned',
-      };
-    })
-    .sort((left, right) => right.score - left.score || right.volume - left.volume || left.label.localeCompare(right.label))
-    .map((item, index) => ({
-      ...item,
-      rank: index + 1,
-    }));
-}
-
-function resolveConversationOperatorName(
-  conversation: ConversationRecord,
-  profile?: ContactCRMProfileRecord,
-  fallbackName?: string | null,
-) {
-  const candidates = [profile?.assignee, conversation.owner, fallbackName];
-
-  for (const candidate of candidates) {
-    const normalized = stringsToDefinedLabel(candidate);
-    if (normalized) {
-      return normalized;
-    }
-  }
-
-  return '';
-}
-
-function stringsToDefinedLabel(value?: string | null) {
-  const normalized = value?.trim();
-  if (!normalized) {
-    return '';
-  }
-
-  const lowered = normalized.toLowerCase();
-  if (['unknown', 'unassigned', 'sem responsavel', 'n/a', '-'].includes(lowered)) {
-    return '';
-  }
-
-  return normalized;
-}
-
 function estimateWaitingMinutes(value: string) {
   const normalized = value.trim().toLowerCase();
   if (!normalized) {
@@ -7109,139 +6931,6 @@ function formatCompactDuration(totalMinutes: number) {
     return `${Math.floor(totalMinutes / 60)}h`;
   }
   return `${Math.max(totalMinutes, 0)}m`;
-}
-
-function isResolvedConversation(
-  conversation: ConversationRecord,
-  stageMap: Record<string, ContactKanbanStageId>,
-) {
-  const stage = resolveContactKanbanStage(conversation, stageMap);
-  const normalizedStatus = conversation.status.toLowerCase();
-
-  return stage === 'won' || normalizedStatus.includes('closed') || normalizedStatus.includes('resolved');
-}
-
-function resolveConversationOutcomeLabel(
-  conversation: ConversationRecord,
-  stageMap: Record<string, ContactKanbanStageId>,
-) {
-  return resolveContactKanbanStage(conversation, stageMap) === 'won' ? 'Won' : 'Resolved';
-}
-
-function buildAnalyticsConversationId(conversation: ConversationRecord) {
-  return `#${conversation.id.replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase() || 'CONV'}`;
-}
-
-function calculateWorkspaceHealthScore({
-  responseSeconds,
-  targetSeconds,
-  totalConversations,
-  unreadVolume,
-  resolvedRate,
-}: {
-  responseSeconds: number;
-  targetSeconds: number;
-  totalConversations: number;
-  unreadVolume: number;
-  resolvedRate: number;
-}) {
-  if (totalConversations === 0) {
-    return 0;
-  }
-
-  const safeTargetSeconds = targetSeconds > 0 ? targetSeconds : 120;
-  const responseComponent = Math.max(0, Math.min(100, 100 - (responseSeconds / safeTargetSeconds) * 55));
-  const backlogComponent = Math.max(0, Math.min(100, 100 - (unreadVolume / totalConversations) * 100));
-  const composite = responseComponent * 0.45 + backlogComponent * 0.2 + resolvedRate * 0.35;
-
-  return Number((composite / 20).toFixed(1));
-}
-
-function buildConversationActivityAnalytics(conversations: ConversationRecord[]) {
-  const channelTotals = {
-    whatsapp: 0,
-    instagram: 0,
-    facebook: 0,
-  };
-  const dailyBuckets = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() - (6 - index));
-
-    return {
-      key: buildLocalDateKey(date),
-      day: formatShortWeekday(date),
-      total: 0,
-      whatsapp: 0,
-      instagram: 0,
-      facebook: 0,
-    };
-  });
-  const dailyBucketMap = new Map(dailyBuckets.map((bucket) => [bucket.key, bucket]));
-  const heatmapDayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-  const heatmapCounts = heatmapDayLabels.map(() => Array.from({ length: 12 }, () => 0));
-
-  for (const conversation of conversations) {
-    const channelKey = getContactChannelKey(conversation);
-    channelTotals[channelKey] += 1;
-
-    const timestamp = Date.parse(conversation.lastMessageAt);
-    if (!Number.isFinite(timestamp)) {
-      continue;
-    }
-
-    const date = new Date(timestamp);
-    const dailyBucket = dailyBucketMap.get(buildLocalDateKey(date));
-    if (dailyBucket) {
-      dailyBucket.total += 1;
-      dailyBucket[channelKey] += 1;
-    }
-
-    const dayIndex = toMondayFirstIndex(date.getDay());
-    const slotIndex = Math.floor(date.getHours() / 2);
-    heatmapCounts[dayIndex]![slotIndex] += 1;
-  }
-
-  const maxDailyTotal = Math.max(...dailyBuckets.map((bucket) => bucket.total), 0);
-  const maxHeatValue = Math.max(...heatmapCounts.flat(), 0);
-
-  return {
-    channelTotals,
-    weeklyChannelSeries: dailyBuckets.map((bucket) => ({
-      day: bucket.day,
-      channel: resolveDominantChannel(bucket),
-      value: maxDailyTotal === 0 ? 0 : Math.round((bucket.total / maxDailyTotal) * 100),
-    })),
-    heatmapRows: heatmapDayLabels.map((day, dayIndex) => ({
-      day,
-      values: heatmapCounts[dayIndex]!.map((value) => maxHeatValue === 0 ? 0 : Math.round((value / maxHeatValue) * 100)),
-    })),
-  };
-}
-
-function resolveDominantChannel(bucket: { whatsapp: number; instagram: number; facebook: number }) {
-  if (bucket.instagram > bucket.whatsapp && bucket.instagram >= bucket.facebook) {
-    return 'instagram';
-  }
-  if (bucket.facebook > bucket.whatsapp && bucket.facebook > bucket.instagram) {
-    return 'facebook';
-  }
-  return 'whatsapp';
-}
-
-function buildLocalDateKey(date: Date) {
-  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-}
-
-function formatShortWeekday(date: Date) {
-  return date
-    .toLocaleDateString('en-US', { weekday: 'short' })
-    .slice(0, 3)
-    .toUpperCase();
-}
-
-function toMondayFirstIndex(dayIndex: number) {
-  return dayIndex === 0 ? 6 : dayIndex - 1;
 }
 
 function getContactInteractionMetric(contact: ConversationRecord) {
@@ -7492,8 +7181,32 @@ function resolveApiAsset(src?: string | null) {
 function sanitizeOverview(overview: DashboardOverview): DashboardOverview {
   return {
     ...overview,
+    dashboard: {
+      snapshot: {
+        activeSessions: overview.dashboard?.snapshot?.activeSessions ?? overview.metrics.activeSessions,
+        onlineUsers: overview.dashboard?.snapshot?.onlineUsers ?? overview.metrics.onlineUsers,
+        recentConversations: overview.dashboard?.snapshot?.recentConversations ?? 0,
+        teamCount: overview.dashboard?.snapshot?.teamCount ?? 0,
+      },
+      leaderboard: Array.isArray(overview.dashboard?.leaderboard) ? overview.dashboard.leaderboard : [],
+    },
     analytics: {
       responseVelocity: normalizeResponseVelocityAnalytics(overview.analytics?.responseVelocity),
+      healthScore: overview.analytics?.healthScore ?? 0,
+      resolvedRate: overview.analytics?.resolvedRate ?? 0,
+      totalConversations: overview.analytics?.totalConversations ?? 0,
+      unreadVolume: overview.analytics?.unreadVolume ?? 0,
+      waitingVolume: overview.analytics?.waitingVolume ?? 0,
+      channelTotals: {
+        whatsapp: overview.analytics?.channelTotals?.whatsapp ?? 0,
+        instagram: overview.analytics?.channelTotals?.instagram ?? 0,
+        facebook: overview.analytics?.channelTotals?.facebook ?? 0,
+      },
+      weeklyChannelSeries: Array.isArray(overview.analytics?.weeklyChannelSeries)
+        ? overview.analytics.weeklyChannelSeries
+        : [],
+      heatmapRows: Array.isArray(overview.analytics?.heatmapRows) ? overview.analytics.heatmapRows : [],
+      resolvedTickets: Array.isArray(overview.analytics?.resolvedTickets) ? overview.analytics.resolvedTickets : [],
     },
     conversations: dedupeConversations(overview.conversations),
   };
@@ -7514,6 +7227,21 @@ function normalizeResponseVelocityAnalytics(
 function areOverviewsEquivalent(left: DashboardOverview, right: DashboardOverview) {
   const leftResponseVelocity = normalizeResponseVelocityAnalytics(left.analytics?.responseVelocity);
   const rightResponseVelocity = normalizeResponseVelocityAnalytics(right.analytics?.responseVelocity);
+  const fallbackDashboardSnapshot = {
+    activeSessions: 0,
+    onlineUsers: 0,
+    recentConversations: 0,
+    teamCount: 0,
+  };
+  const fallbackChannelTotals = {
+    whatsapp: 0,
+    instagram: 0,
+    facebook: 0,
+  };
+  const leftDashboardSnapshot = left.dashboard?.snapshot ?? fallbackDashboardSnapshot;
+  const rightDashboardSnapshot = right.dashboard?.snapshot ?? fallbackDashboardSnapshot;
+  const leftChannelTotals = left.analytics?.channelTotals ?? fallbackChannelTotals;
+  const rightChannelTotals = right.analytics?.channelTotals ?? fallbackChannelTotals;
 
   if (
     left.product !== right.product ||
@@ -7522,10 +7250,22 @@ function areOverviewsEquivalent(left: DashboardOverview, right: DashboardOvervie
     left.metrics.activeSessions !== right.metrics.activeSessions ||
     left.metrics.onlineUsers !== right.metrics.onlineUsers ||
     left.metrics.waitingConversations !== right.metrics.waitingConversations ||
+    leftDashboardSnapshot.activeSessions !== rightDashboardSnapshot.activeSessions ||
+    leftDashboardSnapshot.onlineUsers !== rightDashboardSnapshot.onlineUsers ||
+    leftDashboardSnapshot.recentConversations !== rightDashboardSnapshot.recentConversations ||
+    leftDashboardSnapshot.teamCount !== rightDashboardSnapshot.teamCount ||
     leftResponseVelocity.averageSeconds !== rightResponseVelocity.averageSeconds ||
     leftResponseVelocity.deltaSeconds !== rightResponseVelocity.deltaSeconds ||
     leftResponseVelocity.targetSeconds !== rightResponseVelocity.targetSeconds ||
-    leftResponseVelocity.peakLabel !== rightResponseVelocity.peakLabel
+	    leftResponseVelocity.peakLabel !== rightResponseVelocity.peakLabel ||
+    left.analytics.healthScore !== right.analytics.healthScore ||
+    left.analytics.resolvedRate !== right.analytics.resolvedRate ||
+    left.analytics.totalConversations !== right.analytics.totalConversations ||
+    left.analytics.unreadVolume !== right.analytics.unreadVolume ||
+    left.analytics.waitingVolume !== right.analytics.waitingVolume ||
+    leftChannelTotals.whatsapp !== rightChannelTotals.whatsapp ||
+    leftChannelTotals.instagram !== rightChannelTotals.instagram ||
+    leftChannelTotals.facebook !== rightChannelTotals.facebook
   ) {
     return false;
   }
@@ -7595,10 +7335,73 @@ function areOverviewsEquivalent(left: DashboardOverview, right: DashboardOvervie
     return false;
   }
 
+  if (
+    left.dashboard.leaderboard.length !== right.dashboard.leaderboard.length ||
+    left.analytics.weeklyChannelSeries.length !== right.analytics.weeklyChannelSeries.length ||
+    left.analytics.heatmapRows.length !== right.analytics.heatmapRows.length ||
+    left.analytics.resolvedTickets.length !== right.analytics.resolvedTickets.length
+  ) {
+    return false;
+  }
+
   for (let index = 0; index < leftResponseVelocity.points.length; index += 1) {
     const current = leftResponseVelocity.points[index];
     const next = rightResponseVelocity.points[index];
     if (current.label !== next.label || current.averageSeconds !== next.averageSeconds) {
+      return false;
+    }
+  }
+
+  for (let index = 0; index < left.dashboard.leaderboard.length; index += 1) {
+    const current = left.dashboard.leaderboard[index];
+    const next = right.dashboard.leaderboard[index];
+    if (
+      current.id !== next.id ||
+      current.label !== next.label ||
+      current.avatarUrl !== next.avatarUrl ||
+      current.score !== next.score ||
+      current.volume !== next.volume ||
+      current.volumeLabel !== next.volumeLabel ||
+      current.rank !== next.rank
+    ) {
+      return false;
+    }
+  }
+
+  for (let index = 0; index < left.analytics.weeklyChannelSeries.length; index += 1) {
+    const current = left.analytics.weeklyChannelSeries[index];
+    const next = right.analytics.weeklyChannelSeries[index];
+    if (current.day !== next.day || current.channel !== next.channel || current.value !== next.value) {
+      return false;
+    }
+  }
+
+  for (let index = 0; index < left.analytics.heatmapRows.length; index += 1) {
+    const current = left.analytics.heatmapRows[index];
+    const next = right.analytics.heatmapRows[index];
+    if (current.day !== next.day || current.values.length !== next.values.length) {
+      return false;
+    }
+
+    for (let valueIndex = 0; valueIndex < current.values.length; valueIndex += 1) {
+      if (current.values[valueIndex] !== next.values[valueIndex]) {
+        return false;
+      }
+    }
+  }
+
+  for (let index = 0; index < left.analytics.resolvedTickets.length; index += 1) {
+    const current = left.analytics.resolvedTickets[index];
+    const next = right.analytics.resolvedTickets[index];
+    if (
+      current.id !== next.id ||
+      current.customer !== next.customer ||
+      current.customerAvatar !== next.customerAvatar ||
+      current.channel !== next.channel ||
+      current.agent !== next.agent ||
+      current.lastActivityAt !== next.lastActivityAt ||
+      current.statusLabel !== next.statusLabel
+    ) {
       return false;
     }
   }

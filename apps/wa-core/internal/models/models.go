@@ -322,12 +322,44 @@ type DashboardOverview struct {
 		OnlineUsers          int `json:"onlineUsers"`
 		WaitingConversations int `json:"waitingConversations"`
 	} `json:"metrics"`
+	Dashboard DashboardDerivedMetrics `json:"dashboard"`
 	Analytics struct {
-		ResponseVelocity DashboardResponseVelocityAnalytics `json:"responseVelocity"`
+		ResponseVelocity   DashboardResponseVelocityAnalytics  `json:"responseVelocity"`
+		HealthScore        float64                             `json:"healthScore"`
+		ResolvedRate       float64                             `json:"resolvedRate"`
+		TotalConversations int                                 `json:"totalConversations"`
+		UnreadVolume       int                                 `json:"unreadVolume"`
+		WaitingVolume      int                                 `json:"waitingVolume"`
+		ChannelTotals      DashboardChannelTotals              `json:"channelTotals"`
+		WeeklySeries       []DashboardWeeklyChannelSeriesPoint `json:"weeklyChannelSeries"`
+		HeatmapRows        []DashboardHeatmapRow               `json:"heatmapRows"`
+		ResolvedTickets    []DashboardResolvedConversation     `json:"resolvedTickets"`
 	} `json:"analytics"`
 	Channels      []ChannelRecord      `json:"channels"`
 	Sessions      []SessionRecord      `json:"sessions"`
 	Conversations []ConversationRecord `json:"conversations"`
+}
+
+type DashboardDerivedMetrics struct {
+	Snapshot    DashboardSnapshot         `json:"snapshot"`
+	Leaderboard []DashboardLeaderboardRow `json:"leaderboard"`
+}
+
+type DashboardSnapshot struct {
+	ActiveSessions      int `json:"activeSessions"`
+	OnlineUsers         int `json:"onlineUsers"`
+	RecentConversations int `json:"recentConversations"`
+	TeamCount           int `json:"teamCount"`
+}
+
+type DashboardLeaderboardRow struct {
+	ID          string `json:"id"`
+	Label       string `json:"label"`
+	AvatarURL   string `json:"avatarUrl,omitempty"`
+	Score       int    `json:"score"`
+	Volume      int    `json:"volume"`
+	VolumeLabel string `json:"volumeLabel"`
+	Rank        int    `json:"rank"`
 }
 
 type DashboardResponseVelocityAnalytics struct {
@@ -341,6 +373,33 @@ type DashboardResponseVelocityAnalytics struct {
 type DashboardResponseVelocityPoint struct {
 	Label          string `json:"label"`
 	AverageSeconds int    `json:"averageSeconds"`
+}
+
+type DashboardChannelTotals struct {
+	WhatsApp  int `json:"whatsapp"`
+	Instagram int `json:"instagram"`
+	Facebook  int `json:"facebook"`
+}
+
+type DashboardWeeklyChannelSeriesPoint struct {
+	Day     string `json:"day"`
+	Channel string `json:"channel"`
+	Value   int    `json:"value"`
+}
+
+type DashboardHeatmapRow struct {
+	Day    string `json:"day"`
+	Values []int  `json:"values"`
+}
+
+type DashboardResolvedConversation struct {
+	ID             string `json:"id"`
+	Customer       string `json:"customer"`
+	CustomerAvatar string `json:"customerAvatar,omitempty"`
+	Channel        string `json:"channel"`
+	Agent          string `json:"agent"`
+	LastActivityAt string `json:"lastActivityAt"`
+	StatusLabel    string `json:"statusLabel"`
 }
 
 type ContactKanbanStageRecord struct {
