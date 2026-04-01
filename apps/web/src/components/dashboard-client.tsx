@@ -419,6 +419,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const canManageBoards = canManageWorkspaceSessions;
   const canCreateManualContacts = canManageWorkspaceSessions;
   const canManageQuickReplies = authUser?.role === 'admin' || authUser?.role === 'supervisor';
+  const canLoadWorkspaceUsers = authUser?.role === 'admin' || authUser?.role === 'supervisor';
   const isWorkspaceBootstrapPending =
     isAuthReady &&
     (!hasLoadedInitialOverview ||
@@ -1282,6 +1283,14 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
+    if (!canLoadWorkspaceUsers) {
+      setWorkspaceUsers([]);
+      setWorkspaceUserSessionsMap({});
+      setExpandedUserSessionsId(null);
+      setHasLoadedInitialUsers(true);
+      return;
+    }
+
     setIsLoadingUsers(true);
     void loadWorkspaceUsers()
       .catch(() => undefined)
@@ -1289,7 +1298,7 @@ export function DashboardClient({ initialOverview }: Props) {
         setIsLoadingUsers(false);
         setHasLoadedInitialUsers(true);
       });
-  }, [isAuthReady, loadWorkspaceUsers]);
+  }, [canLoadWorkspaceUsers, isAuthReady, loadWorkspaceUsers]);
 
   useEffect(() => {
     if (!isAuthReady) {
