@@ -158,6 +158,10 @@ func (a *API) handleSessionInit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleSessionQR(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
 	qr, err := a.manager.GetQR(r.Context())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
@@ -167,6 +171,10 @@ func (a *API) handleSessionQR(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleSessionStatus(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
 	status, err := a.manager.GetStatus(r.Context())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
@@ -360,6 +368,10 @@ func (a *API) handleDashboardOverview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleListSessions(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
 	sessions, err := a.buildSessionRecords(r.Context())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
@@ -443,6 +455,10 @@ func (a *API) handleDisconnectSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleSessionQRCompat(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
 	if !a.isDefaultSession(chi.URLParam(r, "id")) {
 		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
 		return
@@ -1177,6 +1193,10 @@ func (a *API) handleCreateManualContact(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *API) handleSessionStream(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
 	if !a.isDefaultSession(chi.URLParam(r, "id")) {
 		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
 		return
