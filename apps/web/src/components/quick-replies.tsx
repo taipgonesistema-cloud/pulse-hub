@@ -315,6 +315,7 @@ export function QuickReplyDeleteModal({
 export function QuickReplyAutocomplete({
   items,
   activeIndex,
+  isLoading,
   open,
   query,
   onHover,
@@ -322,6 +323,7 @@ export function QuickReplyAutocomplete({
 }: {
   items: QuickReplyRecord[];
   activeIndex: number;
+  isLoading: boolean;
   open: boolean;
   query: string;
   onHover: (index: number) => void;
@@ -331,23 +333,43 @@ export function QuickReplyAutocomplete({
     return null;
   }
 
+  const safeActiveIndex = items.length > 0 ? Math.min(activeIndex, items.length - 1) : 0;
+
   return (
     <div className="absolute bottom-[calc(100%+0.8rem)] left-0 right-0 z-20 overflow-hidden rounded-[26px] border border-white/10 bg-[rgba(12,15,20,0.96)] shadow-[0_24px_48px_-18px_rgba(0,0,0,0.95)] backdrop-blur-xl">
-      <div className="border-b border-white/8 px-4 py-3">
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Respostas rapidas</p>
-        <p className="mt-1 text-xs text-zinc-400">Buscando por <span className="font-semibold text-white">/{query}</span></p>
+      <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Respostas rapidas</p>
+          <p className="mt-1 text-xs text-zinc-400">
+            {query
+              ? <>Buscando por <span className="font-semibold text-white">/{query}</span></>
+              : 'Digite para filtrar ou escolha uma resposta pronta.'}
+          </p>
+        </div>
+        <span className="rounded-full bg-white/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+          Enter ou Tab
+        </span>
       </div>
       <div className="max-h-72 overflow-y-auto p-2">
-        {items.length === 0 ? (
+        {isLoading ? (
+          <div className="space-y-2 p-1">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="h-20 animate-pulse rounded-[20px] bg-white/5" />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
           <div className="rounded-[20px] border border-dashed border-white/8 px-4 py-6 text-center text-sm text-zinc-500">
-            Nenhuma resposta rapida encontrada.
+            {query ? 'Nenhuma resposta rapida encontrada para este atalho.' : 'Nenhuma resposta rapida disponivel.'}
           </div>
         ) : (
           items.map((item, index) => (
             <button
               key={item.id}
-              className={`w-full rounded-[20px] px-4 py-3 text-left transition ${activeIndex === index ? 'bg-[var(--primary)]/14 text-white' : 'text-zinc-300 hover:bg-white/5 hover:text-white'}`}
-              onClick={() => onSelect(item)}
+              className={`w-full rounded-[20px] px-4 py-3 text-left transition ${safeActiveIndex === index ? 'bg-[var(--primary)]/14 text-white' : 'text-zinc-300 hover:bg-white/5 hover:text-white'}`}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                onSelect(item);
+              }}
               onMouseEnter={() => onHover(index)}
               type="button"
             >

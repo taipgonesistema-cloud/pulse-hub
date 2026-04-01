@@ -356,6 +356,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [previewQuickReply, setPreviewQuickReply] = useState<QuickReplyRecord | null>(null);
   const [quickReplyToDelete, setQuickReplyToDelete] = useState<QuickReplyRecord | null>(null);
   const [composerQuickReplyResults, setComposerQuickReplyResults] = useState<QuickReplyRecord[]>([]);
+  const [isLoadingComposerQuickReplies, setIsLoadingComposerQuickReplies] = useState(false);
   const [draggedContactKey, setDraggedContactKey] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<ContactKanbanStageId | null>(null);
   const [showCreateContactModal, setShowCreateContactModal] = useState(false);
@@ -404,6 +405,8 @@ export function DashboardClient({ initialOverview }: Props) {
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
   const toastTimersRef = useRef(new Map<number, number>());
   const toastIdRef = useRef(0);
+  const composerQuickReplyQueryRef = useRef('');
+  const composerQuickReplyRequestIdRef = useRef(0);
   const currentView = viewTransition ?? activeView;
   const hasWorkspaceData = overview.sessions.length > 0 || overview.conversations.length > 0;
   const shouldShowInitialSkeleton = isPending && !hasWorkspaceData && !errorMessage;
@@ -1177,8 +1180,24 @@ export function DashboardClient({ initialOverview }: Props) {
   }, []);
 
   const loadComposerQuickReplies = useCallback(async (query = '') => {
-    const items = await autocompleteQuickReplies(query);
-    setComposerQuickReplyResults(items);
+    const normalizedQuery = query.trim();
+    composerQuickReplyQueryRef.current = normalizedQuery;
+    const requestId = composerQuickReplyRequestIdRef.current + 1;
+    composerQuickReplyRequestIdRef.current = requestId;
+    setIsLoadingComposerQuickReplies(true);
+
+    try {
+      const items = await autocompleteQuickReplies(normalizedQuery);
+      if (composerQuickReplyRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setComposerQuickReplyResults(items);
+    } finally {
+      if (composerQuickReplyRequestIdRef.current === requestId) {
+        setIsLoadingComposerQuickReplies(false);
+      }
+    }
   }, []);
 
   const loadUserSessionsForUser = useCallback(async (userId: string) => {
@@ -1274,8 +1293,11 @@ export function DashboardClient({ initialOverview }: Props) {
 
   useEffect(() => {
     if (!isAuthReady) {
+      composerQuickReplyQueryRef.current = '';
+      composerQuickReplyRequestIdRef.current += 1;
       setQuickReplies([]);
       setComposerQuickReplyResults([]);
+      setIsLoadingComposerQuickReplies(false);
       return;
     }
 
@@ -1878,7 +1900,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
         if (payload.kind === 'quick_reply.updated') {
           void loadQuickRepliesListRef.current().catch(() => undefined);
-          void loadComposerQuickRepliesRef.current().catch(() => undefined);
+          void loadComposerQuickRepliesRef.current(composerQuickReplyQueryRef.current).catch(() => undefined);
         }
 
         const { isConversationsView, activeSessionId, activeConversationId } = realtimeContextRef.current;
@@ -4240,6 +4262,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 onSendMedia={sendMedia}
                 onSend={sendMessage}
                 quickReplies={composerQuickReplyResults}
+                quickRepliesLoading={isLoadingComposerQuickReplies}
                 replyToMessage={replyTargetMessage}
                 signatureStorageKey={`pulse-hub.composer-signature:${authUser?.id ?? 'guest'}`}
               />
@@ -5693,6 +5716,7 @@ function ConversationComposer({
   onSendMedia,
   onCancelReply,
   quickReplies,
+  quickRepliesLoading,
   replyToMessage,
   signatureStorageKey,
 }: {
@@ -5703,6 +5727,7 @@ function ConversationComposer({
   onSendMedia: (file: File, options?: { sticker?: boolean; caption?: string }) => Promise<boolean>;
   onCancelReply: () => void;
   quickReplies: QuickReplyRecord[];
+  quickRepliesLoading: boolean;
   replyToMessage: MessageRecord | null;
   signatureStorageKey: string;
 }) {
@@ -5719,6 +5744,7 @@ function ConversationComposer({
   const [isDragging, setIsDragging] = useState(false);
   const [isSendingText, setIsSendingText] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [quickReplyActiveIndex, setQuickReplyActiveIndex] = useState(0);
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
   const stickerInputRef = useRef<HTMLInputElement | null>(null);
@@ -5726,15 +5752,15 @@ function ConversationComposer({
 
   const composerBusy = disabled || isSendingText || isUploading;
   const slashContext = useMemo(() => getQuickReplySlashContext(draft), [draft]);
-  const slashAutocompleteOpen = Boolean(slashContext) && !composerBusy;
+  const slashAutocompleteOpen = Boolean(slashContext) && !composerBusy && isComposerFocused;
 
   useEffect(() => {
-    if (!slashContext) {
+    if (!slashAutocompleteOpen || !slashContext) {
       return;
     }
 
     onQuickReplySearch(slashContext.query);
-  }, [onQuickReplySearch, slashContext]);
+  }, [onQuickReplySearch, slashAutocompleteOpen, slashContext]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -6051,6 +6077,7 @@ function ConversationComposer({
       <div className="relative">
         <QuickReplyAutocomplete
           activeIndex={quickReplyActiveIndex}
+          isLoading={quickRepliesLoading}
           items={quickReplies}
           onHover={setQuickReplyActiveIndex}
           onSelect={insertQuickReply}
@@ -6145,6 +6172,8 @@ function ConversationComposer({
           className="max-h-56 min-h-[24px] flex-1 resize-none overflow-y-auto bg-transparent py-1 text-sm leading-6 text-white outline-none placeholder:text-zinc-500"
           disabled={composerBusy}
           onChange={(event) => handleDraftChange(event.target.value)}
+          onBlur={() => setIsComposerFocused(false)}
+          onFocus={() => setIsComposerFocused(true)}
           onKeyDown={(event) => {
             if (slashAutocompleteOpen && quickReplies.length > 0) {
               if (event.key === 'ArrowDown') {
