@@ -406,10 +406,13 @@ export function DashboardClient({ initialOverview }: Props) {
   } | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const toastTimersRef = useRef(new Map<number, number>());
   const toastIdRef = useRef(0);
   const composerQuickReplyQueryRef = useRef('');
   const composerQuickReplyRequestIdRef = useRef(0);
+  const messageElementMapRef = useRef(new Map<string, HTMLDivElement>());
+  const highlightedMessageTimerRef = useRef<number | null>(null);
   const currentView = viewTransition ?? activeView;
   const hasWorkspaceData = overview.sessions.length > 0 || overview.conversations.length > 0;
   const shouldShowInitialSkeleton = isPending && !hasWorkspaceData && !errorMessage;
@@ -1551,6 +1554,8 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
+    setHighlightedMessageId(null);
+
     const currentConversation = visibleSessionConversations.find(
       (conversation) => conversation.id === activeConversationId,
     );
@@ -1570,6 +1575,12 @@ export function DashboardClient({ initialOverview }: Props) {
       };
     });
   }, [activeConversationId, isConversationsView, visibleSessionConversations]);
+
+  useEffect(() => () => {
+    if (highlightedMessageTimerRef.current) {
+      window.clearTimeout(highlightedMessageTimerRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isConversationsView || !selectedSession || visibleSessionConversations.length < 2) {
@@ -1983,6 +1994,38 @@ export function DashboardClient({ initialOverview }: Props) {
       container.scrollHeight - container.scrollTop - container.clientHeight;
 
     shouldStickToBottomRef.current = distanceFromBottom <= 96;
+  }, []);
+
+  const registerMessageElement = useCallback((messageId: string, node: HTMLDivElement | null) => {
+    if (!messageId) {
+      return;
+    }
+
+    if (node) {
+      messageElementMapRef.current.set(messageId, node);
+      return;
+    }
+
+    messageElementMapRef.current.delete(messageId);
+  }, []);
+
+  const jumpToMessage = useCallback((messageId: string) => {
+    const target = messageElementMapRef.current.get(messageId);
+    if (!target) {
+      return;
+    }
+
+    shouldStickToBottomRef.current = false;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedMessageId(messageId);
+
+    if (highlightedMessageTimerRef.current) {
+      window.clearTimeout(highlightedMessageTimerRef.current);
+    }
+
+    highlightedMessageTimerRef.current = window.setTimeout(() => {
+      setHighlightedMessageId((current) => (current === messageId ? null : current));
+    }, 2200);
   }, []);
 
   const executeAction = useCallback(
@@ -4281,6 +4324,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       <MessageBubble
                         avatarUrl={selectedConversation?.avatarUrl}
                         conversation={selectedConversation}
+                        isHighlighted={highlightedMessageId === message.id}
                         isUnread={
                           unreadSeparatorIndex !== -1 &&
                           index >= unreadSeparatorIndex &&
@@ -4288,8 +4332,10 @@ export function DashboardClient({ initialOverview }: Props) {
                         }
                         message={message}
                         messageLookup={messagesById}
+                        onJumpToMessage={jumpToMessage}
                         onReact={reactToMessage}
                         onReply={setReplyTargetMessage}
+                        registerElement={registerMessageElement}
                       />
                     </Fragment>
                   ))}
@@ -4328,8 +4374,10 @@ export function DashboardClient({ initialOverview }: Props) {
               <ConversationComposer
                 key={`${selectedSession.id}:${selectedConversation?.id ?? 'none'}:${authUser?.id ?? 'guest'}`}
                 defaultSignatureName={authUser?.name ?? 'Operador'}
+                draftStorageKey={`pulse-hub.composer-draft:${authUser?.id ?? 'guest'}:${selectedSession.id}:${selectedConversation?.id ?? 'none'}`}
                 disabled={!selectedConversation || isPending}
                 onCancelReply={() => setReplyTargetMessage(null)}
+                onJumpToMessage={jumpToMessage}
                 onQuickReplySearch={(query) => {
                   void loadComposerQuickReplies(query).catch(() => undefined);
                 }}
@@ -5785,22 +5833,26 @@ function AvatarBadge({
 
 function ConversationComposer({
   defaultSignatureName,
+  draftStorageKey,
   disabled,
   onQuickReplySearch,
   onSend,
   onSendMedia,
   onCancelReply,
+  onJumpToMessage,
   quickReplies,
   quickRepliesLoading,
   replyToMessage,
   signatureStorageKey,
 }: {
   defaultSignatureName: string;
+  draftStorageKey: string;
   disabled: boolean;
   onQuickReplySearch: (query: string) => void;
   onSend: (text: string) => Promise<boolean>;
   onSendMedia: (file: File, options?: { sticker?: boolean; caption?: string }) => Promise<boolean>;
   onCancelReply: () => void;
+  onJumpToMessage: (messageId: string) => void;
   quickReplies: QuickReplyRecord[];
   quickRepliesLoading: boolean;
   replyToMessage: MessageRecord | null;
@@ -5810,7 +5862,8 @@ function ConversationComposer({
     () => readComposerSignaturePreference(signatureStorageKey, defaultSignatureName),
     [defaultSignatureName, signatureStorageKey],
   );
-  const [draft, setDraft] = useState('');
+  const initialDraft = useMemo(() => readComposerDraft(draftStorageKey), [draftStorageKey]);
+  const [draft, setDraft] = useState(initialDraft);
   const [signatureEnabled, setSignatureEnabled] = useState(initialSignaturePreference.enabled);
   const [signatureName, setSignatureName] = useState(initialSignaturePreference.name);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -5824,6 +5877,7 @@ function ConversationComposer({
   const mediaInputRef = useRef<HTMLInputElement | null>(null);
   const stickerInputRef = useRef<HTMLInputElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerShellRef = useRef<HTMLDivElement | null>(null);
 
   const composerBusy = disabled || isSendingText || isUploading;
   const slashContext = useMemo(() => getQuickReplySlashContext(draft), [draft]);
@@ -5850,6 +5904,19 @@ function ConversationComposer({
       }),
     );
   }, [defaultSignatureName, signatureEnabled, signatureName, signatureStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (!draft.trim()) {
+      window.localStorage.removeItem(draftStorageKey);
+      return;
+    }
+
+    window.localStorage.setItem(draftStorageKey, draft);
+  }, [draft, draftStorageKey]);
 
   useLayoutEffect(() => {
     const composer = composerInputRef.current;
@@ -5945,6 +6012,25 @@ function ConversationComposer({
     }
   }, [selectedAttachment]);
 
+  useEffect(() => {
+    const shell = composerShellRef.current;
+    if (!shell) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (shell.contains(event.target as Node)) {
+        return;
+      }
+
+      setShowAttachmentMenu(false);
+      setShowEmojiPicker(false);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
+  }, []);
+
   const submit = useCallback(async () => {
     if (composerBusy) {
       return;
@@ -5980,6 +6066,7 @@ function ConversationComposer({
 
   return (
     <div
+      ref={composerShellRef}
       className={`rounded-[34px] transition ${isDragging ? 'bg-[var(--primary)]/8 p-2 ring-1 ring-[var(--primary)]/30' : ''}`}
       onDragEnter={(event) => {
         event.preventDefault();
@@ -6103,14 +6190,18 @@ function ConversationComposer({
       {replyToMessage ? (
         <div className="mb-3 overflow-hidden rounded-[24px] border border-[var(--primary)]/18 bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.9)]">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 border-l-2 border-[var(--primary)]/55 pl-3">
+            <button
+              className="min-w-0 flex-1 border-l-2 border-[var(--primary)]/55 pl-3 text-left transition hover:opacity-90"
+              onClick={() => onJumpToMessage(replyToMessage.id)}
+              type="button"
+            >
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--primary)]">
                 Respondendo {replyToMessage.direction === 'outgoing' ? 'voce' : replyToMessage.author}
               </p>
               <p className="mt-1 line-clamp-2 text-sm text-zinc-300">
                 {summarizeMessageForReply(replyToMessage)}
               </p>
-            </div>
+            </button>
             <button
               aria-label="Cancelar resposta"
               className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/5 text-[var(--muted)] transition hover:bg-white/10 hover:text-white"
@@ -6290,6 +6381,21 @@ function ConversationComposer({
             event.preventDefault();
             void submit();
           }}
+          onPaste={(event) => {
+            if (composerBusy) {
+              return;
+            }
+
+            const clipboardItems = Array.from(event.clipboardData?.items ?? []);
+            const fileItem = clipboardItems.find((item) => item.kind === 'file');
+            const file = fileItem?.getAsFile();
+            if (!file) {
+              return;
+            }
+
+            event.preventDefault();
+            queueAttachment(file, { sticker: file.type === 'image/webp' });
+          }}
           placeholder={disabled ? 'Selecione uma conversa...' : selectedAttachment ? 'Adicione uma legenda opcional...' : 'Digite uma mensagem...'}
           rows={1}
           value={draft}
@@ -6315,18 +6421,24 @@ const MessageBubble = memo(function MessageBubble({
   message,
   avatarUrl,
   conversation,
+  isHighlighted = false,
   isUnread = false,
   messageLookup,
+  onJumpToMessage,
   onReact,
   onReply,
+  registerElement,
 }: {
   message: MessageRecord;
   avatarUrl?: string | null;
   conversation?: ConversationRecord;
+  isHighlighted?: boolean;
   isUnread?: boolean;
   messageLookup: Map<string, MessageRecord>;
+  onJumpToMessage: (messageId: string) => void;
   onReact: (message: MessageRecord, emoji: string) => Promise<boolean>;
   onReply: (message: MessageRecord) => void;
+  registerElement: (messageId: string, node: HTMLDivElement | null) => void;
 }) {
   const incoming = message.direction !== 'outgoing';
   const showGroupAuthor = shouldShowGroupMessageAuthor(message, conversation);
@@ -6414,12 +6526,21 @@ const MessageBubble = memo(function MessageBubble({
       ) : null}
 
       {message.replyTo ? (
-        <div className={`mb-3 rounded-[20px] border px-3 py-3 ${incoming ? 'border-white/8 bg-white/4' : 'border-[rgba(127,175,255,0.18)] bg-[rgba(10,18,30,0.26)]'}`}>
+        <button
+          className={`mb-3 block w-full rounded-[20px] border px-3 py-3 text-left transition hover:opacity-90 ${incoming ? 'border-white/8 bg-white/4' : 'border-[rgba(127,175,255,0.18)] bg-[rgba(10,18,30,0.26)]'}`}
+          disabled={!repliedMessage}
+          onClick={() => {
+            if (repliedMessage) {
+              onJumpToMessage(repliedMessage.id);
+            }
+          }}
+          type="button"
+        >
           <p className={`text-[11px] font-bold uppercase tracking-[0.16em] ${incoming ? 'text-[var(--secondary)]' : 'text-[var(--primary)]'}`}>
             {replyAuthor || 'Mensagem citada'}
           </p>
           <p className="mt-1 text-sm leading-6 text-zinc-300">{replyPreview}</p>
-        </div>
+        </button>
       ) : null}
 
       <MessageContent message={message} />
@@ -6453,7 +6574,11 @@ const MessageBubble = memo(function MessageBubble({
 
   if (incoming) {
     return (
-      <div className="flex max-w-[80%] gap-4">
+      <div
+        ref={(node) => registerElement(message.id, node)}
+        className={`flex max-w-[80%] gap-4 rounded-[30px] transition ${isHighlighted ? 'bg-[var(--secondary)]/10 ring-1 ring-[var(--secondary)]/30' : ''}`}
+        data-message-id={message.id}
+      >
         <AvatarBadge label={message.author} small src={showGroupAuthor ? null : avatarUrl} />
         {bubbleBody}
       </div>
@@ -6461,7 +6586,11 @@ const MessageBubble = memo(function MessageBubble({
   }
 
   return (
-    <div className="ml-auto flex max-w-[80%] justify-end">
+    <div
+      ref={(node) => registerElement(message.id, node)}
+      className={`ml-auto flex max-w-[80%] justify-end rounded-[30px] transition ${isHighlighted ? 'bg-[var(--primary)]/10 ring-1 ring-[var(--primary)]/30' : ''}`}
+      data-message-id={message.id}
+    >
       {bubbleBody}
     </div>
   );
@@ -6931,6 +7060,14 @@ function readComposerSignaturePreference(signatureStorageKey: string, defaultSig
       name: fallbackName,
     };
   }
+}
+
+function readComposerDraft(draftStorageKey: string) {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  return window.localStorage.getItem(draftStorageKey) ?? '';
 }
 
 function formatDateLabel(timestamp: string) {
