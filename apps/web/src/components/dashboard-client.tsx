@@ -7387,7 +7387,16 @@ function resolveContactKanbanStage(
   contact: ConversationRecord,
   stageMap: Record<string, ContactKanbanStageId>,
 ) {
-  return stageMap[buildContactKanbanKey(contact)] ?? inferContactKanbanStage(contact);
+  const persistedStage = stageMap[buildContactKanbanKey(contact)];
+  if (persistedStage) {
+    return persistedStage;
+  }
+
+  if (isValidContactKanbanStageId(contact.kanbanStage)) {
+    return contact.kanbanStage;
+  }
+
+  return inferContactKanbanStage(contact);
 }
 
 function inferContactKanbanStage(contact: ConversationRecord): ContactKanbanStageId {
@@ -7595,6 +7604,7 @@ function areOverviewsEquivalent(left: DashboardOverview, right: DashboardOvervie
       current.contact !== next.contact ||
       current.avatarUrl !== next.avatarUrl ||
       current.participantId !== next.participantId ||
+      current.kanbanStage !== next.kanbanStage ||
       current.owner !== next.owner ||
       current.status !== next.status ||
       current.channelName !== next.channelName ||

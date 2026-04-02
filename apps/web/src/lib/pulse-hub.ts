@@ -50,6 +50,7 @@ export type ConversationRecord = {
   contact: string;
   avatarUrl?: string | null;
   participantId: string;
+  kanbanStage?: string;
   owner: string;
   status: string;
   channelName: string;

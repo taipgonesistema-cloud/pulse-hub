@@ -1,165 +1,63 @@
-# Product Implementation Plan
+# Multi-Session Plan
 
-## Current Direction
+## Goal
 
-Build Pulse Hub as a shared multi-user WhatsApp operations workspace.
+Support two or more real WhatsApp numbers connected at the same time inside the same workspace, with each number having its own QR flow, connection lifecycle, chats, messages, and realtime events.
 
-The WhatsApp connection in `apps/wa-core` stays shared and persistent.
-User login to the dashboard must be independent from the WhatsApp session, so multiple people can access the same workspace at the same time without disconnecting each other.
+## Desired Outcome
 
-## Confirmed Product Rules
+- multiple active WhatsApp sessions in `apps/wa-core`
+- operators can switch between numbers in `apps/web`
+- each session keeps its own chats, unread counts, QR state, and send/read actions
+- auth, roles, audit log, and security remain intact
 
-- keep the backend on `apps/wa-core`
-- keep the frontend on `apps/web`
-- keep using `whatsmeow` directly
-- keep PostgreSQL + Redis
-- allow multiple dashboard users on the same active WhatsApp session
-- v1 access control uses roles only
-- do not add per-user limits yet
+## Phase 1 - Backend Persistence
 
-## Already Delivered
+- replace single-session assumptions in store methods with multi-session-safe methods
+- ensure session records are keyed by real session id everywhere
+- verify chats/messages remain associated with the correct session id
 
-### Core Messaging
+## Phase 2 - WhatsApp Manager Refactor
 
-- shared WhatsApp session management
-- QR login and reconnect flow
-- conversation timeline
-- media and sticker sending
-- reply to message
-- react to message
-- smoother unread handling for active conversations
-- lighter refresh and websocket behavior
+- replace the single `whatsmeow.Client` field with a session-aware client registry
+- load, create, connect, and disconnect clients per session id
+- make QR/status APIs return data per specific session
 
-### CRM / Contacts
+## Phase 3 - HTTP/API Refactor
 
-- Kanban contacts workspace
-- shared Kanban stage persistence
-- shared custom boards
-- inline CRM editing
-- websocket sync for CRM and Kanban updates
+- remove `isDefaultSession` restrictions from session-aware routes
+- make all session endpoints operate on the requested session id
+- keep auth/role checks unchanged
+- keep audit logging for connect/disconnect/create actions
 
-### Analytics
+## Phase 4 - Realtime Isolation
 
-- real response-time analytics
-- business-hours filtering
-- hardened frontend fallbacks for analytics payloads
+- include session id consistently in realtime payloads
+- ensure websocket and stream updates only affect the right session in the UI
 
-## Main Goal Now
+## Phase 5 - Frontend Multi-Session UX
 
-Introduce real multi-user dashboard authentication and user management without breaking the shared WhatsApp workspace.
+- validate session switching in dashboard without leaking state between numbers
+- confirm conversation list, timeline, composer drafts, and quick replies behave per session
+- verify QR/connect/disconnect controls work per session
 
-## Phase 1 - Real Auth Foundation
+## Phase 6 - Stability Pass
 
-### Backend
+- test two connected numbers simultaneously
+- verify message send, media, read receipts, reply, reaction, and CRM updates per session
+- verify reconnect behavior after restart/deploy
 
-- add `app_user` table
-- add `app_user_session` table
-- hash passwords instead of using env-only credentials
-- keep env seed only for bootstrapping the first admin user
-- create real sign-in, sign-out, and `me` endpoints
-- allow multiple active login sessions per user
+## First Implementation Slice
 
-### Frontend
-
-- stop relying on fake local-only auth state
-- centralize authenticated API calls
-- attach auth token to API and websocket requests
-- make dashboard bootstrap work with authenticated user state
-
-## Phase 2 - Role-Based Access
-
-### Roles for v1
-
-- `admin`
-- `supervisor`
-- `attendant`
-
-### Role Behavior
-
-- `admin` manages users, sessions, workspace settings, CRM, analytics, and messaging actions
-- `supervisor` manages operations and sessions but not user administration
-- `attendant` handles inbox, replies, reactions, and CRM work but not user management or sensitive settings
-
-### Enforcement
-
-- enforce roles in backend endpoints, not only in UI
-- hide or disable UI sections the current user cannot access
-- protect websocket-connected actions the same way as HTTP actions
-
-## Phase 3 - User Management UI
-
-### Settings Expansion
-
-- add a `Users` management area inside `Settings`
-- list users with:
-  - name
-  - email
-  - role
-  - active status
-  - last login
-  - current session activity
-
-### User Actions
-
-- create user
-- edit user profile
-- change role
-- activate or deactivate user
-- reset or replace password
-- revoke active login sessions if needed
-
-### Current Execution Focus
-
-- list active login sessions per user inside `Settings > Users`
-- show last activity and basic device/session context
-- allow admins to revoke specific active sessions
-- keep WhatsApp session shared and untouched while dashboard sessions are revoked
-
-## Phase 4 - Shared Workspace Hardening
-
-- ensure multiple logged-in operators can stay in the same workspace safely
-- keep the WhatsApp session connected even if one dashboard user logs out
-- preserve realtime sync across users for conversations, CRM, Kanban, replies, and reactions
-- avoid coupling dashboard auth lifecycle to WhatsApp connection lifecycle
-
-## Phase 5 - Post-Auth UX Polish
-
-- refine settings IA after adding user management
-- improve session status visibility for supervisors/admins
-- add clearer activity/audit feedback for user changes
-- polish active-session management UX after revoke flow lands
-- continue reducing heavy rerenders in large conversation/contact datasets
-- add virtualization where needed for long lists
-
-## Explicitly Deferred
-
-Do not implement these yet:
-
-- per-user limits
-- per-user quotas
-- session assignment caps
-- rate limits by operator
-- channel restrictions by operator
-- schedule-based permissions
-- custom permission matrices beyond role-based v1
-
-These can be added later after roles are stable.
-
-## Recommended Implementation Order
-
-1. add database schema for users and login sessions
-2. replace env-only fake auth with real auth endpoints
-3. add auth middleware and role checks in backend
-4. migrate frontend to authenticated dashboard bootstrap
-5. add `Users` management inside `Settings`
-6. gate UI and actions by role
-7. polish multi-user UX and audit visibility
+1. audit all single-session store methods
+2. refactor backend persistence to support multiple session rows safely
+3. refactor manager to map session id -> client/store/device
+4. remove default-session route guards
+5. validate one existing session still works before enabling two
 
 ## Success Criteria
 
-- multiple people can log into the same dashboard workspace simultaneously
-- no user login disconnects the shared WhatsApp session
-- roles reliably restrict access in both backend and frontend
-- admins can manage users without leaving the dashboard
-- supervisors and attendants only see actions they are allowed to use
-- existing messaging, CRM, Kanban, and analytics flows remain stable during the auth migration
+- session `A` and session `B` can both stay connected at once
+- sending in one session never touches the other
+- QR and reconnect are independent per session
+- dashboard state remains correctly scoped per session

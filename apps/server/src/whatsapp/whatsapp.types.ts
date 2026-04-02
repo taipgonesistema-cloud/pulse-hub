@@ -2,7 +2,7 @@ import type {
   ChannelRecord,
   ConversationRecord,
   SessionRecord,
-} from '../data/mock-data';
+} from '../data/records';
 
 export type DashboardOverview = {
   product: string;

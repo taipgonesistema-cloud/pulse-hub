@@ -5,11 +5,6 @@ export const metadata: Metadata = {
   title: "Pulse Hub | Atendimento Omnichannel",
   description:
     "Dashboard operacional para conectar multiplos numeros de WhatsApp via QR code e evoluir para Instagram e Facebook.",
-  icons: {
-    icon: "/icon.svg",
-    shortcut: "/icon.svg",
-    apple: "/icon.svg",
-  },
 };
 
 export default function RootLayout({

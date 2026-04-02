@@ -59,15 +59,3 @@ export type SessionRecord = {
   qrCodeDataUrl: string | null;
   lastError: string | null;
 };
-
-type SeedPayload = {
-  channels: ChannelRecord[];
-  sessions: SessionRecord[];
-  conversations: ConversationRecord[];
-};
-
-export const createSeedData = (): SeedPayload => ({
-  channels: [],
-  sessions: [],
-  conversations: [],
-});

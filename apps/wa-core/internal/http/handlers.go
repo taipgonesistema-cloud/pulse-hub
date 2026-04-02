@@ -1462,6 +1462,7 @@ func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOver
 	overview.Analytics.ResponseVelocity = responseVelocity
 	crmProfileMap := buildCRMProfileMap(crmProfiles)
 	kanbanStageMap := buildKanbanStageMap(kanbanStages)
+	enrichConversationWorkspaceFields(conversations, crmProfileMap, kanbanStageMap)
 
 	connectedNumbers := 0
 	activeSessions := 0
@@ -1601,6 +1602,22 @@ func countResolvedConversations(
 		}
 	}
 	return total
+}
+
+func enrichConversationWorkspaceFields(
+	conversations []models.ConversationRecord,
+	crmProfiles map[string]models.ContactCRMProfileRecord,
+	kanbanStages map[string]models.ContactKanbanStageRecord,
+) {
+	for index := range conversations {
+		conversation := &conversations[index]
+		storageKey := dashboardConversationKey(conversation.SessionID, conversation.ID)
+		profile := crmProfiles[storageKey]
+		stage := resolveContactKanbanStage(*conversation, kanbanStages)
+		conversation.KanbanStage = stage
+		conversation.Owner = fallbackText(normalizeOperatorLabel(profile.Assignee), fallbackText(conversation.Owner, "Sem responsavel"))
+		conversation.Status = kanbanStageLabel(stage)
+	}
 }
 
 func buildDashboardLeaderboardRows(
@@ -1980,6 +1997,21 @@ func resolveConversationOutcomeLabel(
 		return "Won"
 	}
 	return "Resolved"
+}
+
+func kanbanStageLabel(stage string) string {
+	switch strings.TrimSpace(strings.ToLower(stage)) {
+	case "new":
+		return "Novo"
+	case "qualified":
+		return "Qualificado"
+	case "followup":
+		return "Follow-up"
+	case "won":
+		return "Ganho"
+	default:
+		return "Ativo"
+	}
 }
 
 func buildAnalyticsConversationID(value string) string {

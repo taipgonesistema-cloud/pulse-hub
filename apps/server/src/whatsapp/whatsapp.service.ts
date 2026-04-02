@@ -14,7 +14,7 @@ import {
   type ConversationRecord,
   type MessageRecord,
   type SessionRecord,
-} from '../data/mock-data';
+} from '../data/records';
 import { RedisService } from '../persistence/redis.service';
 import { WHATSAPP_ENGINE } from './engine/whatsapp-engine.token';
 import type { WhatsappEngine } from './engine/whatsapp-engine.interface';

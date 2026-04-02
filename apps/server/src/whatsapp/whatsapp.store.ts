@@ -5,7 +5,7 @@ import {
   type ConversationRecord,
   type MessageRecord,
   type SessionRecord,
-} from '../data/mock-data';
+} from '../data/records';
 import { PostgresService } from '../persistence/postgres.service';
 
 type SessionRow = {

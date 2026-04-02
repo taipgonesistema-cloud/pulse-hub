@@ -306,6 +306,7 @@ type ConversationRecord struct {
 	Contact       string          `json:"contact"`
 	AvatarURL     string          `json:"avatarUrl,omitempty"`
 	ParticipantID string          `json:"participantId"`
+	KanbanStage   string          `json:"kanbanStage,omitempty"`
 	Owner         string          `json:"owner"`
 	Status        string          `json:"status"`
 	ChannelName   string          `json:"channelName"`
