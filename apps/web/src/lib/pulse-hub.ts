@@ -186,6 +186,19 @@ export type AuditLogRecord = {
   createdAt: string;
 };
 
+export type InstagramPublishStatus = {
+  configured: boolean;
+  imageHostingConfigured: boolean;
+  userId?: string;
+};
+
+export type InstagramPublishResult = {
+  mode: 'feed' | 'story';
+  creationId: string;
+  publishedId: string;
+  imageUrl: string;
+};
+
 export type SignInPayload = {
   email: string;
   password: string;
@@ -517,6 +530,49 @@ export async function revokeUserSession(userId: string, sessionId: string) {
     const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
     throw new Error(errorPayload?.message ?? 'Falha ao revogar a sessao.');
   }
+}
+
+export async function getInstagramPublishStatus() {
+	const response = await authFetch(`${apiUrl}/instagram/status`, {
+		cache: 'no-store',
+	});
+
+	if (!response.ok) {
+		const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+		throw new Error(errorPayload?.message ?? 'Falha ao carregar integracao do Instagram.');
+	}
+
+	return (await response.json()) as InstagramPublishStatus;
+}
+
+export async function publishInstagramContent(payload: {
+	mode: 'feed' | 'story';
+	caption?: string;
+	imageUrl?: string;
+	file?: File | null;
+}) {
+	const formData = new FormData();
+	if (payload.caption?.trim()) {
+		formData.set('caption', payload.caption.trim());
+	}
+	if (payload.imageUrl?.trim()) {
+		formData.set('imageUrl', payload.imageUrl.trim());
+	}
+	if (payload.file) {
+		formData.set('file', payload.file);
+	}
+
+	const response = await authFetch(`${apiUrl}/instagram/${payload.mode}`, {
+		method: 'POST',
+		body: formData,
+	});
+
+	if (!response.ok) {
+		const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+		throw new Error(errorPayload?.message ?? 'Falha ao publicar no Instagram.');
+	}
+
+	return (await response.json()) as InstagramPublishResult;
 }
 
 export async function listQuickReplies(query?: string) {

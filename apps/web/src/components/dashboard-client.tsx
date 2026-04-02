@@ -55,6 +55,8 @@ import type {
   ChannelRecord,
   ConversationRecord,
   DashboardOverview,
+  InstagramPublishResult,
+  InstagramPublishStatus,
   MessageRecord,
   QuickReplyRecord,
   SaveQuickReplyPayload,
@@ -70,11 +72,13 @@ import {
   deleteQuickReply,
   autocompleteQuickReplies,
   getCurrentUser,
+  getInstagramPublishStatus,
   listAuditLogs,
   listQuickReplies,
   listUsers,
   listUserSessions,
   persistCsrfToken,
+  publishInstagramContent,
   revokeUserSession,
   signOutRequest,
   updateQuickReply,
@@ -329,7 +333,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [isLoadingContactKanban, setIsLoadingContactKanban] = useState(true);
   const [isLoadingContactBoards, setIsLoadingContactBoards] = useState(true);
   const [isLoadingContactCRM, setIsLoadingContactCRM] = useState(true);
-  const [settingsSection, setSettingsSection] = useState<'sessions' | 'users' | 'quickReplies' | 'audit'>('sessions');
+  const [settingsSection, setSettingsSection] = useState<'sessions' | 'users' | 'quickReplies' | 'audit' | 'instagram'>('sessions');
   const [workspaceUsers, setWorkspaceUsers] = useState<AuthUser[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [expandedUserSessionsId, setExpandedUserSessionsId] = useState<string | null>(null);
@@ -360,6 +364,14 @@ export function DashboardClient({ initialOverview }: Props) {
   const [isLoadingComposerQuickReplies, setIsLoadingComposerQuickReplies] = useState(false);
   const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
   const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
+  const [instagramStatus, setInstagramStatus] = useState<InstagramPublishStatus | null>(null);
+  const [isLoadingInstagramStatus, setIsLoadingInstagramStatus] = useState(false);
+  const [instagramPublishMode, setInstagramPublishMode] = useState<'feed' | 'story'>('feed');
+  const [instagramCaption, setInstagramCaption] = useState('');
+  const [instagramImageUrl, setInstagramImageUrl] = useState('');
+  const [instagramFile, setInstagramFile] = useState<File | null>(null);
+  const [instagramPreviewUrl, setInstagramPreviewUrl] = useState('');
+  const [lastInstagramPublish, setLastInstagramPublish] = useState<InstagramPublishResult | null>(null);
   const [draggedContactKey, setDraggedContactKey] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<ContactKanbanStageId | null>(null);
   const [showCreateContactModal, setShowCreateContactModal] = useState(false);
@@ -427,6 +439,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const canManageQuickReplies = authUser?.role === 'admin' || authUser?.role === 'supervisor';
   const canLoadWorkspaceUsers = authUser?.role === 'admin' || authUser?.role === 'supervisor';
   const canViewAuditLogs = authUser?.role === 'admin' || authUser?.role === 'supervisor';
+  const canManageInstagram = authUser?.role === 'admin' || authUser?.role === 'supervisor';
   const isWorkspaceBootstrapPending =
     isAuthReady &&
     (!hasLoadedInitialOverview ||
@@ -988,8 +1001,13 @@ export function DashboardClient({ initialOverview }: Props) {
 
     if (settingsSection === 'audit' && !canViewAuditLogs) {
       setSettingsSection('sessions');
+      return;
     }
-  }, [canManageQuickReplies, canViewAuditLogs, isAdminUser, settingsSection]);
+
+    if (settingsSection === 'instagram' && !canManageInstagram) {
+      setSettingsSection('sessions');
+    }
+  }, [canManageInstagram, canManageQuickReplies, canViewAuditLogs, isAdminUser, settingsSection]);
 
   useEffect(() => {
     if (!canManageBoards && showCreateBoardModal) {
@@ -1128,6 +1146,11 @@ export function DashboardClient({ initialOverview }: Props) {
   const loadAuditLogEntries = useCallback(async () => {
     const items = await listAuditLogs(60);
     setAuditLogs(items);
+  }, []);
+
+  const loadInstagramIntegrationStatus = useCallback(async () => {
+    const status = await getInstagramPublishStatus();
+    setInstagramStatus(status);
   }, []);
 
   const loadComposerQuickReplies = useCallback(async (query = '') => {
@@ -1299,6 +1322,45 @@ export function DashboardClient({ initialOverview }: Props) {
       .catch(() => undefined)
       .finally(() => setIsLoadingAuditLogs(false));
   }, [canViewAuditLogs, isAuthReady, loadAuditLogEntries, settingsSection]);
+
+  useEffect(() => {
+    if (!isAuthReady || !canManageInstagram) {
+      setInstagramStatus(null);
+      setIsLoadingInstagramStatus(false);
+      return;
+    }
+
+    if (settingsSection !== 'instagram') {
+      return;
+    }
+
+    setIsLoadingInstagramStatus(true);
+    void loadInstagramIntegrationStatus()
+      .catch(() => undefined)
+      .finally(() => setIsLoadingInstagramStatus(false));
+  }, [canManageInstagram, isAuthReady, loadInstagramIntegrationStatus, settingsSection]);
+
+  useEffect(() => {
+    if (!instagramFile) {
+      setInstagramPreviewUrl((current) => {
+        if (current.startsWith('blob:')) {
+          URL.revokeObjectURL(current);
+        }
+        return '';
+      });
+      return;
+    }
+
+    const preview = URL.createObjectURL(instagramFile);
+    setInstagramPreviewUrl((current) => {
+      if (current.startsWith('blob:')) {
+        URL.revokeObjectURL(current);
+      }
+      return preview;
+    });
+
+    return () => URL.revokeObjectURL(preview);
+  }, [instagramFile]);
 
   const fetchConversationMessages = useCallback(async (sessionId: string, conversationId: string) => {
     const response = await authenticatedFetch(
@@ -2581,6 +2643,56 @@ export function DashboardClient({ initialOverview }: Props) {
     setSelectedQuickReplyIds((current) => current.length === quickReplies.length ? [] : quickReplies.map((item) => item.id));
   }, [quickReplies]);
 
+  const submitInstagramPublish = useCallback(async () => {
+    if (!canManageInstagram) {
+      return;
+    }
+
+    if (!instagramFile && !instagramImageUrl.trim()) {
+      pushToast({
+        tone: 'error',
+        title: 'Imagem obrigatoria',
+        description: 'Envie um arquivo ou informe uma URL publica da imagem.',
+      });
+      return;
+    }
+
+    if (instagramPublishMode === 'feed' && !instagramCaption.trim()) {
+      pushToast({
+        tone: 'error',
+        title: 'Legenda obrigatoria',
+        description: 'Preencha a legenda antes de publicar no feed.',
+      });
+      return;
+    }
+
+    const published = await executeAction(async () => {
+      const result = await publishInstagramContent({
+        mode: instagramPublishMode,
+        caption: instagramPublishMode === 'feed' ? instagramCaption : '',
+        imageUrl: instagramImageUrl,
+        file: instagramFile,
+      });
+
+      setLastInstagramPublish(result);
+      setInstagramCaption('');
+      setInstagramImageUrl('');
+      setInstagramFile(null);
+      await loadInstagramIntegrationStatus().catch(() => undefined);
+    }, {
+      successMessage: instagramPublishMode === 'feed' ? 'Post publicado no Instagram' : 'Story publicado no Instagram',
+    });
+
+    if (published) {
+      setInstagramPreviewUrl((current) => {
+        if (current.startsWith('blob:')) {
+          URL.revokeObjectURL(current);
+        }
+        return '';
+      });
+    }
+  }, [canManageInstagram, executeAction, instagramCaption, instagramFile, instagramImageUrl, instagramPublishMode, loadInstagramIntegrationStatus, pushToast]);
+
   const createSession = () => {
     if (!canManageWorkspaceSessions) {
       return;
@@ -3548,6 +3660,8 @@ export function DashboardClient({ initialOverview }: Props) {
                 ? 'Gerenciar usuarios do workspace'
                 : settingsSection === 'quickReplies'
                   ? 'Respostas rapidas'
+                  : settingsSection === 'instagram'
+                    ? 'Publicador do Instagram'
                   : settingsSection === 'audit'
                     ? 'Audit log'
                   : 'Conectar e gerenciar sessoes'}
@@ -3557,6 +3671,8 @@ export function DashboardClient({ initialOverview }: Props) {
                 ? 'Controle acessos por role sem derrubar a sessao compartilhada do WhatsApp.'
                 : settingsSection === 'quickReplies'
                   ? 'Cadastre atalhos reutilizaveis para acelerar o atendimento e acione autocomplete no chat ao digitar /.'
+                  : settingsSection === 'instagram'
+                    ? 'Publique posts de feed e stories diretamente do dashboard usando a integracao da Instagram Graph API.'
                   : settingsSection === 'audit'
                     ? 'Acompanhe quem executou mudancas sensiveis no workspace, em que recurso e quando isso aconteceu.'
                   : 'Crie uma sessao operacional, gere QR code, reconecte numeros e acompanhe o estado da autenticacao sem sair do painel.'}
@@ -3589,6 +3705,15 @@ export function DashboardClient({ initialOverview }: Props) {
                   Quick replies
                 </button>
               ) : null}
+              {canManageInstagram ? (
+                <button
+                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'instagram' ? 'bg-pink-400 text-black' : 'text-[var(--muted)] hover:text-white'}`}
+                  onClick={() => setSettingsSection('instagram')}
+                  type="button"
+                >
+                  Instagram
+                </button>
+              ) : null}
               {canViewAuditLogs ? (
                 <button
                   className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'audit' ? 'bg-white text-black' : 'text-[var(--muted)] hover:text-white'}`}
@@ -3606,6 +3731,8 @@ export function DashboardClient({ initialOverview }: Props) {
                   ? loadWorkspaceUsers
                   : settingsSection === 'quickReplies'
                     ? () => loadQuickRepliesList(quickReplySearchTerm)
+                    : settingsSection === 'instagram'
+                      ? loadInstagramIntegrationStatus
                     : settingsSection === 'audit'
                       ? loadAuditLogEntries
                       : loadOverview,
@@ -3617,7 +3744,182 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
         </div>
 
-        {settingsSection === 'audit' ? (
+        {settingsSection === 'instagram' ? (
+          canManageInstagram ? (
+            <div className="grid gap-5 xl:grid-cols-[0.88fr_1.12fr]">
+              <div className="space-y-6">
+                <div className="glass-panel rounded-[30px] p-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                    Integracao
+                  </p>
+                  <div className="mt-5 grid gap-4 md:grid-cols-3 xl:grid-cols-1">
+                    <MetricCard
+                      compact
+                      detail={instagramStatus?.configured ? 'Credenciais do Graph API carregadas' : 'Configure token e user id no backend'}
+                      label="API"
+                      tone="primary"
+                      value={instagramStatus?.configured ? 'ok' : 'off'}
+                    />
+                    <MetricCard
+                      compact
+                      detail={instagramStatus?.imageHostingConfigured ? 'Upload local habilitado' : 'Sem chave de hospedagem de imagem'}
+                      label="Image host"
+                      tone="tertiary"
+                      value={instagramStatus?.imageHostingConfigured ? 'ok' : 'url'}
+                    />
+                    <MetricCard
+                      compact
+                      detail={instagramStatus?.userId ? 'Conta de destino configurada' : 'Aguardando configuracao'}
+                      label="Conta"
+                      tone="secondary"
+                      value={instagramStatus?.userId ? maskAccountId(instagramStatus.userId) : '--'}
+                    />
+                  </div>
+                </div>
+
+                <div className="glass-panel rounded-[30px] p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                      Ultima publicacao
+                    </p>
+                    {lastInstagramPublish ? (
+                      <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
+                        {lastInstagramPublish.mode}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-5">
+                    {lastInstagramPublish ? (
+                      <div className="rounded-[24px] border border-white/8 bg-white/4 p-4">
+                        <p className="text-sm font-semibold text-white">Publicacao enviada com sucesso</p>
+                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-300">
+                          <span className="rounded-full bg-white/5 px-2.5 py-1">publicado {lastInstagramPublish.publishedId}</span>
+                          <span className="rounded-full bg-white/5 px-2.5 py-1">container {lastInstagramPublish.creationId}</span>
+                        </div>
+                        <a className="mt-4 inline-flex text-sm text-[var(--primary)] underline-offset-4 hover:underline" href={lastInstagramPublish.imageUrl} rel="noreferrer" target="_blank">
+                          Abrir imagem publicada
+                        </a>
+                      </div>
+                    ) : (
+                      <EmptyStateCard
+                        description="Assim que voce publicar um feed ou story daqui, o ultimo resultado aparece nesta area com ids e imagem enviada."
+                        title="Nenhuma publicacao nesta sessao"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-panel rounded-[30px] p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                      Publicar conteudo
+                    </p>
+                    <p className="mt-2 text-sm text-[var(--muted)]">
+                      Use uma URL publica ou envie uma imagem local. Feed exige legenda; story publica apenas a arte.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 rounded-[1.35rem] border border-white/10 bg-white/5 p-2">
+                    {(['feed', 'story'] as const).map((mode) => {
+                      const active = instagramPublishMode === mode;
+                      return (
+                        <button
+                          key={mode}
+                          className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${active ? 'bg-[linear-gradient(135deg,#ff9ad7,#ff7cbc)] text-black shadow-[0_0_18px_rgba(255,124,188,0.24)]' : 'bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white'}`}
+                          onClick={() => setInstagramPublishMode(mode)}
+                          type="button"
+                        >
+                          {mode === 'feed' ? 'Feed' : 'Story'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mt-6 space-y-4">
+                  <div className="rounded-[24px] border border-dashed border-white/10 bg-black/10 p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+                      Imagem local
+                    </p>
+                    <input
+                      accept="image/*"
+                      className="mt-3 block w-full text-sm text-zinc-300 file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-4 file:py-2 file:text-sm file:text-white hover:file:bg-white/15"
+                      onChange={(event) => setInstagramFile(event.target.files?.[0] ?? null)}
+                      type="file"
+                    />
+                    <p className="mt-3 text-xs text-[var(--muted)]">
+                      Se nao houver chave de upload configurada no backend, use a URL publica abaixo.
+                    </p>
+                  </div>
+
+                  <Field
+                    onChange={setInstagramImageUrl}
+                    placeholder="Ou cole uma URL publica da imagem"
+                    value={instagramImageUrl}
+                  />
+
+                  {instagramPublishMode === 'feed' ? (
+                    <textarea
+                      className="min-h-[132px] w-full rounded-[24px] border-0 border-b-2 border-transparent bg-[var(--surface-high)] px-4 py-3 text-sm text-white outline-none transition focus:border-[var(--primary)]"
+                      onChange={(event) => setInstagramCaption(event.target.value)}
+                      placeholder="Legenda do post no feed"
+                      value={instagramCaption}
+                    />
+                  ) : (
+                    <div className="rounded-[24px] border border-white/8 bg-white/4 px-4 py-4 text-sm text-[var(--muted)]">
+                      Stories via API usam apenas a imagem. Texto deve estar na propria arte.
+                    </div>
+                  )}
+
+                  {instagramPreviewUrl || instagramImageUrl ? (
+                    <div className="overflow-hidden rounded-[28px] border border-white/8 bg-black/15 p-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        alt="Preview da publicacao"
+                        className="max-h-[360px] w-full rounded-[22px] object-contain"
+                        src={instagramPreviewUrl || instagramImageUrl}
+                      />
+                    </div>
+                  ) : null}
+
+                  {!isLoadingInstagramStatus && instagramStatus && !instagramStatus.configured ? (
+                    <div className="rounded-[24px] border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                      Configure `INSTAGRAM_GRAPH_ACCESS_TOKEN` e `INSTAGRAM_GRAPH_USER_ID` no backend para habilitar a publicacao.
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      className="rounded-full bg-[linear-gradient(135deg,#ff9ad7,#ff7cbc)] px-5 py-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={isPending || isLoadingInstagramStatus || !instagramStatus?.configured}
+                      onClick={() => void submitInstagramPublish()}
+                      type="button"
+                    >
+                      {instagramPublishMode === 'feed' ? 'Publicar no feed' : 'Publicar story'}
+                    </button>
+                    <button
+                      className="rounded-full bg-white/5 px-5 py-3 text-sm text-[var(--muted)] hover:text-white"
+                      onClick={() => {
+                        setInstagramCaption('');
+                        setInstagramImageUrl('');
+                        setInstagramFile(null);
+                      }}
+                      type="button"
+                    >
+                      Limpar formulario
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <EmptyStateCard
+              description="Apenas administradores e supervisores podem publicar no Instagram pelo dashboard."
+              title="Acesso restrito"
+            />
+          )
+        ) : settingsSection === 'audit' ? (
           canViewAuditLogs ? (
             <div className="grid gap-5 xl:grid-cols-[0.82fr_1.18fr]">
               <div className="glass-panel rounded-[30px] p-6">
@@ -4807,7 +5109,7 @@ function MetricCard({
   compact = false,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   detail: string;
   tone: 'primary' | 'secondary' | 'tertiary' | 'neutral';
   compact?: boolean;
@@ -6949,6 +7251,15 @@ function formatRoleLabel(role: AuthUser['role']) {
     default:
       return 'Atendente';
   }
+}
+
+function maskAccountId(value: string) {
+  const trimmed = value.trim();
+  if (trimmed.length <= 4) {
+    return trimmed || '--';
+  }
+
+  return `***${trimmed.slice(-4)}`;
 }
 
 function formatAuditDetailLabel(value: string) {

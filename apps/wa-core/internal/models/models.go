@@ -222,6 +222,19 @@ type CurrentUserResponse struct {
 	CSRFToken string   `json:"csrfToken"`
 }
 
+type InstagramPublishStatusResponse struct {
+	Configured             bool   `json:"configured"`
+	ImageHostingConfigured bool   `json:"imageHostingConfigured"`
+	UserID                 string `json:"userId,omitempty"`
+}
+
+type InstagramPublishResult struct {
+	Mode        string `json:"mode"`
+	CreationID  string `json:"creationId"`
+	PublishedID string `json:"publishedId"`
+	ImageURL    string `json:"imageUrl"`
+}
+
 type CreateUserRequest struct {
 	Email    string   `json:"email"`
 	Name     string   `json:"name"`

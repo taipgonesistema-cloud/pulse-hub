@@ -24,6 +24,7 @@ import (
 	waProto "google.golang.org/protobuf/encoding/protojson"
 
 	appauth "pulsehub/wa-core/internal/auth"
+	appinstagram "pulsehub/wa-core/internal/instagram"
 	"pulsehub/wa-core/internal/models"
 	appstore "pulsehub/wa-core/internal/store"
 	"pulsehub/wa-core/internal/whatsapp"
@@ -44,6 +45,7 @@ type AuthConfig struct {
 
 type API struct {
 	logger      *slog.Logger
+	instagram   *appinstagram.Client
 	manager     *whatsapp.Manager
 	hub         *ws.Hub
 	store       *appstore.Store
@@ -52,9 +54,10 @@ type API struct {
 	rateLimiter *rateLimiter
 }
 
-func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, store *appstore.Store, auth AuthConfig, security SecurityConfig) http.Handler {
+func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, store *appstore.Store, instagram *appinstagram.Client, auth AuthConfig, security SecurityConfig) http.Handler {
 	api := &API{
 		logger:      logger,
+		instagram:   instagram,
 		manager:     manager,
 		hub:         hub,
 		store:       store,
@@ -85,6 +88,9 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 		r.Post("/auth/users/{id}/sessions/{sessionId}/revoke", api.handleRevokeUserSession)
 		r.Post("/auth/users", api.handleCreateUser)
 		r.Put("/auth/users/{id}", api.handleUpdateUser)
+		r.Get("/instagram/status", api.handleInstagramStatus)
+		r.Post("/instagram/feed", api.handleInstagramFeedPublish)
+		r.Post("/instagram/story", api.handleInstagramStoryPublish)
 
 		r.Post("/session/init", api.handleSessionInit)
 		r.Get("/session/qr", api.handleSessionQR)
@@ -422,6 +428,59 @@ func (a *API) handleDashboardOverview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, http.StatusOK, overview)
+}
+
+func (a *API) handleInstagramStatus(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
+	respondJSON(w, http.StatusOK, a.instagram.Status())
+}
+
+func (a *API) handleInstagramFeedPublish(w http.ResponseWriter, r *http.Request) {
+	a.handleInstagramPublish(w, r, false)
+}
+
+func (a *API) handleInstagramStoryPublish(w http.ResponseWriter, r *http.Request) {
+	a.handleInstagramPublish(w, r, true)
+}
+
+func (a *API) handleInstagramPublish(w http.ResponseWriter, r *http.Request, story bool) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
+	request, err := parseInstagramPublishRequest(r)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": err.Error()})
+		return
+	}
+	request.Story = story
+
+	result, err := a.instagram.Publish(r.Context(), request)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": err.Error()})
+		return
+	}
+
+	mode := "feed"
+	if story {
+		mode = "story"
+	}
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "instagram.publish." + mode,
+		ResourceType: "instagram_media",
+		ResourceID:   result.PublishedID,
+		Summary:      "Publicou conteudo no Instagram pelo dashboard.",
+		Details: map[string]any{
+			"mode":       mode,
+			"creationId": result.CreationID,
+			"imageUrl":   result.ImageURL,
+		},
+	})
+
+	respondJSON(w, http.StatusOK, result)
 }
 
 func (a *API) handleListSessions(w http.ResponseWriter, r *http.Request) {
@@ -3121,6 +3180,41 @@ func parseMediaUpload(r *http.Request, fallbackJID string) (models.SendMediaRequ
 		Sticker:          sticker,
 		ReplyToMessageID: strings.TrimSpace(r.FormValue("replyToMessageId")),
 	}, nil
+}
+
+func parseInstagramPublishRequest(r *http.Request) (appinstagram.PublishRequest, error) {
+	if err := r.ParseMultipartForm(12 << 20); err != nil {
+		return appinstagram.PublishRequest{}, fmt.Errorf("parse multipart form: %w", err)
+	}
+
+	request := appinstagram.PublishRequest{
+		ImageURL: strings.TrimSpace(r.FormValue("imageUrl")),
+		Caption:  strings.TrimSpace(r.FormValue("caption")),
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		if request.ImageURL == "" {
+			return appinstagram.PublishRequest{}, errors.New("envie uma imagem ou informe uma URL publica")
+		}
+		return request, nil
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return appinstagram.PublishRequest{}, fmt.Errorf("read upload: %w", err)
+	}
+	mimeType := strings.TrimSpace(header.Header.Get("Content-Type"))
+	if mimeType == "" && len(data) > 0 {
+		mimeType = http.DetectContentType(data)
+	}
+
+	request.FileName = header.Filename
+	request.MimeType = mimeType
+	request.Data = data
+
+	return request, nil
 }
 
 func respondJSON(w http.ResponseWriter, status int, payload any) {

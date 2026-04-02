@@ -12,6 +12,7 @@ import (
 
 	appauth "pulsehub/wa-core/internal/auth"
 	httpapi "pulsehub/wa-core/internal/http"
+	appinstagram "pulsehub/wa-core/internal/instagram"
 	"pulsehub/wa-core/internal/models"
 	appstore "pulsehub/wa-core/internal/store"
 	"pulsehub/wa-core/internal/whatsapp"
@@ -19,21 +20,24 @@ import (
 )
 
 type config struct {
-	Port               string
-	DatabaseURL        string
-	RedisURL           string
-	WhatsmeowDSN       string
-	AuthEmail          string
-	AuthPassword       string
-	AuthName           string
-	AuthRole           string
-	AuthCookieName     string
-	AuthCSRFCookieName string
-	AuthCookieDomain   string
-	AuthCookieSecure   bool
-	AuthCookieSameSite http.SameSite
-	AllowedOrigins     []string
-	ShutdownTimeout    time.Duration
+	Port                     string
+	DatabaseURL              string
+	RedisURL                 string
+	WhatsmeowDSN             string
+	AuthEmail                string
+	AuthPassword             string
+	AuthName                 string
+	AuthRole                 string
+	AuthCookieName           string
+	AuthCSRFCookieName       string
+	AuthCookieDomain         string
+	AuthCookieSecure         bool
+	AuthCookieSameSite       http.SameSite
+	InstagramAccessToken     string
+	InstagramUserID          string
+	InstagramImageHostAPIKey string
+	AllowedOrigins           []string
+	ShutdownTimeout          time.Duration
 }
 
 func main() {
@@ -77,12 +81,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	instagramClient := appinstagram.NewClient(appinstagram.Config{
+		AccessToken:     cfg.InstagramAccessToken,
+		UserID:          cfg.InstagramUserID,
+		ImageHostAPIKey: cfg.InstagramImageHostAPIKey,
+	})
+
 	if err := manager.Start(ctx); err != nil {
 		logger.Error("start whatsapp manager failed", "error", err)
 		os.Exit(1)
 	}
 
-	router := httpapi.NewRouter(logger, manager, hub, store, httpapi.AuthConfig{
+	router := httpapi.NewRouter(logger, manager, hub, store, instagramClient, httpapi.AuthConfig{
 		Email:          cfg.AuthEmail,
 		Password:       cfg.AuthPassword,
 		Name:           cfg.AuthName,
@@ -131,21 +141,24 @@ func main() {
 
 func loadConfig() config {
 	return config{
-		Port:               envOrDefault("PORT", envOrDefault("SERVER_PORT", "3333")),
-		DatabaseURL:        envOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable"),
-		RedisURL:           envOrDefault("REDIS_URL", "redis://localhost:6379/0"),
-		WhatsmeowDSN:       envOrDefault("WHATSMEOW_DATABASE_URL", envOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable")),
-		AuthEmail:          envOrDefault("AUTH_SEED_EMAIL", "admin@pulsehub.local"),
-		AuthPassword:       envOrDefault("AUTH_SEED_PASSWORD", "PulseHub123!"),
-		AuthName:           envOrDefault("AUTH_SEED_NAME", "Pulse Hub Admin"),
-		AuthRole:           envOrDefault("AUTH_SEED_ROLE", "admin"),
-		AuthCookieName:     envOrDefault("AUTH_COOKIE_NAME", "pulse_hub_session"),
-		AuthCSRFCookieName: envOrDefault("AUTH_CSRF_COOKIE_NAME", "pulse_hub_csrf"),
-		AuthCookieDomain:   strings.TrimSpace(os.Getenv("AUTH_COOKIE_DOMAIN")),
-		AuthCookieSecure:   parseEnvBool("AUTH_COOKIE_SECURE", false),
-		AuthCookieSameSite: parseSameSite(os.Getenv("AUTH_COOKIE_SAME_SITE")),
-		AllowedOrigins:     loadAllowedOrigins(),
-		ShutdownTimeout:    12 * time.Second,
+		Port:                     envOrDefault("PORT", envOrDefault("SERVER_PORT", "3333")),
+		DatabaseURL:              envOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable"),
+		RedisURL:                 envOrDefault("REDIS_URL", "redis://localhost:6379/0"),
+		WhatsmeowDSN:             envOrDefault("WHATSMEOW_DATABASE_URL", envOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable")),
+		AuthEmail:                envOrDefault("AUTH_SEED_EMAIL", "admin@pulsehub.local"),
+		AuthPassword:             envOrDefault("AUTH_SEED_PASSWORD", "PulseHub123!"),
+		AuthName:                 envOrDefault("AUTH_SEED_NAME", "Pulse Hub Admin"),
+		AuthRole:                 envOrDefault("AUTH_SEED_ROLE", "admin"),
+		AuthCookieName:           envOrDefault("AUTH_COOKIE_NAME", "pulse_hub_session"),
+		AuthCSRFCookieName:       envOrDefault("AUTH_CSRF_COOKIE_NAME", "pulse_hub_csrf"),
+		AuthCookieDomain:         strings.TrimSpace(os.Getenv("AUTH_COOKIE_DOMAIN")),
+		AuthCookieSecure:         parseEnvBool("AUTH_COOKIE_SECURE", false),
+		AuthCookieSameSite:       parseSameSite(os.Getenv("AUTH_COOKIE_SAME_SITE")),
+		InstagramAccessToken:     envOrDefault("INSTAGRAM_GRAPH_ACCESS_TOKEN", ""),
+		InstagramUserID:          envOrDefault("INSTAGRAM_GRAPH_USER_ID", ""),
+		InstagramImageHostAPIKey: envOrDefault("INSTAGRAM_IMAGE_HOST_API_KEY", envOrDefault("FREEIMAGE_HOST_API_KEY", "")),
+		AllowedOrigins:           loadAllowedOrigins(),
+		ShutdownTimeout:          12 * time.Second,
 	}
 }
 
