@@ -109,27 +109,11 @@ func (a *API) rateLimit(next http.Handler) http.Handler {
 
 func classifyRateLimitRule(r *http.Request) (rateLimitRule, string) {
 	path := r.URL.Path
-	method := strings.ToUpper(strings.TrimSpace(r.Method))
-
-	if method == http.MethodOptions {
-		return rateLimitRule{}, "options"
-	}
-	if path == "/health" {
-		return rateLimitRule{Limit: 120, Window: time.Minute}, "health"
-	}
 	if path == "/auth/sign-in" {
-		return rateLimitRule{Limit: 5, Window: 10 * time.Minute}, "auth-sign-in"
+		return rateLimitRule{Limit: 50, Window: 10 * time.Minute}, "auth-sign-in"
 	}
-	if path == "/ws" || isProtectedAssetPath(path) {
-		return rateLimitRule{Limit: 120, Window: time.Minute}, "protected-assets"
-	}
-	if method == http.MethodGet {
-		return rateLimitRule{Limit: 240, Window: time.Minute}, "read"
-	}
-	if strings.Contains(path, "/messages") || strings.Contains(path, "/media") {
-		return rateLimitRule{Limit: 30, Window: time.Minute}, "messaging-write"
-	}
-	return rateLimitRule{Limit: 45, Window: time.Minute}, "write"
+
+	return rateLimitRule{}, "disabled"
 }
 
 func requestClientIP(r *http.Request) string {
