@@ -74,6 +74,7 @@ import {
   listQuickReplies,
   listUsers,
   listUserSessions,
+  persistCsrfToken,
   revokeUserSession,
   signOutRequest,
   updateQuickReply,
@@ -913,11 +914,12 @@ export function DashboardClient({ initialOverview }: Props) {
     let cancelled = false;
 
     void getCurrentUser()
-      .then((user) => {
+      .then((result) => {
         if (cancelled) {
           return;
         }
-        setAuthUser(user);
+        persistCsrfToken(result.csrfToken);
+        setAuthUser(result.user);
         setIsAuthReady(true);
       })
       .catch(() => {

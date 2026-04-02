@@ -36,6 +36,7 @@ type AuthConfig struct {
 	Name           string
 	Role           string
 	CookieName     string
+	CSRFCookieName string
 	CookieDomain   string
 	CookieSecure   bool
 	CookieSameSite http.SameSite
@@ -145,7 +146,7 @@ func (a *API) cors(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Max-Age", "600")
 		if r.Method == http.MethodOptions {
@@ -387,10 +388,17 @@ func (a *API) handleSignIn(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	csrfToken, err := appauth.GenerateToken()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
 	a.setSessionCookie(w, token)
+	a.setCSRFCookie(w, csrfToken)
 
 	response := models.SignInResponse{
-		User: *user,
+		User:      *user,
+		CSRFToken: csrfToken,
 	}
 	a.recordAuditLog(r, models.AuditLogRecord{
 		ActorUserID:  user.ID,

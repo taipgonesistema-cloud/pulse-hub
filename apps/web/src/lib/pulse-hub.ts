@@ -192,6 +192,12 @@ export type SignInPayload = {
 
 export type SignInResponse = {
   user: AuthUser;
+  csrfToken: string;
+};
+
+export type CurrentUserResponse = {
+  user: AuthUser;
+  csrfToken: string;
 };
 
 export type CreateUserPayload = {
@@ -292,21 +298,58 @@ export const fallbackOverview: DashboardOverview = {
 };
 
 export const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333';
+export const authCsrfStorageKey = 'pulse-hub.auth-csrf';
 
 export function getStoredAuthUser() {
   return null;
 }
 
+export function getStoredCsrfToken() {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  return window.localStorage.getItem(authCsrfStorageKey) ?? '';
+}
+
+export function persistCsrfToken(token: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (!token) {
+    window.localStorage.removeItem(authCsrfStorageKey);
+    return;
+  }
+
+  window.localStorage.setItem(authCsrfStorageKey, token);
+}
+
 export function persistAuthSession(result: SignInResponse) {
-  void result;
+  persistCsrfToken(result.csrfToken);
 }
 
 export function clearStoredAuthSession() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.removeItem(authCsrfStorageKey);
 }
 
 export async function authFetch(input: string, init?: RequestInit) {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const headers = new Headers(init?.headers ?? undefined);
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const csrfToken = getStoredCsrfToken();
+    if (csrfToken) {
+      headers.set('X-CSRF-Token', csrfToken);
+    }
+  }
+
   return fetch(input, {
     ...init,
+    headers,
     credentials: init?.credentials ?? 'include',
   });
 }
@@ -373,7 +416,7 @@ export async function getCurrentUser() {
     throw new Error('Falha ao validar sessao atual.');
   }
 
-  return (await response.json()) as AuthUser;
+  return (await response.json()) as CurrentUserResponse;
 }
 
 export async function signOutRequest() {

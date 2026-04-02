@@ -28,6 +28,7 @@ type config struct {
 	AuthName           string
 	AuthRole           string
 	AuthCookieName     string
+	AuthCSRFCookieName string
 	AuthCookieDomain   string
 	AuthCookieSecure   bool
 	AuthCookieSameSite http.SameSite
@@ -87,6 +88,7 @@ func main() {
 		Name:           cfg.AuthName,
 		Role:           cfg.AuthRole,
 		CookieName:     cfg.AuthCookieName,
+		CSRFCookieName: cfg.AuthCSRFCookieName,
 		CookieDomain:   cfg.AuthCookieDomain,
 		CookieSecure:   cfg.AuthCookieSecure,
 		CookieSameSite: cfg.AuthCookieSameSite,
@@ -138,6 +140,7 @@ func loadConfig() config {
 		AuthName:           envOrDefault("AUTH_SEED_NAME", "Pulse Hub Admin"),
 		AuthRole:           envOrDefault("AUTH_SEED_ROLE", "admin"),
 		AuthCookieName:     envOrDefault("AUTH_COOKIE_NAME", "pulse_hub_session"),
+		AuthCSRFCookieName: envOrDefault("AUTH_CSRF_COOKIE_NAME", "pulse_hub_csrf"),
 		AuthCookieDomain:   strings.TrimSpace(os.Getenv("AUTH_COOKIE_DOMAIN")),
 		AuthCookieSecure:   parseEnvBool("AUTH_COOKIE_SECURE", false),
 		AuthCookieSameSite: parseSameSite(os.Getenv("AUTH_COOKIE_SAME_SITE")),

@@ -213,7 +213,13 @@ type SignInRequest struct {
 }
 
 type SignInResponse struct {
-	User AuthUser `json:"user"`
+	User      AuthUser `json:"user"`
+	CSRFToken string   `json:"csrfToken"`
+}
+
+type CurrentUserResponse struct {
+	User      AuthUser `json:"user"`
+	CSRFToken string   `json:"csrfToken"`
 }
 
 type CreateUserRequest struct {

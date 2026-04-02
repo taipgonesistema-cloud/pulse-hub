@@ -25,10 +25,12 @@ type authContextKey string
 
 const currentAuthContextKey authContextKey = "pulsehub.auth"
 const authCookieConfigContextKey authContextKey = "pulsehub.auth.cookie-name"
+const csrfCookieConfigContextKey authContextKey = "pulsehub.auth.csrf-cookie-name"
 
 func (a *API) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(context.WithValue(r.Context(), authCookieConfigContextKey, cookieNameOrDefault(a.auth.CookieName)))
+		r = r.WithContext(context.WithValue(r.Context(), csrfCookieConfigContextKey, csrfCookieNameOrDefault(a.auth.CSRFCookieName)))
 		token := authTokenFromRequest(r)
 		if token == "" {
 			respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
@@ -43,7 +45,12 @@ func (a *API) requireAuth(next http.Handler) http.Handler {
 		}
 		if user == nil || session == nil || !user.IsActive || authSessionExpired(*session) {
 			a.clearSessionCookie(w)
+			a.clearCSRFCookie(w)
 			respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Sessao invalida ou expirada."})
+			return
+		}
+		if requestUsesCookieAuth(r) && requiresCSRFMitigation(r.Method) && !validateCSRFTokens(r) {
+			respondJSON(w, http.StatusForbidden, map[string]any{"message": "Falha na validacao CSRF."})
 			return
 		}
 
@@ -80,6 +87,13 @@ func authCookieNameFromRequest(r *http.Request) string {
 	return "pulse_hub_session"
 }
 
+func csrfCookieNameFromRequest(r *http.Request) string {
+	if value, ok := r.Context().Value(csrfCookieConfigContextKey).(string); ok && strings.TrimSpace(value) != "" {
+		return strings.TrimSpace(value)
+	}
+	return "pulse_hub_csrf"
+}
+
 func (a *API) setSessionCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieNameOrDefault(a.auth.CookieName),
@@ -87,6 +101,20 @@ func (a *API) setSessionCookie(w http.ResponseWriter, token string) {
 		Path:     "/",
 		Domain:   strings.TrimSpace(a.auth.CookieDomain),
 		HttpOnly: true,
+		Secure:   a.auth.CookieSecure,
+		SameSite: a.auth.CookieSameSite,
+		MaxAge:   int(authSessionDuration.Seconds()),
+		Expires:  time.Now().UTC().Add(authSessionDuration),
+	})
+}
+
+func (a *API) setCSRFCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     csrfCookieNameOrDefault(a.auth.CSRFCookieName),
+		Value:    token,
+		Path:     "/",
+		Domain:   strings.TrimSpace(a.auth.CookieDomain),
+		HttpOnly: false,
 		Secure:   a.auth.CookieSecure,
 		SameSite: a.auth.CookieSameSite,
 		MaxAge:   int(authSessionDuration.Seconds()),
@@ -108,11 +136,59 @@ func (a *API) clearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
+func (a *API) clearCSRFCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     csrfCookieNameOrDefault(a.auth.CSRFCookieName),
+		Value:    "",
+		Path:     "/",
+		Domain:   strings.TrimSpace(a.auth.CookieDomain),
+		HttpOnly: false,
+		Secure:   a.auth.CookieSecure,
+		SameSite: a.auth.CookieSameSite,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0).UTC(),
+	})
+}
+
 func cookieNameOrDefault(value string) string {
 	if strings.TrimSpace(value) == "" {
 		return "pulse_hub_session"
 	}
 	return strings.TrimSpace(value)
+}
+
+func csrfCookieNameOrDefault(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "pulse_hub_csrf"
+	}
+	return strings.TrimSpace(value)
+}
+
+func requestUsesCookieAuth(r *http.Request) bool {
+	if authorization := strings.TrimSpace(r.Header.Get("Authorization")); strings.HasPrefix(strings.ToLower(authorization), "bearer ") {
+		return false
+	}
+	_, err := r.Cookie(authCookieNameFromRequest(r))
+	return err == nil
+}
+
+func requiresCSRFMitigation(method string) bool {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	default:
+		return true
+	}
+}
+
+func validateCSRFTokens(r *http.Request) bool {
+	cookie, err := r.Cookie(csrfCookieNameFromRequest(r))
+	if err != nil {
+		return false
+	}
+	headerToken := strings.TrimSpace(r.Header.Get("X-CSRF-Token"))
+	cookieToken := strings.TrimSpace(cookie.Value)
+	return headerToken != "" && cookieToken != "" && headerToken == cookieToken
 }
 
 func authSessionExpired(session models.AuthSession) bool {
@@ -166,13 +242,27 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
 		return
 	}
-	respondJSON(w, http.StatusOK, auth.user)
+	csrfToken := ""
+	if cookie, err := r.Cookie(csrfCookieNameFromRequest(r)); err == nil {
+		csrfToken = strings.TrimSpace(cookie.Value)
+	}
+	if csrfToken == "" {
+		generated, err := appauth.GenerateToken()
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, err)
+			return
+		}
+		csrfToken = generated
+		a.setCSRFCookie(w, csrfToken)
+	}
+	respondJSON(w, http.StatusOK, models.CurrentUserResponse{User: auth.user, CSRFToken: csrfToken})
 }
 
 func (a *API) handleSignOut(w http.ResponseWriter, r *http.Request) {
 	auth := currentAuth(r)
 	if auth == nil {
 		a.clearSessionCookie(w)
+		a.clearCSRFCookie(w)
 		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
 		return
 	}
@@ -181,6 +271,7 @@ func (a *API) handleSignOut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.clearSessionCookie(w)
+	a.clearCSRFCookie(w)
 	a.recordAuditLog(r, models.AuditLogRecord{
 		Action:       "auth.session.sign_out",
 		ResourceType: "auth_session",
