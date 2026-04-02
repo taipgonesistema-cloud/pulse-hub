@@ -192,7 +192,6 @@ export type SignInPayload = {
 
 export type SignInResponse = {
   user: AuthUser;
-  token: string;
 };
 
 export type CreateUserPayload = {
@@ -294,71 +293,26 @@ export const fallbackOverview: DashboardOverview = {
 
 export const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3333';
 
-export const authTokenStorageKey = 'pulse-hub.auth-token';
-export const authUserStorageKey = 'pulse-hub.auth-user';
-
-export function getStoredAuthToken() {
-  if (typeof window === 'undefined') {
-    return '';
-  }
-
-  return window.localStorage.getItem(authTokenStorageKey) ?? '';
-}
-
 export function getStoredAuthUser() {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const rawUser = window.localStorage.getItem(authUserStorageKey);
-  if (!rawUser) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(rawUser) as AuthUser;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 export function persistAuthSession(result: SignInResponse) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(authTokenStorageKey, result.token);
-  window.localStorage.setItem(authUserStorageKey, JSON.stringify(result.user));
+  void result;
 }
 
 export function clearStoredAuthSession() {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.removeItem(authTokenStorageKey);
-  window.localStorage.removeItem(authUserStorageKey);
 }
 
 export async function authFetch(input: string, init?: RequestInit) {
-  const token = getStoredAuthToken();
-  const headers = new Headers(init?.headers ?? undefined);
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-
   return fetch(input, {
     ...init,
-    headers,
+    credentials: init?.credentials ?? 'include',
   });
 }
 
 export function buildAuthenticatedWebSocketUrl(baseUrl: string) {
-  const token = getStoredAuthToken();
   const url = new URL(baseUrl);
-  if (token) {
-    url.searchParams.set('token', token);
-  }
 
   if (url.protocol === 'https:') {
     url.protocol = 'wss:';
@@ -373,6 +327,7 @@ export async function getDashboardOverview() {
   try {
     const response = await fetch(`${apiUrl}/dashboard/overview`, {
       cache: 'no-store',
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -387,6 +342,7 @@ export async function getDashboardOverview() {
 
 export async function signIn(payload: SignInPayload) {
   const response = await fetch(`${apiUrl}/auth/sign-in`, {
+    credentials: 'include',
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

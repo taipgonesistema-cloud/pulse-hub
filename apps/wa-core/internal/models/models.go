@@ -213,8 +213,7 @@ type SignInRequest struct {
 }
 
 type SignInResponse struct {
-	User  AuthUser `json:"user"`
-	Token string   `json:"token"`
+	User AuthUser `json:"user"`
 }
 
 type CreateUserRequest struct {

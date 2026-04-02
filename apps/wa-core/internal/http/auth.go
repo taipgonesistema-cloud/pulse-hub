@@ -24,9 +24,11 @@ type authContextValue struct {
 type authContextKey string
 
 const currentAuthContextKey authContextKey = "pulsehub.auth"
+const authCookieConfigContextKey authContextKey = "pulsehub.auth.cookie-name"
 
 func (a *API) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(context.WithValue(r.Context(), authCookieConfigContextKey, cookieNameOrDefault(a.auth.CookieName)))
 		token := authTokenFromRequest(r)
 		if token == "" {
 			respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
@@ -40,6 +42,7 @@ func (a *API) requireAuth(next http.Handler) http.Handler {
 			return
 		}
 		if user == nil || session == nil || !user.IsActive || authSessionExpired(*session) {
+			a.clearSessionCookie(w)
 			respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Sessao invalida ou expirada."})
 			return
 		}
@@ -57,11 +60,59 @@ func (a *API) requireAuth(next http.Handler) http.Handler {
 }
 
 func authTokenFromRequest(r *http.Request) string {
+	if cookie, err := r.Cookie(authCookieNameFromRequest(r)); err == nil {
+		if token := strings.TrimSpace(cookie.Value); token != "" {
+			return token
+		}
+	}
+
 	if authorization := strings.TrimSpace(r.Header.Get("Authorization")); strings.HasPrefix(strings.ToLower(authorization), "bearer ") {
 		return strings.TrimSpace(authorization[len("Bearer "):])
 	}
 
-	return strings.TrimSpace(r.URL.Query().Get("token"))
+	return ""
+}
+
+func authCookieNameFromRequest(r *http.Request) string {
+	if value, ok := r.Context().Value(authCookieConfigContextKey).(string); ok && strings.TrimSpace(value) != "" {
+		return strings.TrimSpace(value)
+	}
+	return "pulse_hub_session"
+}
+
+func (a *API) setSessionCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     cookieNameOrDefault(a.auth.CookieName),
+		Value:    token,
+		Path:     "/",
+		Domain:   strings.TrimSpace(a.auth.CookieDomain),
+		HttpOnly: true,
+		Secure:   a.auth.CookieSecure,
+		SameSite: a.auth.CookieSameSite,
+		MaxAge:   int(authSessionDuration.Seconds()),
+		Expires:  time.Now().UTC().Add(authSessionDuration),
+	})
+}
+
+func (a *API) clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     cookieNameOrDefault(a.auth.CookieName),
+		Value:    "",
+		Path:     "/",
+		Domain:   strings.TrimSpace(a.auth.CookieDomain),
+		HttpOnly: true,
+		Secure:   a.auth.CookieSecure,
+		SameSite: a.auth.CookieSameSite,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0).UTC(),
+	})
+}
+
+func cookieNameOrDefault(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "pulse_hub_session"
+	}
+	return strings.TrimSpace(value)
 }
 
 func authSessionExpired(session models.AuthSession) bool {
@@ -121,6 +172,7 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleSignOut(w http.ResponseWriter, r *http.Request) {
 	auth := currentAuth(r)
 	if auth == nil {
+		a.clearSessionCookie(w)
 		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
 		return
 	}
@@ -128,6 +180,13 @@ func (a *API) handleSignOut(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.clearSessionCookie(w)
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "auth.session.sign_out",
+		ResourceType: "auth_session",
+		ResourceID:   auth.session.ID,
+		Summary:      "Encerrou a propria sessao no workspace.",
+	})
 	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -370,16 +429,13 @@ func (a *API) handleRevokeUserSession(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) recordAuditLog(r *http.Request, item models.AuditLogRecord) {
 	auth := currentAuth(r)
-	if auth == nil {
-		return
-	}
-	if item.ActorUserID == "" {
+	if auth != nil && item.ActorUserID == "" {
 		item.ActorUserID = auth.user.ID
 	}
-	if item.ActorName == "" {
+	if auth != nil && item.ActorName == "" {
 		item.ActorName = auth.user.Name
 	}
-	if item.ActorRole == "" {
+	if auth != nil && item.ActorRole == "" {
 		item.ActorRole = auth.user.Role
 	}
 	if item.RemoteAddr == "" {
@@ -393,6 +449,9 @@ func (a *API) recordAuditLog(r *http.Request, item models.AuditLogRecord) {
 	}
 	if item.Details == nil {
 		item.Details = map[string]any{}
+	}
+	if item.ActorUserID == "" && item.ActorName == "" && item.ActorRole == "" {
+		return
 	}
 
 	if err := a.store.SaveAuditLog(r.Context(), item); err != nil {

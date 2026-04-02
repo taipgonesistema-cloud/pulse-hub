@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,15 +19,20 @@ import (
 )
 
 type config struct {
-	Port            string
-	DatabaseURL     string
-	RedisURL        string
-	WhatsmeowDSN    string
-	AuthEmail       string
-	AuthPassword    string
-	AuthName        string
-	AuthRole        string
-	ShutdownTimeout time.Duration
+	Port               string
+	DatabaseURL        string
+	RedisURL           string
+	WhatsmeowDSN       string
+	AuthEmail          string
+	AuthPassword       string
+	AuthName           string
+	AuthRole           string
+	AuthCookieName     string
+	AuthCookieDomain   string
+	AuthCookieSecure   bool
+	AuthCookieSameSite http.SameSite
+	AllowedOrigins     []string
+	ShutdownTimeout    time.Duration
 }
 
 func main() {
@@ -76,16 +82,26 @@ func main() {
 	}
 
 	router := httpapi.NewRouter(logger, manager, hub, store, httpapi.AuthConfig{
-		Email:    cfg.AuthEmail,
-		Password: cfg.AuthPassword,
-		Name:     cfg.AuthName,
-		Role:     cfg.AuthRole,
+		Email:          cfg.AuthEmail,
+		Password:       cfg.AuthPassword,
+		Name:           cfg.AuthName,
+		Role:           cfg.AuthRole,
+		CookieName:     cfg.AuthCookieName,
+		CookieDomain:   cfg.AuthCookieDomain,
+		CookieSecure:   cfg.AuthCookieSecure,
+		CookieSameSite: cfg.AuthCookieSameSite,
+	}, httpapi.SecurityConfig{
+		AllowedOrigins: cfg.AllowedOrigins,
 	})
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           router,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       20 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       90 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	go func() {
@@ -113,16 +129,60 @@ func main() {
 
 func loadConfig() config {
 	return config{
-		Port:            envOrDefault("PORT", envOrDefault("SERVER_PORT", "3333")),
-		DatabaseURL:     envOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable"),
-		RedisURL:        envOrDefault("REDIS_URL", "redis://localhost:6379/0"),
-		WhatsmeowDSN:    envOrDefault("WHATSMEOW_DATABASE_URL", envOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable")),
-		AuthEmail:       envOrDefault("AUTH_SEED_EMAIL", "admin@pulsehub.local"),
-		AuthPassword:    envOrDefault("AUTH_SEED_PASSWORD", "PulseHub123!"),
-		AuthName:        envOrDefault("AUTH_SEED_NAME", "Pulse Hub Admin"),
-		AuthRole:        envOrDefault("AUTH_SEED_ROLE", "admin"),
-		ShutdownTimeout: 12 * time.Second,
+		Port:               envOrDefault("PORT", envOrDefault("SERVER_PORT", "3333")),
+		DatabaseURL:        envOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable"),
+		RedisURL:           envOrDefault("REDIS_URL", "redis://localhost:6379/0"),
+		WhatsmeowDSN:       envOrDefault("WHATSMEOW_DATABASE_URL", envOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable")),
+		AuthEmail:          envOrDefault("AUTH_SEED_EMAIL", "admin@pulsehub.local"),
+		AuthPassword:       envOrDefault("AUTH_SEED_PASSWORD", "PulseHub123!"),
+		AuthName:           envOrDefault("AUTH_SEED_NAME", "Pulse Hub Admin"),
+		AuthRole:           envOrDefault("AUTH_SEED_ROLE", "admin"),
+		AuthCookieName:     envOrDefault("AUTH_COOKIE_NAME", "pulse_hub_session"),
+		AuthCookieDomain:   strings.TrimSpace(os.Getenv("AUTH_COOKIE_DOMAIN")),
+		AuthCookieSecure:   parseEnvBool("AUTH_COOKIE_SECURE", false),
+		AuthCookieSameSite: parseSameSite(os.Getenv("AUTH_COOKIE_SAME_SITE")),
+		AllowedOrigins:     loadAllowedOrigins(),
+		ShutdownTimeout:    12 * time.Second,
 	}
+}
+
+func loadAllowedOrigins() []string {
+	configured := envOrDefault(
+		"CORS_ALLOWED_ORIGINS",
+		envOrDefault(
+			"APP_ORIGIN",
+			envOrDefault(
+				"FRONTEND_URL",
+				envOrDefault("NEXT_PUBLIC_APP_URL", ""),
+			),
+		),
+	)
+	if configured == "" {
+		return []string{
+			"http://localhost:3000",
+			"http://127.0.0.1:3000",
+			"http://localhost:3001",
+			"http://127.0.0.1:3001",
+			"http://localhost:3002",
+			"http://127.0.0.1:3002",
+		}
+	}
+
+	parts := strings.Split(configured, ",")
+	origins := make([]string, 0, len(parts))
+	seen := make(map[string]struct{}, len(parts))
+	for _, part := range parts {
+		origin := strings.TrimRight(strings.TrimSpace(part), "/")
+		if origin == "" {
+			continue
+		}
+		if _, ok := seen[origin]; ok {
+			continue
+		}
+		seen[origin] = struct{}{}
+		origins = append(origins, origin)
+	}
+	return origins
 }
 
 func envOrDefault(key, fallback string) string {
@@ -130,4 +190,30 @@ func envOrDefault(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func parseEnvBool(key string, fallback bool) bool {
+	value, ok := os.LookupEnv(key)
+	if !ok || strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
+}
+
+func parseSameSite(value string) http.SameSite {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "strict":
+		return http.SameSiteStrictMode
+	case "none":
+		return http.SameSiteNoneMode
+	default:
+		return http.SameSiteLaxMode
+	}
 }

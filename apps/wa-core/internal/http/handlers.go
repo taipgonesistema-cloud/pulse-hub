@@ -31,34 +31,44 @@ import (
 )
 
 type AuthConfig struct {
-	Email    string
-	Password string
-	Name     string
-	Role     string
+	Email          string
+	Password       string
+	Name           string
+	Role           string
+	CookieName     string
+	CookieDomain   string
+	CookieSecure   bool
+	CookieSameSite http.SameSite
 }
 
 type API struct {
-	logger  *slog.Logger
-	manager *whatsapp.Manager
-	hub     *ws.Hub
-	store   *appstore.Store
-	auth    AuthConfig
+	logger      *slog.Logger
+	manager     *whatsapp.Manager
+	hub         *ws.Hub
+	store       *appstore.Store
+	auth        AuthConfig
+	security    SecurityConfig
+	rateLimiter *rateLimiter
 }
 
-func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, store *appstore.Store, auth AuthConfig) http.Handler {
+func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, store *appstore.Store, auth AuthConfig, security SecurityConfig) http.Handler {
 	api := &API{
-		logger:  logger,
-		manager: manager,
-		hub:     hub,
-		store:   store,
-		auth:    auth,
+		logger:      logger,
+		manager:     manager,
+		hub:         hub,
+		store:       store,
+		auth:        auth,
+		security:    security,
+		rateLimiter: newRateLimiter(),
 	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
+	r.Use(api.securityHeaders)
 	r.Use(api.cors)
+	r.Use(api.rateLimit)
 
 	r.Get("/health", api.handleHealth)
 	r.Post("/auth/sign-in", api.handleSignIn)
@@ -121,15 +131,41 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 
 func (a *API) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := normalizeOrigin(r.Header.Get("Origin"))
+		if origin != "" {
+			w.Header().Add("Vary", "Origin")
+			if !a.isAllowedOrigin(origin) {
+				if r.Method == http.MethodOptions {
+					respondJSON(w, http.StatusForbidden, map[string]any{"message": "Origem nao permitida."})
+					return
+				}
+				respondJSON(w, http.StatusForbidden, map[string]any{"message": "Origem nao permitida."})
+				return
+			}
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Max-Age", "600")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func (a *API) isAllowedOrigin(origin string) bool {
+	if origin == "" {
+		return true
+	}
+	for _, candidate := range a.security.AllowedOrigins {
+		if normalizeOrigin(candidate) == origin {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *API) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -351,11 +387,22 @@ func (a *API) handleSignIn(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.setSessionCookie(w, token)
 
 	response := models.SignInResponse{
-		User:  *user,
-		Token: token,
+		User: *user,
 	}
+	a.recordAuditLog(r, models.AuditLogRecord{
+		ActorUserID:  user.ID,
+		ActorName:    user.Name,
+		ActorRole:    user.Role,
+		Action:       "auth.session.sign_in",
+		ResourceType: "auth_session",
+		Summary:      "Iniciou uma nova sessao no workspace.",
+		Details: map[string]any{
+			"sessionExpiresAt": time.Now().UTC().Add(authSessionDuration).Format(time.RFC3339),
+		},
+	})
 
 	respondJSON(w, http.StatusOK, response)
 }

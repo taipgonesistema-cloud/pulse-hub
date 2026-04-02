@@ -70,8 +70,6 @@ import {
   deleteQuickReply,
   autocompleteQuickReplies,
   getCurrentUser,
-  getStoredAuthToken,
-  getStoredAuthUser,
   listAuditLogs,
   listQuickReplies,
   listUsers,
@@ -912,19 +910,6 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   useEffect(() => {
-    const token = getStoredAuthToken();
-    const cachedUser = getStoredAuthUser();
-
-    if (!token) {
-      clearStoredAuthSession();
-      router.replace('/login');
-      return;
-    }
-
-    if (cachedUser) {
-      setAuthUser(cachedUser);
-    }
-
     let cancelled = false;
 
     void getCurrentUser()
@@ -933,7 +918,6 @@ export function DashboardClient({ initialOverview }: Props) {
           return;
         }
         setAuthUser(user);
-        window.localStorage.setItem('pulse-hub.auth-user', JSON.stringify(user));
         setIsAuthReady(true);
       })
       .catch(() => {
@@ -2435,7 +2419,6 @@ export function DashboardClient({ initialOverview }: Props) {
       setWorkspaceUsers((current) => current.map((item) => (item.id === user.id ? user : item)));
       if (authUser?.id === user.id) {
         setAuthUser(user);
-        window.localStorage.setItem('pulse-hub.auth-user', JSON.stringify(user));
       }
       setEditingUserId(null);
       setEditingUserForm({
@@ -7306,27 +7289,12 @@ function resolveApiAsset(src?: string | null) {
     return src;
   }
 
-  const token = getStoredAuthToken();
-  const appendToken = (value: string) => {
-    if (!token) {
-      return value;
-    }
-
-    try {
-      const url = new URL(value);
-      url.searchParams.set('token', token);
-      return url.toString();
-    } catch {
-      return value;
-    }
-  };
-
   if (src.startsWith('http://') || src.startsWith('https://')) {
     try {
       const assetUrl = new URL(src);
       const backendUrl = new URL(apiUrl);
-      if (assetUrl.origin === backendUrl.origin) {
-        return appendToken(src);
+      if (assetUrl.origin === backendUrl.origin && isProtectedAssetPath(assetUrl.pathname)) {
+        return src;
       }
     } catch {
       return src;
@@ -7335,9 +7303,16 @@ function resolveApiAsset(src?: string | null) {
     return src;
   }
   if (src.startsWith('/')) {
-    return appendToken(`${apiUrl}${src}`);
+    const assetUrl = new URL(src, apiUrl);
+    return assetUrl.toString();
   }
   return src;
+}
+
+function isProtectedAssetPath(pathname: string) {
+  return (pathname.startsWith('/contacts/') && pathname.endsWith('/photo'))
+    || (pathname.startsWith('/messages/') && pathname.endsWith('/media'))
+    || (pathname.startsWith('/whatsapp/sessions/') && pathname.endsWith('/stream'));
 }
 
 function sanitizeOverview(overview: DashboardOverview): DashboardOverview {
