@@ -88,7 +88,7 @@ import {
 } from '@/components/quick-replies';
 
 const statusLabel: Record<SessionRecord['status'], string> = {
-  demo: 'Demo',
+  demo: 'Teste',
   idle: 'Pronta',
   initializing: 'Iniciando',
   qr_ready: 'QR pronto',
@@ -181,10 +181,10 @@ const navigationItems: Array<{
   icon: typeof Home;
 }> = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
-  { id: 'conversations', label: 'Conversations', icon: MessageCircle },
-  { id: 'contacts', label: 'Contacts', icon: ContactRound },
+  { id: 'conversations', label: 'Conversas', icon: MessageCircle },
+  { id: 'contacts', label: 'Contatos', icon: ContactRound },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'settings', label: 'Configuracoes', icon: Settings },
 ];
 
 function canAccessWorkspaceView(role: AuthUser['role'] | undefined, view: WorkspaceView) {
@@ -781,34 +781,34 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const queueLabel = useMemo(() => {
     if (!isConversationsView) {
-      return 'No session selected';
+      return 'Nenhuma sessao selecionada';
     }
 
     if (!selectedSession) {
-      return 'No session selected';
+      return 'Nenhuma sessao selecionada';
     }
 
-    return `${selectedSession.channelName} queue`;
+    return `Fila ${selectedSession.channelName}`;
   }, [isConversationsView, selectedSession]);
 
   const contactInfo = useMemo(() => {
     if (!isConversationsView) {
       return {
         email: 'Nao informado',
-        phone: selectedSession?.phoneNumber ?? 'No phone linked',
+        phone: selectedSession?.phoneNumber ?? 'Sem numero vinculado',
       };
     }
 
     if (!selectedConversation) {
       return {
         email: 'Nao informado',
-        phone: selectedSession?.phoneNumber ?? 'No phone linked',
+        phone: selectedSession?.phoneNumber ?? 'Sem numero vinculado',
       };
     }
 
     return {
       email: 'Nao informado',
-      phone: selectedConversation.participantId,
+      phone: formatParticipantReference(selectedConversation.participantId),
     };
   }, [isConversationsView, selectedConversation, selectedSession?.phoneNumber]);
 
@@ -3958,7 +3958,7 @@ export function DashboardClient({ initialOverview }: Props) {
       <section className="min-h-0 overflow-hidden border-r border-white/5 bg-[var(--surface-low)]/35 px-3 py-4">
         <div className="mb-4 flex items-center justify-between px-1">
           <div>
-            <h2 className="font-headline text-xl font-bold text-white">Conversations</h2>
+            <h2 className="font-headline text-xl font-bold text-white">Conversas</h2>
             <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-[var(--muted)]">
               {queueLabel}
             </p>
@@ -3968,18 +3968,18 @@ export function DashboardClient({ initialOverview }: Props) {
             onClick={() => runAction(loadOverview)}
             type="button"
           >
-            Refresh
+            Atualizar
           </button>
         </div>
 
         <div className="mb-4 rounded-[24px] border border-white/6 bg-white/[0.03] p-3">
           <div className="flex items-center justify-between gap-3 px-1">
             <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Queue Filters
+              Filtros da fila
             </span>
             {conversationSearchTerm ? (
               <span className="rounded-full bg-[var(--primary)]/10 px-2.5 py-1 text-[10px] font-semibold text-[var(--primary)]">
-                {visibleSessionConversations.length} result{visibleSessionConversations.length === 1 ? '' : 's'}
+                  {visibleSessionConversations.length} resultado{visibleSessionConversations.length === 1 ? '' : 's'}
               </span>
             ) : null}
           </div>
@@ -4263,13 +4263,13 @@ export function DashboardClient({ initialOverview }: Props) {
               </p>
             </div>
 
-            <ProfileSection title="Contact Info">
+            <ProfileSection title="Dados do contato">
               <ProfileRow label="Email" value={contactInfo.email} />
-              <ProfileRow label="Phone" value={contactInfo.phone} />
-              <ProfileRow label="Session" value={selectedSession.name} />
+              <ProfileRow label="Telefone" value={contactInfo.phone} />
+              <ProfileRow label="Sessao" value={selectedSession.name} />
             </ProfileSection>
 
-            <ProfileSection title="Customer Tags">
+            <ProfileSection title="Marcadores do contato">
               <div className="flex flex-wrap gap-2">
                 <Tag tone="primary">{selectedConversation.channelName}</Tag>
                 <Tag tone="tertiary">{selectedConversation.status}</Tag>
@@ -4277,15 +4277,15 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
             </ProfileSection>
 
-            <ProfileSection title="Conversation History">
+            <ProfileSection title="Historico da conversa">
               <div className="space-y-4">
                 <MiniTimelineItem
-                  label="Current WhatsApp thread"
+                  label="Thread atual no WhatsApp"
                   meta={formatDateLabel(selectedConversation.lastMessageAt)}
                   tone="primary"
                 />
                 <MiniTimelineItem
-                  label="Realtime session online"
+                  label="Sessao em tempo real"
                   meta={statusLabel[selectedSession.status]}
                   tone="secondary"
                 />
@@ -4293,7 +4293,7 @@ export function DashboardClient({ initialOverview }: Props) {
             </ProfileSection>
 
             {canManageWorkspaceSessions ? (
-              <ProfileSection title="Session Control">
+              <ProfileSection title="Controle da sessao">
                 <div className="space-y-3">
                   <button
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
@@ -4304,7 +4304,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     type="button"
                   >
                     <QrCode className="h-4 w-4" strokeWidth={2.1} />
-                    Generate QR / reconnect
+                    Gerar QR / reconectar
                   </button>
                   <button
                     className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--surface-highest)] px-4 py-3 text-sm font-semibold text-white"
@@ -4312,7 +4312,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     type="button"
                   >
                     <Wifi className="h-4 w-4" strokeWidth={2.1} />
-                    Disconnect session
+                    Desconectar sessao
                   </button>
                 </div>
               </ProfileSection>
@@ -4506,30 +4506,30 @@ export function DashboardClient({ initialOverview }: Props) {
 
           <div className="mt-auto space-y-1 border-t border-white/5 pt-6">
             <button
-              aria-label="New Message"
+              aria-label="Acoes rapidas"
               className="mb-4 flex w-full items-center justify-center rounded-xl bg-[var(--primary-container)] px-3 py-3 text-[var(--on-primary-container)] transition-transform active:scale-95"
               onClick={() => navigateToView(selectedSession ? 'conversations' : canAccessSettings ? 'settings' : 'dashboard')}
-              title="New Message"
+              title="Acoes rapidas"
               type="button"
             >
               <MessageSquarePlus className="h-4 w-4" strokeWidth={2.2} />
             </button>
             {canAccessSettings ? (
               <button
-                aria-label="Support"
+                aria-label="Ajuda"
                 className="flex w-full items-center justify-center rounded-xl px-3 py-3 text-zinc-500 transition-all hover:bg-zinc-800/50 hover:text-zinc-300"
                 onClick={() => navigateToView('settings')}
-                title="Support"
+                title="Ajuda"
                 type="button"
               >
                 <CircleHelp className="h-5 w-5" strokeWidth={2.1} />
               </button>
             ) : null}
             <button
-              aria-label="Sign Out"
+              aria-label="Sair"
               className="flex w-full items-center justify-center rounded-xl px-3 py-3 text-[var(--error-dim)] transition-all hover:bg-white/5"
               onClick={signOut}
-              title="Sign Out"
+              title="Sair"
               type="button"
             >
               <LogOut className="h-5 w-5" strokeWidth={2.1} />
@@ -4541,7 +4541,7 @@ export function DashboardClient({ initialOverview }: Props) {
           <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/8 bg-zinc-950/60 px-4 py-2.5 backdrop-blur-2xl shadow-[0_8px_24px_0_rgba(0,0,0,0.55)] md:px-5">
             <div className="flex items-center gap-5">
               <span className="font-headline text-xl font-bold tracking-tight text-transparent bg-gradient-to-br from-blue-400 to-blue-600 bg-clip-text">
-                EtherCommand
+                Pulse Hub
               </span>
               <div className="hidden items-center gap-3 rounded-full border border-white/5 bg-white/5 px-4 py-1.5 transition-all duration-300 focus-within:border-[var(--primary)]/50 lg:flex">
                 <Search className="h-4 w-4 text-zinc-400" strokeWidth={2.1} />
@@ -4549,7 +4549,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   ref={globalSearchInputRef}
                   className="w-80 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
                   onChange={(event) => setGlobalSearch(event.target.value)}
-                  placeholder="Search interactions..."
+                  placeholder="Buscar contatos, conversas ou responsaveis..."
                   value={globalSearch}
                 />
                 <span className="rounded-full border border-white/8 bg-black/20 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
@@ -4572,7 +4572,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 type="button"
               >
                 <Plus className="h-4 w-4" strokeWidth={2.2} />
-                <span className="text-sm">Broadcast</span>
+                <span className="text-sm">Acoes</span>
               </button>
               <div className="flex items-center gap-3">
                 <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-full border border-white/20 bg-[var(--surface-high)] text-[11px] font-bold text-white">
@@ -4911,27 +4911,27 @@ function WorkspaceLoadingScreen({ targetView }: { targetView: WorkspaceView }) {
     { label: string; detail: string; icon: typeof Home }
   > = {
     dashboard: {
-      label: 'Command Central',
+      label: 'Visao geral',
       detail: 'Carregando sinais da operacao e feed em tempo real...',
       icon: Home,
     },
     conversations: {
-      label: 'Conversations',
+      label: 'Conversas',
       detail: 'Hidratando filas, timeline e estado do atendimento...',
       icon: MessageCircle,
     },
     contacts: {
-      label: 'Contacts',
+      label: 'Contatos',
       detail: 'Montando CRM, filtros e perfis dos contatos...',
       icon: ContactRound,
     },
     analytics: {
-      label: 'Service Intelligence',
+      label: 'Analytics',
       detail: 'Calculando estatisticas e organizando a leitura operacional...',
       icon: BarChart3,
     },
     settings: {
-      label: 'Settings',
+      label: 'Configuracoes',
       detail: 'Sincronizando sessoes, QR e configuracoes do workspace...',
       icon: Settings,
     },
@@ -4952,7 +4952,7 @@ function WorkspaceLoadingScreen({ targetView }: { targetView: WorkspaceView }) {
             </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.28em] text-[var(--muted)]">
-                Loading workspace
+                Carregando workspace
               </p>
               <h2 className="font-headline mt-2 text-4xl font-extrabold text-white md:text-5xl">
                 {label}
@@ -5342,11 +5342,11 @@ function ContactKanbanCard({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="line-clamp-2 text-sm font-semibold text-white">{contact.contact}</p>
-              <p className="mt-1 truncate text-xs text-zinc-500">
-                {isVerifiedContact(contact)
-                  ? `@${slugifyContact(contact.contact)}`
-                  : toContactEmail(contact.contact)}
-              </p>
+                <p className="mt-1 truncate text-xs text-zinc-500">
+                  {isVerifiedContact(contact)
+                    ? `@${slugifyContact(contact.contact)}`
+                    : formatParticipantReference(contact.participantId)}
+                </p>
             </div>
             {contact.unread > 0 ? (
               <span className="rounded-full bg-[var(--secondary)]/16 px-2 py-1 text-[10px] font-semibold text-[var(--secondary)]">
@@ -6174,7 +6174,7 @@ function ConversationComposer({
             event.preventDefault();
             void submit();
           }}
-          placeholder={disabled ? 'Selecione uma conversa...' : selectedAttachment ? 'Adicione uma legenda opcional...' : 'Type a message...'}
+          placeholder={disabled ? 'Selecione uma conversa...' : selectedAttachment ? 'Adicione uma legenda opcional...' : 'Digite uma mensagem...'}
           rows={1}
           value={draft}
         />
@@ -6702,7 +6702,7 @@ function formatRoleLabel(role: AuthUser['role']) {
     case 'supervisor':
       return 'Supervisor';
     default:
-      return 'Attendant';
+      return 'Atendente';
   }
 }
 
@@ -6713,16 +6713,16 @@ function formatSessionUserAgent(userAgent?: string) {
   }
 
   if (value.includes('Windows')) {
-    return 'Windows browser';
+    return 'Navegador no Windows';
   }
   if (value.includes('Mac OS')) {
-    return 'macOS browser';
+    return 'Navegador no macOS';
   }
   if (value.includes('Android')) {
-    return 'Android browser';
+    return 'Navegador no Android';
   }
   if (value.includes('iPhone') || value.includes('iPad')) {
-    return 'iOS browser';
+    return 'Navegador no iOS';
   }
 
   return value.length > 64 ? `${value.slice(0, 64)}...` : value;
@@ -6805,8 +6805,8 @@ function formatRelativePulse(timestamp: string) {
   const parsed = Date.parse(timestamp);
   if (!Number.isFinite(parsed)) {
     return {
-      primary: 'Unknown',
-      secondary: 'No pulse available',
+      primary: 'Sem registro',
+      secondary: 'Nenhuma atividade detectada',
     };
   }
 
@@ -6815,36 +6815,43 @@ function formatRelativePulse(timestamp: string) {
 
   if (minutes < 2) {
     return {
-      primary: 'Just now',
-      secondary: 'Realtime activity',
+      primary: 'Agora',
+      secondary: 'Atividade em tempo real',
     };
   }
 
   if (minutes < 60) {
     return {
-      primary: `${minutes} mins ago`,
-      secondary: 'Active session',
+      primary: `Ha ${minutes} min`,
+      secondary: 'Sessao ativa',
     };
   }
 
   const hours = Math.floor(minutes / 60);
   if (hours < 24) {
     return {
-      primary: `${hours}h ago`,
+      primary: `Ha ${hours}h`,
       secondary: formatClock(timestamp),
     };
   }
 
   const days = Math.floor(hours / 24);
   return {
-    primary: `${days} days ago`,
+    primary: `Ha ${days}d`,
     secondary: formatDateLabel(timestamp),
   };
 }
 
-function toContactEmail(label: string) {
-  const safeName = label.toLowerCase().replace(/[^a-z0-9]+/g, '.');
-  return `${safeName}@pulsehub.local`;
+function formatParticipantReference(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 'Nao informado';
+  }
+
+  return trimmed
+    .replace(/@s\.whatsapp\.net$/i, '')
+    .replace(/@c\.us$/i, '')
+    .replace(/@g\.us$/i, ' (grupo)');
 }
 
 function slugifyContact(label: string) {
@@ -7219,7 +7226,7 @@ function normalizeResponseVelocityAnalytics(
     averageSeconds: responseVelocity?.averageSeconds ?? 102,
     deltaSeconds: responseVelocity?.deltaSeconds ?? 0,
     targetSeconds: responseVelocity?.targetSeconds ?? 120,
-    peakLabel: responseVelocity?.peakLabel ?? 'No data',
+    peakLabel: responseVelocity?.peakLabel ?? 'Sem dados',
     points: Array.isArray(responseVelocity?.points) ? responseVelocity.points : [],
   };
 }

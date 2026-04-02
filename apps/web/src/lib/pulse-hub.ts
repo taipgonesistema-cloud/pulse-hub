@@ -248,7 +248,7 @@ export const fallbackOverview: DashboardOverview = {
       averageSeconds: 102,
       deltaSeconds: 0,
       targetSeconds: 120,
-      peakLabel: 'No data',
+      peakLabel: 'Sem dados',
       points: [
         { label: '08:00 AM', averageSeconds: 102 },
         { label: '10:00 AM', averageSeconds: 102 },

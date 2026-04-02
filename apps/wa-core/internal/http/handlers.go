@@ -1851,7 +1851,7 @@ func (a *API) buildResponseVelocityAnalytics(ctx context.Context) (models.Dashbo
 		AverageSeconds: 102,
 		DeltaSeconds:   0,
 		TargetSeconds:  120,
-		PeakLabel:      "No data",
+		PeakLabel:      "Sem dados",
 		Points: []models.DashboardResponseVelocityPoint{
 			{Label: "08:00 AM", AverageSeconds: 102},
 			{Label: "10:00 AM", AverageSeconds: 102},
@@ -2200,7 +2200,7 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 			}
 		}
 
-		preview := fallbackText(chat.LastMessageText, "Conversa sincronizada.")
+		preview := fallbackText(chat.LastMessageText, "Sem mensagem recente.")
 		lastMessageAt := fallbackText(chat.LastMessageAt, session.UpdatedAt)
 		if latestMessage.ID != "" {
 			preview = fallbackText(latestMessage.Text, preview)
@@ -2214,8 +2214,8 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 			Contact:       name,
 			AvatarURL:     avatarProxyPath(canonicalJID, contact.PhotoID),
 			ParticipantID: canonicalJID,
-			Owner:         "Livre",
-			Status:        "Fila geral",
+			Owner:         "Sem responsavel",
+			Status:        "Atendimento geral",
 			ChannelName:   session.ChannelName,
 			WaitingTime:   waitingLabel(chat.LastMessageAt),
 			Unread:        chat.UnreadCount,
