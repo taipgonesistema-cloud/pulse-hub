@@ -69,6 +69,7 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 		r.Get("/auth/me", api.handleMe)
 		r.Post("/auth/sign-out", api.handleSignOut)
 		r.Get("/auth/users", api.handleListUsers)
+		r.Get("/auth/audit-logs", api.handleListAuditLogs)
 		r.Get("/auth/users/{id}/sessions", api.handleListUserSessions)
 		r.Post("/auth/users/{id}/sessions/{sessionId}/revoke", api.handleRevokeUserSession)
 		r.Post("/auth/users", api.handleCreateUser)
@@ -382,7 +383,8 @@ func (a *API) handleListSessions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleCreateSession(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+	auth, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor)
+	if !ok {
 		return
 	}
 
@@ -403,6 +405,18 @@ func (a *API) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "session.create",
+		ResourceType: "whatsapp_session",
+		ResourceID:   compat.ID,
+		Summary:      "Criou ou atualizou uma sessao operacional.",
+		Details: map[string]any{
+			"name":        compat.Name,
+			"phoneNumber": compat.PhoneNumber,
+			"channelName": compat.ChannelName,
+			"actorId":     auth.user.ID,
+		},
+	})
 
 	respondJSON(w, http.StatusCreated, compat)
 }
@@ -428,6 +442,15 @@ func (a *API) handleConnectSession(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "session.connect",
+		ResourceType: "whatsapp_session",
+		ResourceID:   compat.ID,
+		Summary:      "Solicitou conexao ou geracao de QR da sessao.",
+		Details: map[string]any{
+			"status": compat.Status,
+		},
+	})
 
 	respondJSON(w, http.StatusOK, compat)
 }
@@ -452,6 +475,15 @@ func (a *API) handleDisconnectSession(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "session.disconnect",
+		ResourceType: "whatsapp_session",
+		ResourceID:   compat.ID,
+		Summary:      "Desconectou uma sessao operacional.",
+		Details: map[string]any{
+			"status": compat.Status,
+		},
+	})
 	respondJSON(w, http.StatusOK, compat)
 }
 
@@ -732,6 +764,18 @@ func (a *API) handleCreateContactKanbanBoard(w http.ResponseWriter, r *http.Requ
 		Text:       record.ID,
 		OccurredAt: now,
 	})
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "kanban.board.create",
+		ResourceType: "kanban_board",
+		ResourceID:   record.ID,
+		Summary:      "Criou um board personalizado do CRM.",
+		Details: map[string]any{
+			"label":                  record.Label,
+			"contactsFilter":         record.ContactsFilter,
+			"contactsAudienceFilter": record.ContactsAudienceFilter,
+			"contactsChannelFilter":  record.ContactsChannelFilter,
+		},
+	})
 
 	respondJSON(w, http.StatusCreated, record)
 }
@@ -756,6 +800,12 @@ func (a *API) handleDeleteContactKanbanBoard(w http.ResponseWriter, r *http.Requ
 		Kind:       "kanban.board.updated",
 		Text:       boardID,
 		OccurredAt: models.NowString(),
+	})
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "kanban.board.delete",
+		ResourceType: "kanban_board",
+		ResourceID:   boardID,
+		Summary:      "Removeu um board personalizado do CRM.",
 	})
 
 	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -830,6 +880,18 @@ func (a *API) handleCreateQuickReply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.hub.Broadcast(models.RealtimeEvent{Kind: "quick_reply.updated", Text: record.ID, OccurredAt: record.UpdatedAt})
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "quick_reply.create",
+		ResourceType: "quick_reply",
+		ResourceID:   record.ID,
+		Summary:      "Criou uma resposta rapida.",
+		Details: map[string]any{
+			"name":            record.Name,
+			"shortcut":        record.Shortcut,
+			"visibilityScope": record.VisibilityScope,
+			"status":          record.Status,
+		},
+	})
 	respondJSON(w, http.StatusCreated, record)
 }
 
@@ -863,6 +925,18 @@ func (a *API) handleUpdateQuickReply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.hub.Broadcast(models.RealtimeEvent{Kind: "quick_reply.updated", Text: record.ID, OccurredAt: record.UpdatedAt})
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "quick_reply.update",
+		ResourceType: "quick_reply",
+		ResourceID:   record.ID,
+		Summary:      "Atualizou uma resposta rapida.",
+		Details: map[string]any{
+			"name":            record.Name,
+			"shortcut":        record.Shortcut,
+			"visibilityScope": record.VisibilityScope,
+			"status":          record.Status,
+		},
+	})
 	respondJSON(w, http.StatusOK, record)
 }
 
@@ -883,6 +957,12 @@ func (a *API) handleDeleteQuickReply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.hub.Broadcast(models.RealtimeEvent{Kind: "quick_reply.updated", Text: quickReplyID, OccurredAt: models.NowString()})
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "quick_reply.delete",
+		ResourceType: "quick_reply",
+		ResourceID:   quickReplyID,
+		Summary:      "Removeu uma resposta rapida.",
+	})
 	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -985,6 +1065,12 @@ func (a *API) handleListContactCRMProfiles(w http.ResponseWriter, r *http.Reques
 }
 
 func (a *API) handleUpdateContactCRMProfile(w http.ResponseWriter, r *http.Request) {
+	auth := currentAuth(r)
+	if auth == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
+		return
+	}
+
 	var request models.UpdateContactCRMProfileRequest
 	if err := decodeJSON(r, &request); err != nil {
 		respondError(w, http.StatusBadRequest, err)
@@ -1031,6 +1117,20 @@ func (a *API) handleUpdateContactCRMProfile(w http.ResponseWriter, r *http.Reque
 		Payload:    string(payload),
 		OccurredAt: record.UpdatedAt,
 	})
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "crm.profile.update",
+		ResourceType: "crm_profile",
+		ResourceID:   dashboardConversationKey(record.SessionID, record.ConversationID),
+		Summary:      "Atualizou o perfil CRM de um contato.",
+		Details: map[string]any{
+			"sessionId":       record.SessionID,
+			"conversationId":  record.ConversationID,
+			"assignee":        record.Assignee,
+			"priority":        record.Priority,
+			"tagsCount":       len(record.Tags),
+			"performedByRole": auth.user.Role,
+		},
+	})
 
 	respondJSON(w, http.StatusOK, record)
 }
@@ -1046,6 +1146,12 @@ func (a *API) handleListContactKanbanStages(w http.ResponseWriter, r *http.Reque
 }
 
 func (a *API) handleUpdateContactKanbanStage(w http.ResponseWriter, r *http.Request) {
+	auth := currentAuth(r)
+	if auth == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
+		return
+	}
+
 	var request models.UpdateContactKanbanStageRequest
 	if err := decodeJSON(r, &request); err != nil {
 		respondError(w, http.StatusBadRequest, err)
@@ -1086,6 +1192,18 @@ func (a *API) handleUpdateContactKanbanStage(w http.ResponseWriter, r *http.Requ
 		ChatJID:    record.ConversationID,
 		Text:       record.Stage,
 		OccurredAt: record.UpdatedAt,
+	})
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "kanban.stage.update",
+		ResourceType: "kanban_stage",
+		ResourceID:   dashboardConversationKey(record.SessionID, record.ConversationID),
+		Summary:      "Moveu um contato no kanban.",
+		Details: map[string]any{
+			"sessionId":       record.SessionID,
+			"conversationId":  record.ConversationID,
+			"stage":           record.Stage,
+			"performedByRole": auth.user.Role,
+		},
 	})
 
 	respondJSON(w, http.StatusOK, record)
@@ -1185,6 +1303,18 @@ func (a *API) handleCreateManualContact(w http.ResponseWriter, r *http.Request) 
 			OccurredAt: now,
 		})
 	}
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "contact.manual.create",
+		ResourceType: "contact",
+		ResourceID:   jid,
+		Summary:      "Criou um contato manualmente.",
+		Details: map[string]any{
+			"name":      request.Name,
+			"phone":     phone,
+			"sessionId": request.SessionID,
+			"stage":     request.Stage,
+		},
+	})
 
 	respondJSON(w, http.StatusCreated, map[string]any{
 		"jid":   jid,

@@ -192,6 +192,21 @@ type AuthSessionRecord struct {
 	UpdatedAt  string `json:"updatedAt"`
 }
 
+type AuditLogRecord struct {
+	ID           string         `json:"id"`
+	ActorUserID  string         `json:"actorUserId,omitempty"`
+	ActorName    string         `json:"actorName,omitempty"`
+	ActorRole    AuthRole       `json:"actorRole,omitempty"`
+	Action       string         `json:"action"`
+	ResourceType string         `json:"resourceType"`
+	ResourceID   string         `json:"resourceId,omitempty"`
+	Summary      string         `json:"summary"`
+	Details      map[string]any `json:"details,omitempty"`
+	RemoteAddr   string         `json:"remoteAddr,omitempty"`
+	UserAgent    string         `json:"userAgent,omitempty"`
+	CreatedAt    string         `json:"createdAt"`
+}
+
 type SignInRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`

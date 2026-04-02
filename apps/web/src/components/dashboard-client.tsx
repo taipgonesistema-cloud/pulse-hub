@@ -49,6 +49,7 @@ import {
   useTransition,
 } from 'react';
 import type {
+  AuditLogRecord,
   AuthSessionRecord,
   AuthUser,
   ChannelRecord,
@@ -71,6 +72,7 @@ import {
   getCurrentUser,
   getStoredAuthToken,
   getStoredAuthUser,
+  listAuditLogs,
   listQuickReplies,
   listUsers,
   listUserSessions,
@@ -328,7 +330,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [isLoadingContactKanban, setIsLoadingContactKanban] = useState(true);
   const [isLoadingContactBoards, setIsLoadingContactBoards] = useState(true);
   const [isLoadingContactCRM, setIsLoadingContactCRM] = useState(true);
-  const [settingsSection, setSettingsSection] = useState<'sessions' | 'users' | 'quickReplies'>('sessions');
+  const [settingsSection, setSettingsSection] = useState<'sessions' | 'users' | 'quickReplies' | 'audit'>('sessions');
   const [workspaceUsers, setWorkspaceUsers] = useState<AuthUser[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [expandedUserSessionsId, setExpandedUserSessionsId] = useState<string | null>(null);
@@ -357,6 +359,8 @@ export function DashboardClient({ initialOverview }: Props) {
   const [quickReplyToDelete, setQuickReplyToDelete] = useState<QuickReplyRecord | null>(null);
   const [composerQuickReplyResults, setComposerQuickReplyResults] = useState<QuickReplyRecord[]>([]);
   const [isLoadingComposerQuickReplies, setIsLoadingComposerQuickReplies] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<AuditLogRecord[]>([]);
+  const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
   const [draggedContactKey, setDraggedContactKey] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<ContactKanbanStageId | null>(null);
   const [showCreateContactModal, setShowCreateContactModal] = useState(false);
@@ -420,6 +424,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const canCreateManualContacts = canManageWorkspaceSessions;
   const canManageQuickReplies = authUser?.role === 'admin' || authUser?.role === 'supervisor';
   const canLoadWorkspaceUsers = authUser?.role === 'admin' || authUser?.role === 'supervisor';
+  const canViewAuditLogs = authUser?.role === 'admin' || authUser?.role === 'supervisor';
   const isWorkspaceBootstrapPending =
     isAuthReady &&
     (!hasLoadedInitialOverview ||
@@ -989,8 +994,13 @@ export function DashboardClient({ initialOverview }: Props) {
 
     if (settingsSection === 'quickReplies' && !canManageQuickReplies) {
       setSettingsSection('sessions');
+      return;
     }
-  }, [canManageQuickReplies, isAdminUser, settingsSection]);
+
+    if (settingsSection === 'audit' && !canViewAuditLogs) {
+      setSettingsSection('sessions');
+    }
+  }, [canManageQuickReplies, canViewAuditLogs, isAdminUser, settingsSection]);
 
   useEffect(() => {
     if (!canManageBoards && showCreateBoardModal) {
@@ -1124,6 +1134,11 @@ export function DashboardClient({ initialOverview }: Props) {
   const loadQuickRepliesList = useCallback(async (query = '') => {
     const items = await listQuickReplies(query);
     setQuickReplies(items);
+  }, []);
+
+  const loadAuditLogEntries = useCallback(async () => {
+    const items = await listAuditLogs(60);
+    setAuditLogs(items);
   }, []);
 
   const loadComposerQuickReplies = useCallback(async (query = '') => {
@@ -1278,6 +1293,23 @@ export function DashboardClient({ initialOverview }: Props) {
       .catch(() => undefined)
       .finally(() => setIsLoadingQuickReplies(false));
   }, [canManageQuickReplies, deferredQuickReplySearch, isAuthReady, loadQuickRepliesList]);
+
+  useEffect(() => {
+    if (!isAuthReady || !canViewAuditLogs) {
+      setAuditLogs([]);
+      setIsLoadingAuditLogs(false);
+      return;
+    }
+
+    if (settingsSection !== 'audit') {
+      return;
+    }
+
+    setIsLoadingAuditLogs(true);
+    void loadAuditLogEntries()
+      .catch(() => undefined)
+      .finally(() => setIsLoadingAuditLogs(false));
+  }, [canViewAuditLogs, isAuthReady, loadAuditLogEntries, settingsSection]);
 
   const fetchConversationMessages = useCallback(async (sessionId: string, conversationId: string) => {
     const response = await authenticatedFetch(
@@ -3488,6 +3520,8 @@ export function DashboardClient({ initialOverview }: Props) {
                 ? 'Gerenciar usuarios do workspace'
                 : settingsSection === 'quickReplies'
                   ? 'Respostas rapidas'
+                  : settingsSection === 'audit'
+                    ? 'Audit log'
                   : 'Conectar e gerenciar sessoes'}
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
@@ -3495,6 +3529,8 @@ export function DashboardClient({ initialOverview }: Props) {
                 ? 'Controle acessos por role sem derrubar a sessao compartilhada do WhatsApp.'
                 : settingsSection === 'quickReplies'
                   ? 'Cadastre atalhos reutilizaveis para acelerar o atendimento e acione autocomplete no chat ao digitar /.'
+                  : settingsSection === 'audit'
+                    ? 'Acompanhe quem executou mudancas sensiveis no workspace, em que recurso e quando isso aconteceu.'
                   : 'Crie uma sessao operacional, gere QR code, reconecte numeros e acompanhe o estado da autenticacao sem sair do painel.'}
             </p>
           </div>
@@ -3525,10 +3561,27 @@ export function DashboardClient({ initialOverview }: Props) {
                   Quick replies
                 </button>
               ) : null}
+              {canViewAuditLogs ? (
+                <button
+                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'audit' ? 'bg-white text-black' : 'text-[var(--muted)] hover:text-white'}`}
+                  onClick={() => setSettingsSection('audit')}
+                  type="button"
+                >
+                  Audit log
+                </button>
+              ) : null}
             </div>
             <button
               className="rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white"
-              onClick={() => runAction(settingsSection === 'users' ? loadWorkspaceUsers : settingsSection === 'quickReplies' ? () => loadQuickRepliesList(quickReplySearchTerm) : loadOverview)}
+              onClick={() => runAction(
+                settingsSection === 'users'
+                  ? loadWorkspaceUsers
+                  : settingsSection === 'quickReplies'
+                    ? () => loadQuickRepliesList(quickReplySearchTerm)
+                    : settingsSection === 'audit'
+                      ? loadAuditLogEntries
+                      : loadOverview,
+              )}
               type="button"
             >
               Refresh {settingsSection}
@@ -3536,7 +3589,85 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
         </div>
 
-        {settingsSection === 'quickReplies' ? (
+        {settingsSection === 'audit' ? (
+          canViewAuditLogs ? (
+            <div className="grid gap-5 xl:grid-cols-[0.82fr_1.18fr]">
+              <div className="glass-panel rounded-[30px] p-6">
+                <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                  Resumo
+                </p>
+                <div className="mt-5 grid gap-4 md:grid-cols-3 xl:grid-cols-1">
+                  <MetricCard label="Eventos" value={auditLogs.length} detail="Ultimos registros carregados" tone="primary" compact />
+                  <MetricCard label="Atores" value={new Set(auditLogs.map((item) => item.actorUserId || item.actorName || item.id)).size} detail="Usuarios distintos nesta lista" tone="secondary" compact />
+                  <MetricCard label="Recursos" value={new Set(auditLogs.map((item) => item.resourceType)).size} detail="Tipos de recurso rastreados" tone="tertiary" compact />
+                </div>
+              </div>
+
+              <div className="glass-panel rounded-[30px] p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                      Eventos recentes
+                    </p>
+                    <p className="mt-2 text-sm text-[var(--muted)]">
+                      Usuario, acao, recurso e contexto operacional das ultimas mudancas sensiveis.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
+                    60 ultimos
+                  </span>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {isLoadingAuditLogs ? <StackSkeleton rows={4} /> : null}
+                  {!isLoadingAuditLogs && auditLogs.length === 0 ? (
+                    <EmptyStateCard
+                      description="Assim que uma acao sensivel acontecer, ela passa a aparecer aqui com usuario, recurso e horario."
+                      title="Nenhum evento auditado ainda"
+                    />
+                  ) : null}
+                  {!isLoadingAuditLogs ? auditLogs.map((entry) => (
+                    <div key={entry.id} className="rounded-[24px] border border-white/8 bg-white/4 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-white">{entry.summary}</p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">
+                            {entry.actorName || 'Usuario desconhecido'} · {entry.actorRole ? formatRoleLabel(entry.actorRole) : 'Sem role'}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
+                          {formatTimestamp(entry.createdAt)}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-400">
+                        <span className="rounded-full bg-white/5 px-2.5 py-1">acao {entry.action}</span>
+                        <span className="rounded-full bg-white/5 px-2.5 py-1">recurso {entry.resourceType}</span>
+                        {entry.resourceId ? <span className="rounded-full bg-white/5 px-2.5 py-1">id {entry.resourceId}</span> : null}
+                        {entry.remoteAddr ? <span className="rounded-full bg-white/5 px-2.5 py-1">ip {entry.remoteAddr}</span> : null}
+                      </div>
+
+                      {entry.details && Object.keys(entry.details).length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-300">
+                          {Object.entries(entry.details).slice(0, 6).map(([key, value]) => (
+                            <span key={key} className="rounded-full border border-white/8 bg-black/10 px-2.5 py-1">
+                              {formatAuditDetailLabel(key)} {formatAuditDetailValue(value)}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  )) : null}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <EmptyStateCard
+              description="Apenas administradores e supervisores podem consultar o historico de auditoria."
+              title="Acesso restrito"
+            />
+          )
+        ) : settingsSection === 'quickReplies' ? (
           canManageQuickReplies ? (
             <QuickRepliesSettingsPanel
               isLoading={isLoadingQuickReplies}
@@ -6704,6 +6835,30 @@ function formatRoleLabel(role: AuthUser['role']) {
     default:
       return 'Atendente';
   }
+}
+
+function formatAuditDetailLabel(value: string) {
+  return value
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .toLowerCase();
+}
+
+function formatAuditDetailValue(value: unknown) {
+  if (value == null) {
+    return 'vazio';
+  }
+  if (typeof value === 'boolean') {
+    return value ? 'sim' : 'nao';
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+
+  return JSON.stringify(value);
 }
 
 function formatSessionUserAgent(userAgent?: string) {

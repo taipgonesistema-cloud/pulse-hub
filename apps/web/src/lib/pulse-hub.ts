@@ -170,6 +170,21 @@ export type AuthSessionRecord = {
   updatedAt: string;
 };
 
+export type AuditLogRecord = {
+  id: string;
+  actorUserId?: string;
+  actorName?: string;
+  actorRole?: AuthUser['role'];
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  summary: string;
+  details?: Record<string, unknown>;
+  remoteAddr?: string;
+  userAgent?: string;
+  createdAt: string;
+};
+
 export type SignInPayload = {
   email: string;
   password: string;
@@ -472,6 +487,22 @@ export async function listUserSessions(userId: string) {
   }
 
   return (await response.json()) as AuthSessionRecord[];
+}
+
+export async function listAuditLogs(limit = 50) {
+  const url = new URL(`${apiUrl}/auth/audit-logs`);
+  url.searchParams.set('limit', String(limit));
+
+  const response = await authFetch(url.toString(), {
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(errorPayload?.message ?? 'Falha ao carregar audit log.');
+  }
+
+  return (await response.json()) as AuditLogRecord[];
 }
 
 export async function revokeUserSession(userId: string, sessionId: string) {

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -143,8 +144,30 @@ func (a *API) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, users)
 }
 
+func (a *API) handleListAuditLogs(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor); !ok {
+		return
+	}
+
+	limit := 50
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		if parsed, err := strconv.Atoi(rawLimit); err == nil {
+			limit = parsed
+		}
+	}
+
+	items, err := a.store.ListAuditLogs(r.Context(), limit)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, items)
+}
+
 func (a *API) handleCreateUser(w http.ResponseWriter, r *http.Request) {
-	if _, ok := a.requireRoles(w, r, models.AuthRoleAdmin); !ok {
+	auth, ok := a.requireRoles(w, r, models.AuthRoleAdmin)
+	if !ok {
 		return
 	}
 
@@ -196,6 +219,19 @@ func (a *API) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "auth.user.create",
+		ResourceType: "auth_user",
+		ResourceID:   user.ID,
+		Summary:      "Criou um usuario do workspace.",
+		Details: map[string]any{
+			"email":    user.Email,
+			"name":     user.Name,
+			"role":     user.Role,
+			"isActive": user.IsActive,
+			"actorId":  auth.user.ID,
+		},
+	})
 
 	respondJSON(w, http.StatusCreated, user)
 }
@@ -262,6 +298,18 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "auth.user.update",
+		ResourceType: "auth_user",
+		ResourceID:   updated.ID,
+		Summary:      "Atualizou um usuario do workspace.",
+		Details: map[string]any{
+			"name":            updated.Name,
+			"role":            updated.Role,
+			"isActive":        updated.IsActive,
+			"passwordUpdated": passwordHash != nil,
+		},
+	})
 
 	respondJSON(w, http.StatusOK, updated)
 }
@@ -307,8 +355,49 @@ func (a *API) handleRevokeUserSession(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "auth.session.revoke",
+		ResourceType: "auth_session",
+		ResourceID:   sessionID,
+		Summary:      "Revogou uma sessao ativa de usuario.",
+		Details: map[string]any{
+			"userId": userID,
+		},
+	})
 
 	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *API) recordAuditLog(r *http.Request, item models.AuditLogRecord) {
+	auth := currentAuth(r)
+	if auth == nil {
+		return
+	}
+	if item.ActorUserID == "" {
+		item.ActorUserID = auth.user.ID
+	}
+	if item.ActorName == "" {
+		item.ActorName = auth.user.Name
+	}
+	if item.ActorRole == "" {
+		item.ActorRole = auth.user.Role
+	}
+	if item.RemoteAddr == "" {
+		item.RemoteAddr = strings.TrimSpace(r.RemoteAddr)
+	}
+	if item.UserAgent == "" {
+		item.UserAgent = strings.TrimSpace(r.UserAgent())
+	}
+	if item.CreatedAt == "" {
+		item.CreatedAt = models.NowString()
+	}
+	if item.Details == nil {
+		item.Details = map[string]any{}
+	}
+
+	if err := a.store.SaveAuditLog(r.Context(), item); err != nil {
+		a.logger.Warn("failed to write audit log", "action", item.Action, "resourceType", item.ResourceType, "resourceID", item.ResourceID, "error", err)
+	}
 }
 
 func isAllowedRole(role models.AuthRole) bool {

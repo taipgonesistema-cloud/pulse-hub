@@ -179,6 +179,21 @@ func (s *Store) migrate(ctx context.Context) error {
 		CONSTRAINT fk_app_user FOREIGN KEY(user_id) REFERENCES app_user(id) ON DELETE CASCADE
 	);
 
+	CREATE TABLE IF NOT EXISTS audit_log (
+		id TEXT PRIMARY KEY,
+		actor_user_id TEXT NOT NULL DEFAULT '',
+		actor_name TEXT NOT NULL DEFAULT '',
+		actor_role TEXT NOT NULL DEFAULT '',
+		action TEXT NOT NULL,
+		resource_type TEXT NOT NULL,
+		resource_id TEXT NOT NULL DEFAULT '',
+		summary TEXT NOT NULL DEFAULT '',
+		details_json TEXT NOT NULL DEFAULT '{}',
+		remote_addr TEXT NOT NULL DEFAULT '',
+		user_agent TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL
+	);
+
 	CREATE TABLE IF NOT EXISTS quick_reply (
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL,
@@ -209,6 +224,9 @@ func (s *Store) migrate(ctx context.Context) error {
 	CREATE INDEX IF NOT EXISTS idx_app_user_role ON app_user(role);
 	CREATE INDEX IF NOT EXISTS idx_app_user_session_user_id ON app_user_session(user_id);
 	CREATE INDEX IF NOT EXISTS idx_app_user_session_expires_at ON app_user_session(expires_at);
+	CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_audit_log_actor_user_id ON audit_log(actor_user_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log(resource_type, resource_id, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_quick_reply_name ON quick_reply(name);
 	CREATE INDEX IF NOT EXISTS idx_quick_reply_shortcut ON quick_reply(shortcut);
 	CREATE INDEX IF NOT EXISTS idx_quick_reply_visibility ON quick_reply(visibility_scope, visibility_user_id);
@@ -689,6 +707,87 @@ func (s *Store) RevokeAuthSessionByID(ctx context.Context, userID, sessionID str
 	}
 
 	return nil
+}
+
+func (s *Store) SaveAuditLog(ctx context.Context, item models.AuditLogRecord) error {
+	if item.ID == "" {
+		item.ID = uuid.NewString()
+	}
+	if item.CreatedAt == "" {
+		item.CreatedAt = models.NowString()
+	}
+	detailsJSON, err := json.Marshal(item.Details)
+	if err != nil {
+		return fmt.Errorf("marshal audit log details: %w", err)
+	}
+
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO audit_log (
+			id, actor_user_id, actor_name, actor_role, action, resource_type, resource_id,
+			summary, details_json, remote_addr, user_agent, created_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+	`, item.ID, item.ActorUserID, item.ActorName, string(item.ActorRole), item.Action, item.ResourceType, item.ResourceID, item.Summary, string(detailsJSON), item.RemoteAddr, item.UserAgent, item.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("save audit log %s: %w", item.Action, err)
+	}
+
+	return nil
+}
+
+func (s *Store) ListAuditLogs(ctx context.Context, limit int) ([]models.AuditLogRecord, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, actor_user_id, actor_name, actor_role, action, resource_type, resource_id,
+			summary, details_json, remote_addr, user_agent, created_at
+		FROM audit_log
+		ORDER BY created_at DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list audit logs: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]models.AuditLogRecord, 0, limit)
+	for rows.Next() {
+		var item models.AuditLogRecord
+		var detailsJSON string
+		if err := rows.Scan(
+			&item.ID,
+			&item.ActorUserID,
+			&item.ActorName,
+			&item.ActorRole,
+			&item.Action,
+			&item.ResourceType,
+			&item.ResourceID,
+			&item.Summary,
+			&detailsJSON,
+			&item.RemoteAddr,
+			&item.UserAgent,
+			&item.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan audit log: %w", err)
+		}
+		if detailsJSON != "" {
+			if err := json.Unmarshal([]byte(detailsJSON), &item.Details); err != nil {
+				item.Details = map[string]any{}
+			}
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate audit logs: %w", err)
+	}
+
+	return items, nil
 }
 
 func (s *Store) ListQuickReplies(ctx context.Context, search string) ([]models.QuickReplyRecord, error) {
