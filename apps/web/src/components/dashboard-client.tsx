@@ -36,12 +36,12 @@ import {
   Fragment,
   memo,
   useCallback,
+  useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  useDeferredValue,
   useTransition,
 } from 'react';
 import type {
@@ -6102,7 +6102,8 @@ function ConversationComposer({
   const quickReplySearchTimerRef = useRef<number | null>(null);
 
   const composerBusy = disabled || isSendingText || isUploading;
-  const slashContext = useMemo(() => getQuickReplySlashContext(draft), [draft]);
+  const deferredDraft = useDeferredValue(draft);
+  const slashContext = useMemo(() => getQuickReplySlashContext(deferredDraft), [deferredDraft]);
   const slashAutocompleteOpen = Boolean(slashContext) && !composerBusy && isComposerFocused;
 
   useEffect(() => {
@@ -6159,16 +6160,6 @@ function ConversationComposer({
       }
     };
   }, [draft, draftStorageKey]);
-
-  useLayoutEffect(() => {
-    const composer = composerInputRef.current;
-    if (!composer) {
-      return;
-    }
-
-    composer.style.height = '0px';
-    composer.style.height = `${Math.min(composer.scrollHeight, 224)}px`;
-  }, [draft]);
 
   const clearAttachment = useCallback(() => {
     setSelectedAttachment((current) => {
@@ -6592,7 +6583,7 @@ function ConversationComposer({
         </button>
         <textarea
           ref={composerInputRef}
-          className="max-h-56 min-h-[24px] flex-1 resize-none overflow-y-auto bg-transparent py-1 text-sm leading-6 text-white outline-none placeholder:text-zinc-500"
+          className="h-20 max-h-40 flex-1 resize-none overflow-y-auto bg-transparent py-1 text-sm leading-6 text-white outline-none placeholder:text-zinc-500"
           disabled={composerBusy}
           onChange={(event) => handleDraftChange(event.target.value)}
           onBlur={() => setIsComposerFocused(false)}
@@ -6654,7 +6645,7 @@ function ConversationComposer({
             queueAttachment(file, { sticker: file.type === 'image/webp' });
           }}
           placeholder={disabled ? 'Selecione uma conversa...' : selectedAttachment ? 'Adicione uma legenda opcional...' : 'Digite uma mensagem...'}
-          rows={1}
+          rows={3}
           value={draft}
         />
         <button
