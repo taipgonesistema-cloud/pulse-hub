@@ -10,7 +10,6 @@ import {
   CalendarDays,
   CircleHelp,
   ContactRound,
-  Grid3X3,
   Heart,
   Home,
   LayoutGrid,
@@ -4960,23 +4959,7 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5">
-              <button className="rounded-full p-2 text-zinc-400 transition-all duration-300 hover:bg-white/5 active:scale-95">
-                <Bell className="h-5 w-5" strokeWidth={2.1} />
-              </button>
-              <button className="rounded-full p-2 text-zinc-400 transition-all duration-300 hover:bg-white/5 active:scale-95">
-                <Grid3X3 className="h-5 w-5" strokeWidth={2.1} />
-              </button>
-              <div className="mx-1 h-7 w-px bg-white/10" />
-              <button
-                className="flex items-center gap-2 rounded-full bg-[var(--primary-container)] px-3 py-1.5 text-sm font-semibold text-[var(--on-primary-container)] transition-all duration-200 hover:brightness-110 active:scale-95"
-                onClick={() => navigateToView(selectedSession ? 'conversations' : 'settings')}
-                type="button"
-              >
-                <Plus className="h-4 w-4" strokeWidth={2.2} />
-                <span className="text-sm">Acoes</span>
-              </button>
-              <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3">
                 <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-full border border-white/20 bg-[var(--surface-high)] text-[11px] font-bold text-white">
                   {authUser?.name
                     ?.split(' ')
@@ -4985,7 +4968,6 @@ export function DashboardClient({ initialOverview }: Props) {
                     .slice(0, 2)
                     .toUpperCase() ?? 'PH'}
                 </div>
-              </div>
             </div>
           </header>
 
@@ -6316,6 +6298,9 @@ function ConversationComposer({
       if (sent) {
         clearAttachment();
         setDraft('');
+        window.requestAnimationFrame(() => {
+          composerInputRef.current?.focus();
+        });
       }
       return;
     }
@@ -6330,6 +6315,9 @@ function ConversationComposer({
     setIsSendingText(false);
     if (sent) {
       setDraft('');
+      window.requestAnimationFrame(() => {
+        composerInputRef.current?.focus();
+      });
     }
   }, [applySignature, clearAttachment, composerBusy, draft, onSend, onSendMedia, selectedAttachment]);
 
