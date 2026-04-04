@@ -1174,6 +1174,10 @@ export function DashboardClient({ initialOverview }: Props) {
     }
   }, []);
 
+  const handleComposerQuickReplySearch = useCallback((query: string) => {
+    void loadComposerQuickReplies(query).catch(() => undefined);
+  }, [loadComposerQuickReplies]);
+
   const loadUserSessionsForUser = useCallback(async (userId: string) => {
     setLoadingUserSessionsMap((current) => ({ ...current, [userId]: true }));
     try {
@@ -4680,9 +4684,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 disabled={!selectedConversation || isPending}
                 onCancelReply={() => setReplyTargetMessage(null)}
                 onJumpToMessage={jumpToMessage}
-                onQuickReplySearch={(query) => {
-                  void loadComposerQuickReplies(query).catch(() => undefined);
-                }}
+                onQuickReplySearch={handleComposerQuickReplySearch}
                 onSendMedia={sendMedia}
                 onSend={sendMessage}
                 quickReplies={composerQuickReplyResults}
