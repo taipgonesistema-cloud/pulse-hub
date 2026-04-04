@@ -406,8 +406,13 @@ export function DashboardClient({ initialOverview }: Props) {
   const [isPending, startTransition] = useTransition();
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const globalSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const overviewLoadInFlightRef = useRef<Promise<void> | null>(null);
+  const overviewRefreshQueuedRef = useRef(false);
   const messageCacheRef = useRef(new Map<string, MessageRecord[]>());
+  const messageLoadInFlightRef = useRef(new Map<string, Promise<void>>());
+  const messageReloadQueuedRef = useRef(new Set<string>());
   const messagePrefetchRef = useRef(new Set<string>());
+  const conversationPrefetchTimerRef = useRef<number | null>(null);
   const shouldStickToBottomRef = useRef(true);
   const lastConversationAnchorRef = useRef<string | null>(null);
   const viewTransitionTimerRef = useRef<number | null>(null);
@@ -1055,6 +1060,13 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [activeContactsBoard, customContactsBoards]);
 
   const loadOverview = useCallback(async () => {
+    if (overviewLoadInFlightRef.current) {
+      overviewRefreshQueuedRef.current = true;
+      return overviewLoadInFlightRef.current;
+    }
+
+    const request = (async () => {
+      try {
     const response = await authenticatedFetch(`${apiUrl}/dashboard/overview`, {
       cache: 'no-store',
     });
@@ -1080,6 +1092,17 @@ export function DashboardClient({ initialOverview }: Props) {
     setOverview((current) =>
       areOverviewsEquivalent(current, smoothedOverview) ? current : smoothedOverview,
     );
+      } finally {
+        overviewLoadInFlightRef.current = null;
+        if (overviewRefreshQueuedRef.current) {
+          overviewRefreshQueuedRef.current = false;
+          void loadOverview();
+        }
+      }
+    })();
+
+    overviewLoadInFlightRef.current = request;
+    return request;
   }, [activeConversationId, activeSessionId, authenticatedFetch, isConversationActivelyViewed]);
 
   const loadContactKanbanStages = useCallback(async () => {
@@ -1385,52 +1408,70 @@ export function DashboardClient({ initialOverview }: Props) {
       conversationId: string,
       options?: { showLoading?: boolean },
     ) => {
-      if (options?.showLoading ?? true) {
-        setIsLoadingMessages(true);
+      const cacheKey = buildConversationCacheKey(sessionId, conversationId);
+      const inFlightRequest = messageLoadInFlightRef.current.get(cacheKey);
+      if (inFlightRequest) {
+        messageReloadQueuedRef.current.add(cacheKey);
+        return inFlightRequest;
       }
 
-      try {
-        const data = await fetchConversationMessages(sessionId, conversationId);
-        messageCacheRef.current.set(buildConversationCacheKey(sessionId, conversationId), data);
-        setMessages((current) =>
-          areMessageListsEquivalent(current, data) ? current : data,
-        );
-        setOverview((current) => {
-          let hasChanges = false;
+      const request = (async () => {
+        const shouldShowLoading = options?.showLoading ?? true;
+        if (shouldShowLoading) {
+          setIsLoadingMessages(true);
+        }
 
-          const conversations = current.conversations.map((conversation) => {
-            if (
-              conversation.sessionId !== sessionId ||
-              conversation.id !== conversationId ||
-              conversation.unread === 0
-            ) {
-              return conversation;
+        try {
+          const data = await fetchConversationMessages(sessionId, conversationId);
+          messageCacheRef.current.set(cacheKey, data);
+          setMessages((current) =>
+            areMessageListsEquivalent(current, data) ? current : data,
+          );
+          setOverview((current) => {
+            let hasChanges = false;
+
+            const conversations = current.conversations.map((conversation) => {
+              if (
+                conversation.sessionId !== sessionId ||
+                conversation.id !== conversationId ||
+                conversation.unread === 0
+              ) {
+                return conversation;
+              }
+
+              hasChanges = true;
+              return {
+                ...conversation,
+                unread: 0,
+              };
+            });
+
+            if (!hasChanges) {
+              return current;
             }
 
-            hasChanges = true;
             return {
-              ...conversation,
-              unread: 0,
+              ...current,
+              conversations,
             };
           });
-
-          if (!hasChanges) {
-            return current;
+        } finally {
+          messageLoadInFlightRef.current.delete(cacheKey);
+          setPendingConversationId((current) =>
+            current === conversationId ? null : current,
+          );
+          if (shouldShowLoading) {
+            setIsLoadingMessages(false);
           }
-
-          return {
-            ...current,
-            conversations,
-          };
-        });
-      } finally {
-        setPendingConversationId((current) =>
-          current === conversationId ? null : current,
-        );
-        if (options?.showLoading ?? true) {
-          setIsLoadingMessages(false);
+          if (messageReloadQueuedRef.current.has(cacheKey)) {
+            messageReloadQueuedRef.current.delete(cacheKey);
+            void loadMessages(sessionId, conversationId, { showLoading: false });
+          }
         }
-      }
+      })();
+
+      messageLoadInFlightRef.current.set(cacheKey, request);
+      return request;
     },
     [fetchConversationMessages],
   );
@@ -1646,6 +1687,9 @@ export function DashboardClient({ initialOverview }: Props) {
     if (highlightedMessageTimerRef.current) {
       window.clearTimeout(highlightedMessageTimerRef.current);
     }
+    if (conversationPrefetchTimerRef.current) {
+      window.clearTimeout(conversationPrefetchTimerRef.current);
+    }
   }, []);
 
   useEffect(() => {
@@ -1770,12 +1814,12 @@ export function DashboardClient({ initialOverview }: Props) {
     const pageVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
     const intervalMs = isRealtimeConnected
       ? pageVisible
-        ? 12000
+        ? 18000
         : 30000
       : selectedSession.status === 'active'
-        ? 5000
+        ? 8000
         : ['initializing', 'qr_ready', 'syncing'].includes(selectedSession.status)
-          ? 7000
+          ? 10000
           : null;
 
     if (!intervalMs) {
@@ -1849,7 +1893,7 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
-    const intervalMs = isRealtimeConnected ? 12000 : 5000;
+    const intervalMs = isRealtimeConnected ? 18000 : 8000;
 
     const interval = window.setInterval(() => {
       void loadMessages(activeSessionId, activeConversationId, {
@@ -1882,10 +1926,10 @@ export function DashboardClient({ initialOverview }: Props) {
         window.clearTimeout(refreshTimer);
       }
 
-      refreshTimer = window.setTimeout(() => {
-        void loadOverviewRef.current().catch(() => undefined);
-      }, 180);
-    };
+        refreshTimer = window.setTimeout(() => {
+          void loadOverviewRef.current().catch(() => undefined);
+        }, 420);
+      };
 
     const connect = () => {
       if (cancelled) {
@@ -2093,6 +2137,16 @@ export function DashboardClient({ initialOverview }: Props) {
       setHighlightedMessageId((current) => (current === messageId ? null : current));
     }, 2200);
   }, []);
+
+  const scheduleConversationPrefetch = useCallback((sessionId: string, conversationId: string) => {
+    if (conversationPrefetchTimerRef.current) {
+      window.clearTimeout(conversationPrefetchTimerRef.current);
+    }
+
+    conversationPrefetchTimerRef.current = window.setTimeout(() => {
+      void prefetchConversation(sessionId, conversationId);
+    }, 140);
+  }, [prefetchConversation]);
 
   const executeAction = useCallback(
     async (handler: () => Promise<void>, options?: { successMessage?: string }) => {
@@ -4508,12 +4562,17 @@ export function DashboardClient({ initialOverview }: Props) {
                 }`}
                 onFocus={() => {
                   if (selectedSession) {
-                    void prefetchConversation(selectedSession.id, conversation.id);
+                    scheduleConversationPrefetch(selectedSession.id, conversation.id);
                   }
                 }}
                 onMouseEnter={() => {
                   if (selectedSession) {
-                    void prefetchConversation(selectedSession.id, conversation.id);
+                    scheduleConversationPrefetch(selectedSession.id, conversation.id);
+                  }
+                }}
+                onMouseLeave={() => {
+                  if (conversationPrefetchTimerRef.current) {
+                    window.clearTimeout(conversationPrefetchTimerRef.current);
                   }
                 }}
                 onClick={() => openConversation(conversation.id)}
