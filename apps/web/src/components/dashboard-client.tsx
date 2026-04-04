@@ -6,7 +6,6 @@ import {
   BarChart3,
   BadgeCheck,
   Bell,
-  Briefcase,
   Camera,
   CalendarDays,
   CircleHelp,
@@ -16,13 +15,11 @@ import {
   Home,
   LayoutGrid,
   LogOut,
-  Mail,
   MoreVertical,
   Mic,
   MessageCircle,
   MessageSquarePlus,
   Paperclip,
-  Phone,
   Plus,
   QrCode,
   RefreshCw,
@@ -815,27 +812,6 @@ export function DashboardClient({ initialOverview }: Props) {
 
     return `Fila ${selectedSession.channelName}`;
   }, [isConversationsView, selectedSession]);
-
-  const contactInfo = useMemo(() => {
-    if (!isConversationsView) {
-      return {
-        email: 'Nao informado',
-        phone: selectedSession?.phoneNumber ?? 'Sem numero vinculado',
-      };
-    }
-
-    if (!selectedConversation) {
-      return {
-        email: 'Nao informado',
-        phone: selectedSession?.phoneNumber ?? 'Sem numero vinculado',
-      };
-    }
-
-    return {
-      email: 'Nao informado',
-      phone: formatParticipantReference(selectedConversation.participantId),
-    };
-  }, [isConversationsView, selectedConversation, selectedSession?.phoneNumber]);
 
   const signOut = useCallback(() => {
     void signOutRequest().catch(() => undefined).finally(() => {
@@ -4473,7 +4449,7 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   const renderConversationsView = () => (
-    <div className="grid min-h-0 flex-1 overflow-hidden grid-cols-1 xl:grid-cols-[19rem_minmax(0,1fr)] 2xl:grid-cols-[19rem_minmax(0,1fr)_17rem]">
+    <div className="grid min-h-0 flex-1 overflow-hidden grid-cols-1 xl:grid-cols-[19rem_minmax(0,1fr)]">
       <section className="min-h-0 overflow-hidden border-r border-white/5 bg-[var(--surface-low)]/35 px-3 py-4">
         <div className="mb-4 flex items-center justify-between px-1">
           <div>
@@ -4767,107 +4743,6 @@ export function DashboardClient({ initialOverview }: Props) {
         )}
       </section>
 
-      <aside className="hidden min-h-0 overflow-y-auto bg-[var(--surface-low)]/20 px-4 py-4 2xl:block">
-        {selectedConversation && selectedSession ? (
-          <div className="space-y-5">
-            <div className="flex flex-col items-center text-center">
-              <div className="relative">
-                <AvatarBadge
-                  className="h-20 w-20 rounded-[22px] text-2xl"
-                  label={selectedConversation.contact}
-                  src={selectedConversation.avatarUrl}
-                />
-                <div className="absolute -bottom-1 -right-1 grid h-9 w-9 place-items-center rounded-full bg-[var(--secondary)] text-black shadow-[0_0_18px_rgba(93,253,138,0.5)]">
-                  <MessageCircle className="h-4 w-4" strokeWidth={2.4} />
-                </div>
-              </div>
-
-              <h3 className="mt-4 font-headline text-2xl font-bold tracking-tight text-white">
-                {selectedConversation.contact}
-              </h3>
-              <p className="mt-2 text-sm text-[var(--muted)]">
-                {selectedConversation.owner} · {selectedConversation.channelName}
-              </p>
-            </div>
-
-            <ProfileSection title="Dados do contato">
-              <ProfileRow label="Email" value={contactInfo.email} />
-              <ProfileRow label="Telefone" value={contactInfo.phone} />
-              <ProfileRow label="Sessao" value={selectedSession.name} />
-            </ProfileSection>
-
-            <ProfileSection title="Marcadores do contato">
-              <div className="flex flex-wrap gap-2">
-                <Tag tone="primary">{selectedConversation.channelName}</Tag>
-                <Tag tone="tertiary">{selectedConversation.status}</Tag>
-                <Tag tone="neutral">{selectedConversation.owner}</Tag>
-              </div>
-            </ProfileSection>
-
-            <ProfileSection title="Historico da conversa">
-              <div className="space-y-4">
-                <MiniTimelineItem
-                  label="Thread atual no WhatsApp"
-                  meta={formatDateLabel(selectedConversation.lastMessageAt)}
-                  tone="primary"
-                />
-                <MiniTimelineItem
-                  label="Sessao em tempo real"
-                  meta={statusLabel[selectedSession.status]}
-                  tone="secondary"
-                />
-              </div>
-            </ProfileSection>
-
-            {canManageWorkspaceSessions ? (
-              <ProfileSection title="Controle da sessao">
-                <div className="space-y-3">
-                  <button
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
-                    onClick={() => {
-                      navigateToView('settings');
-                      connectSession(selectedSession.id);
-                    }}
-                    type="button"
-                  >
-                    <QrCode className="h-4 w-4" strokeWidth={2.1} />
-                    Gerar QR / reconectar
-                  </button>
-                  <button
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--surface-highest)] px-4 py-3 text-sm font-semibold text-white"
-                    onClick={() => disconnectSession(selectedSession.id)}
-                    type="button"
-                  >
-                    <Wifi className="h-4 w-4" strokeWidth={2.1} />
-                    Desconectar sessao
-                  </button>
-                </div>
-              </ProfileSection>
-            ) : null}
-
-            {selectedSession.qrCodeDataUrl ? (
-              <ProfileSection title="QR Code">
-                <div className="rounded-[28px] bg-white p-4">
-                  <Image
-                    alt={`QR code da sessao ${selectedSession.name}`}
-                    className="mx-auto rounded-[20px]"
-                    height={220}
-                    src={selectedSession.qrCodeDataUrl}
-                    unoptimized
-                    width={220}
-                  />
-                </div>
-              </ProfileSection>
-            ) : null}
-
-          </div>
-        ) : (
-          <EmptyStateCard
-            description="Abra uma conversa para revelar os dados do contato, tags e atalhos de sessao nesta coluna lateral."
-            title="Selecione uma conversa para ver o perfil"
-          />
-        )}
-      </aside>
     </div>
   );
 
@@ -6241,6 +6116,8 @@ function ConversationComposer({
   const stickerInputRef = useRef<HTMLInputElement | null>(null);
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
   const composerShellRef = useRef<HTMLDivElement | null>(null);
+  const draftPersistTimerRef = useRef<number | null>(null);
+  const quickReplySearchTimerRef = useRef<number | null>(null);
 
   const composerBusy = disabled || isSendingText || isUploading;
   const slashContext = useMemo(() => getQuickReplySlashContext(draft), [draft]);
@@ -6251,7 +6128,15 @@ function ConversationComposer({
       return;
     }
 
-    onQuickReplySearch(slashContext.query);
+    quickReplySearchTimerRef.current = window.setTimeout(() => {
+      onQuickReplySearch(slashContext.query);
+    }, slashContext.query ? 120 : 0);
+
+    return () => {
+      if (quickReplySearchTimerRef.current) {
+        window.clearTimeout(quickReplySearchTimerRef.current);
+      }
+    };
   }, [onQuickReplySearch, slashAutocompleteOpen, slashContext]);
 
   useEffect(() => {
@@ -6273,12 +6158,24 @@ function ConversationComposer({
       return;
     }
 
+    if (draftPersistTimerRef.current) {
+      window.clearTimeout(draftPersistTimerRef.current);
+    }
+
     if (!draft.trim()) {
       window.localStorage.removeItem(draftStorageKey);
       return;
     }
 
-    window.localStorage.setItem(draftStorageKey, draft);
+    draftPersistTimerRef.current = window.setTimeout(() => {
+      window.localStorage.setItem(draftStorageKey, draft);
+    }, 220);
+
+    return () => {
+      if (draftPersistTimerRef.current) {
+        window.clearTimeout(draftPersistTimerRef.current);
+      }
+    };
   }, [draft, draftStorageKey]);
 
   useLayoutEffect(() => {
@@ -6374,6 +6271,15 @@ function ConversationComposer({
       URL.revokeObjectURL(selectedAttachment.previewUrl);
     }
   }, [selectedAttachment]);
+
+  useEffect(() => () => {
+    if (draftPersistTimerRef.current) {
+      window.clearTimeout(draftPersistTimerRef.current);
+    }
+    if (quickReplySearchTimerRef.current) {
+      window.clearTimeout(quickReplySearchTimerRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     const shell = composerShellRef.current;
@@ -7099,91 +7005,6 @@ function FormattedMessageText({
     <p className={`whitespace-pre-wrap ${className ?? ''}`}>
       {renderWhatsAppFormattedText(value)}
     </p>
-  );
-}
-
-function ProfileSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.28em] text-zinc-500">
-        {title}
-      </p>
-      {children}
-    </section>
-  );
-}
-
-function ProfileRow({ label, value }: { label: string; value: string }) {
-  const Icon =
-    label === 'Email' ? Mail : label === 'Phone' ? Phone : Briefcase;
-
-  return (
-    <div className="flex items-center justify-between gap-4 py-2 text-sm">
-      <span className="inline-flex items-center gap-2 text-[var(--primary)]">
-        <Icon className="h-4 w-4" strokeWidth={2.1} />
-        {label}
-      </span>
-      <span className="text-right text-zinc-300">{value}</span>
-    </div>
-  );
-}
-
-function Tag({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone: 'primary' | 'secondary' | 'tertiary' | 'neutral';
-}) {
-  const tones = {
-    primary: 'bg-[var(--primary)]/12 text-[var(--primary)] border-[var(--primary)]/20',
-    secondary:
-      'bg-[var(--secondary)]/12 text-[var(--secondary)] border-[var(--secondary)]/20',
-    tertiary:
-      'bg-[var(--tertiary)]/12 text-[var(--tertiary)] border-[var(--tertiary)]/20',
-    neutral: 'bg-white/5 text-zinc-300 border-white/10',
-  };
-
-  return (
-    <span
-      className={`rounded-full border px-4 py-2 text-[11px] font-bold uppercase tracking-[0.14em] ${tones[tone]}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function MiniTimelineItem({
-  label,
-  meta,
-  tone,
-}: {
-  label: string;
-  meta: string;
-  tone: 'primary' | 'secondary';
-}) {
-  const bg =
-    tone === 'primary'
-      ? 'text-[var(--primary)] bg-[var(--surface-high)]'
-      : 'text-[var(--secondary)] bg-[var(--surface-high)]';
-  const Icon = tone === 'primary' ? MessageCircle : Wifi;
-
-  return (
-    <div className="flex gap-3">
-      <div className={`grid h-10 w-10 place-items-center rounded-2xl ${bg}`}>
-        <Icon className="h-4 w-4" strokeWidth={2.1} />
-      </div>
-      <div>
-        <p className="text-sm font-semibold text-white">{label}</p>
-        <p className="mt-1 text-xs text-zinc-500">{meta}</p>
-      </div>
-    </div>
   );
 }
 
