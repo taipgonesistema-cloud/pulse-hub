@@ -49,6 +49,10 @@ type PublishRequest struct {
 type graphErrorResponse struct {
 	Error struct {
 		Message string `json:"message"`
+		Type    string `json:"type"`
+		Code    int    `json:"code"`
+		Subcode int    `json:"error_subcode"`
+		TraceID string `json:"fbtrace_id"`
 	} `json:"error"`
 }
 
@@ -320,8 +324,28 @@ func (c *Client) postForm(ctx context.Context, endpoint string, form url.Values)
 
 	var payload graphErrorResponse
 	if err := json.Unmarshal(body, &payload); err == nil && strings.TrimSpace(payload.Error.Message) != "" {
-		return nil, errors.New(strings.TrimSpace(payload.Error.Message))
+		return nil, errors.New(formatGraphError(payload))
 	}
 
 	return nil, fmt.Errorf("instagram retornou status %d", resp.StatusCode)
+}
+
+func formatGraphError(payload graphErrorResponse) string {
+	message := strings.TrimSpace(payload.Error.Message)
+	if message == "" {
+		message = "falha ao publicar no Instagram"
+	}
+
+	parts := []string{message}
+	if payload.Error.Code > 0 {
+		parts = append(parts, fmt.Sprintf("code=%d", payload.Error.Code))
+	}
+	if payload.Error.Subcode > 0 {
+		parts = append(parts, fmt.Sprintf("subcode=%d", payload.Error.Subcode))
+	}
+	if traceID := strings.TrimSpace(payload.Error.TraceID); traceID != "" {
+		parts = append(parts, fmt.Sprintf("trace=%s", traceID))
+	}
+
+	return strings.Join(parts, " | ")
 }
