@@ -11,6 +11,13 @@ Support two or more real WhatsApp numbers connected at the same time inside the 
 - each session keeps its own chats, unread counts, QR state, and send/read actions
 - auth, roles, audit log, and security remain intact
 
+## Execution Order
+
+1. backend multi-session support in `apps/wa-core`
+2. adapt QR, status, connect, and disconnect flows per session
+3. isolate conversations, messages, and realtime events per session
+4. polish the dashboard UX for switching between connected numbers
+
 ## Phase 1 - Backend Persistence
 
 - replace single-session assumptions in store methods with multi-session-safe methods
