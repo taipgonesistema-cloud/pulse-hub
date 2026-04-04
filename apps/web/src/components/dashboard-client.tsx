@@ -114,6 +114,9 @@ const composerEmojis = ['🙂', '😂', '😍', '🙏', '🎉', '🔥', '✅', '
 
 const messageReactionOptions = ['👍', '❤️', '😂', '😮', '🙏'];
 
+const INITIAL_VISIBLE_MESSAGE_COUNT = 80;
+const MESSAGE_PAGE_SIZE = 80;
+
 const contactsKanbanStages = [
   {
     id: 'new' as const,
@@ -305,6 +308,7 @@ export function DashboardClient({ initialOverview }: Props) {
     initialOverview.conversations[0]?.id ?? '',
   );
   const [messages, setMessages] = useState<MessageRecord[]>([]);
+  const [visibleMessageCount, setVisibleMessageCount] = useState(INITIAL_VISIBLE_MESSAGE_COUNT);
   const [replyTargetMessage, setReplyTargetMessage] = useState<MessageRecord | null>(null);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
@@ -731,6 +735,24 @@ export function DashboardClient({ initialOverview }: Props) {
 
     return Math.max(messages.length - unreadCount, 0);
   }, [activeConversationId, messages.length, openedUnreadMarker]);
+
+  const visibleMessageStartIndex = useMemo(
+    () => Math.max(messages.length - visibleMessageCount, 0),
+    [messages.length, visibleMessageCount],
+  );
+
+  const visibleMessages = useMemo(
+    () => messages.slice(visibleMessageStartIndex),
+    [messages, visibleMessageStartIndex],
+  );
+
+  const visibleUnreadSeparatorIndex = useMemo(() => {
+    if (unreadSeparatorIndex === -1) {
+      return -1;
+    }
+
+    return unreadSeparatorIndex - visibleMessageStartIndex;
+  }, [unreadSeparatorIndex, visibleMessageStartIndex]);
 
   const messagesById = useMemo(
     () => new Map(messages.map((message) => [message.id, message])),
@@ -2030,6 +2052,7 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     shouldStickToBottomRef.current = true;
+    setVisibleMessageCount(INITIAL_VISIBLE_MESSAGE_COUNT);
     setReplyTargetMessage(null);
   }, [activeConversationId, isConversationsView]);
 
@@ -2095,8 +2118,23 @@ export function DashboardClient({ initialOverview }: Props) {
   }, []);
 
   const jumpToMessage = useCallback((messageId: string) => {
+    const targetIndex = messages.findIndex((message) => message.id === messageId);
+    if (targetIndex !== -1 && targetIndex < visibleMessageStartIndex) {
+      setVisibleMessageCount(messages.length - targetIndex + MESSAGE_PAGE_SIZE);
+    }
+
     const target = messageElementMapRef.current.get(messageId);
     if (!target) {
+      window.requestAnimationFrame(() => {
+        const nextTarget = messageElementMapRef.current.get(messageId);
+        if (!nextTarget) {
+          return;
+        }
+
+        shouldStickToBottomRef.current = false;
+        nextTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedMessageId(messageId);
+      });
       return;
     }
 
@@ -2111,7 +2149,7 @@ export function DashboardClient({ initialOverview }: Props) {
     highlightedMessageTimerRef.current = window.setTimeout(() => {
       setHighlightedMessageId((current) => (current === messageId ? null : current));
     }, 2200);
-  }, []);
+  }, [messages, visibleMessageStartIndex]);
 
   const scheduleConversationPrefetch = useCallback((sessionId: string, conversationId: string) => {
     if (conversationPrefetchTimerRef.current) {
@@ -4656,9 +4694,21 @@ export function DashboardClient({ initialOverview }: Props) {
                     <ConversationTimelineSkeleton />
                   ) : null}
 
-                  {messages.map((message, index) => (
+                  {visibleMessageStartIndex > 0 ? (
+                    <div className="flex justify-center pb-2">
+                      <button
+                        className="rounded-full bg-white/5 px-4 py-2 text-xs font-semibold text-[var(--muted)] transition hover:bg-white/10 hover:text-white"
+                        onClick={() => setVisibleMessageCount((current) => current + MESSAGE_PAGE_SIZE)}
+                        type="button"
+                      >
+                        Carregar {Math.min(MESSAGE_PAGE_SIZE, visibleMessageStartIndex)} mensagens anteriores
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {visibleMessages.map((message, index) => (
                     <Fragment key={message.id}>
-                      {index === unreadSeparatorIndex ? (
+                      {index === visibleUnreadSeparatorIndex ? (
                         <NewMessagesDivider unreadCount={openedUnreadMarker?.unreadCount ?? 0} />
                       ) : null}
                       <MessageBubble
