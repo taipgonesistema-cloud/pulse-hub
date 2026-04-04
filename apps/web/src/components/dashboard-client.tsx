@@ -6864,8 +6864,7 @@ function MessageContent({ message }: { message: MessageRecord }) {
       return (
         <div className="space-y-3">
           {mediaSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img alt={message.fileName || message.body} className="max-h-[22rem] rounded-2xl object-cover" src={mediaSrc} />
+            <LazyMessageMedia alt={message.fileName || message.body} kind="image" src={mediaSrc} />
           ) : null}
           {message.body && message.body !== '[imagem]' ? (
             <FormattedMessageText className="text-lg leading-8 text-white/95" value={message.body} />
@@ -6874,8 +6873,7 @@ function MessageContent({ message }: { message: MessageRecord }) {
       );
     case 'sticker':
       return mediaSrc ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img alt={message.fileName || 'Sticker'} className="h-36 w-36 rounded-2xl object-contain" src={mediaSrc} />
+        <LazyMessageMedia alt={message.fileName || 'Sticker'} kind="sticker" src={mediaSrc} />
       ) : (
         <FormattedMessageText className="text-lg leading-9 text-white/95" value={message.body} />
       );
@@ -6883,7 +6881,7 @@ function MessageContent({ message }: { message: MessageRecord }) {
       return (
         <div className="space-y-3">
           {mediaSrc ? (
-            <video className="max-h-[22rem] rounded-2xl" controls playsInline src={mediaSrc} />
+            <LazyMessageMedia alt={message.fileName || 'Video'} kind="video" src={mediaSrc} />
           ) : null}
           {message.body && message.body !== '[video]' ? (
             <FormattedMessageText className="text-lg leading-8 text-white/95" value={message.body} />
@@ -6893,7 +6891,7 @@ function MessageContent({ message }: { message: MessageRecord }) {
     case 'audio':
       return (
         <div className="space-y-3">
-          {mediaSrc ? <audio className="w-full min-w-[16rem]" controls src={mediaSrc} /> : null}
+          {mediaSrc ? <LazyMessageMedia alt={message.fileName || 'Audio'} kind="audio" src={mediaSrc} /> : null}
           <FormattedMessageText className="text-base leading-8 text-white/90" value={message.body || '[audio]'} />
         </div>
       );
@@ -6986,6 +6984,89 @@ function FormattedMessageText({
     </p>
   );
 }
+
+const LazyMessageMedia = memo(function LazyMessageMedia({
+  src,
+  alt,
+  kind,
+}: {
+  src: string;
+  alt: string;
+  kind: 'image' | 'sticker' | 'video' | 'audio';
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [isVisible, setIsVisible] = useState(
+    () => typeof window !== 'undefined' && !('IntersectionObserver' in window),
+  );
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) {
+      return;
+    }
+
+    if (!('IntersectionObserver' in window)) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      {
+        rootMargin: '600px 0px',
+        threshold: 0.01,
+      },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  const placeholderClass =
+    kind === 'sticker'
+      ? 'h-36 w-36 rounded-2xl'
+      : kind === 'audio'
+        ? 'h-14 w-full min-w-[16rem] rounded-2xl'
+        : 'h-64 w-full max-w-[22rem] rounded-2xl';
+
+  return (
+    <div ref={containerRef} className={placeholderClass}>
+      {isVisible ? (
+        kind === 'image' ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            alt={alt}
+            className="h-full w-full rounded-2xl object-cover"
+            decoding="async"
+            loading="lazy"
+            src={src}
+          />
+        ) : kind === 'sticker' ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            alt={alt}
+            className="h-full w-full rounded-2xl object-contain"
+            decoding="async"
+            loading="lazy"
+            src={src}
+          />
+        ) : kind === 'video' ? (
+          <video className="h-full w-full rounded-2xl object-cover" controls playsInline preload="none" src={src} />
+        ) : (
+          <audio className="w-full min-w-[16rem]" controls preload="none" src={src} />
+        )
+      ) : (
+        <div className="grid h-full w-full place-items-center rounded-2xl bg-white/5 text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
+          {kind === 'video' ? 'Video' : kind === 'audio' ? 'Audio' : 'Midia'}
+        </div>
+      )}
+    </div>
+  );
+});
 
 function Field({
   value,
