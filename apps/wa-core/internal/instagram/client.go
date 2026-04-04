@@ -52,6 +52,12 @@ type graphErrorResponse struct {
 	} `json:"error"`
 }
 
+type mediaStatusResponse struct {
+	StatusCode    string `json:"status_code"`
+	Status        string `json:"status"`
+	StatusMessage string `json:"status_message"`
+}
+
 func NewClient(config Config) *Client {
 	graphBaseURL := strings.TrimRight(strings.TrimSpace(config.GraphBaseURL), "/")
 	if graphBaseURL == "" {
@@ -102,6 +108,9 @@ func (c *Client) Publish(ctx context.Context, request PublishRequest) (*models.I
 
 	creationID, err := c.createMediaContainer(ctx, imageURL, strings.TrimSpace(request.Caption), request.Story)
 	if err != nil {
+		return nil, err
+	}
+	if err := c.waitForMediaReady(ctx, creationID); err != nil {
 		return nil, err
 	}
 
@@ -195,6 +204,73 @@ func (c *Client) createMediaContainer(ctx context.Context, imageURL, caption str
 	}
 
 	return strings.TrimSpace(payload.ID), nil
+}
+
+func (c *Client) waitForMediaReady(ctx context.Context, creationID string) error {
+	deadline := time.Now().Add(45 * time.Second)
+	for {
+		status, err := c.getMediaStatus(ctx, creationID)
+		if err != nil {
+			return err
+		}
+
+		switch strings.ToUpper(strings.TrimSpace(status.StatusCode)) {
+		case "FINISHED", "PUBLISHED":
+			return nil
+		case "ERROR", "EXPIRED":
+			message := strings.TrimSpace(status.StatusMessage)
+			if message == "" {
+				message = strings.TrimSpace(status.Status)
+			}
+			if message == "" {
+				message = "a midia do Instagram falhou antes da publicacao"
+			}
+			return errors.New(message)
+		}
+
+		if time.Now().After(deadline) {
+			return errors.New("o container do Instagram nao ficou pronto a tempo para publicar")
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+}
+
+func (c *Client) getMediaStatus(ctx context.Context, creationID string) (mediaStatusResponse, error) {
+	endpoint := fmt.Sprintf("%s/%s?fields=status_code,status,status_message&access_token=%s", c.graphBaseURL, url.PathEscape(creationID), url.QueryEscape(c.accessToken))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return mediaStatusResponse{}, fmt.Errorf("create instagram status request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return mediaStatusResponse{}, fmt.Errorf("send instagram status request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return mediaStatusResponse{}, fmt.Errorf("read instagram status response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var payload graphErrorResponse
+		if err := json.Unmarshal(body, &payload); err == nil && strings.TrimSpace(payload.Error.Message) != "" {
+			return mediaStatusResponse{}, errors.New(strings.TrimSpace(payload.Error.Message))
+		}
+		return mediaStatusResponse{}, fmt.Errorf("instagram retornou status %d ao consultar container", resp.StatusCode)
+	}
+
+	var payload mediaStatusResponse
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return mediaStatusResponse{}, fmt.Errorf("decode instagram status response: %w", err)
+	}
+
+	return payload, nil
 }
 
 func (c *Client) publishMediaContainer(ctx context.Context, creationID string) (string, error) {
