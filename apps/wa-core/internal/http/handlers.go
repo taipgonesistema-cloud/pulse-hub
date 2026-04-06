@@ -120,6 +120,7 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 			r.Put("/contacts/kanban", api.handleUpdateContactKanbanStage)
 			r.Get("/sessions", api.handleListSessions)
 			r.Post("/sessions", api.handleCreateSession)
+			r.Delete("/sessions/{id}", api.handleDeleteSession)
 			r.Post("/sessions/{id}/connect", api.handleConnectSession)
 			r.Post("/sessions/{id}/disconnect", api.handleDisconnectSession)
 			r.Get("/sessions/{id}/qr", api.handleSessionQRCompat)
@@ -535,6 +536,42 @@ func (a *API) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	})
 
 	respondJSON(w, http.StatusCreated, compat)
+}
+
+func (a *API) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
+	auth, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor)
+	if !ok {
+		return
+	}
+
+	sessionID := strings.TrimSpace(chi.URLParam(r, "id"))
+	session, err := a.manager.DeleteSessionByID(r.Context(), sessionID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if session == nil {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "session.delete",
+		ResourceType: "whatsapp_session",
+		ResourceID:   session.ID,
+		Summary:      "Removeu uma sessao operacional.",
+		Details: map[string]any{
+			"name":        session.Name,
+			"phoneNumber": session.PhoneNumber,
+			"channelName": session.ChannelName,
+			"actorId":     auth.user.ID,
+		},
+	})
+
+	respondJSON(w, http.StatusOK, map[string]any{
+		"id":      session.ID,
+		"deleted": true,
+	})
 }
 
 func (a *API) handleConnectSession(w http.ResponseWriter, r *http.Request) {

@@ -155,16 +155,6 @@ func (m *Manager) CreateOrUpdateSession(ctx context.Context, req models.SessionI
 	phone := strings.TrimSpace(req.PhoneNumber)
 	channel := strings.TrimSpace(req.ChannelName)
 
-	if name == "" {
-		name = "WhatsApp principal"
-	}
-	if phone == "" {
-		phone = "Nao informado"
-	}
-	if channel == "" {
-		channel = "WhatsApp"
-	}
-
 	now := models.NowString()
 	session, err := m.store.GetSessionByID(ctx, sessionID)
 	if err != nil {
@@ -172,6 +162,15 @@ func (m *Manager) CreateOrUpdateSession(ctx context.Context, req models.SessionI
 	}
 
 	if session == nil {
+		if name == "" {
+			name = "WhatsApp principal"
+		}
+		if phone == "" {
+			phone = "Aguardando conexao"
+		}
+		if channel == "" {
+			channel = "WhatsApp"
+		}
 		session = &models.Session{
 			ID:          normalizeSessionID(sessionID),
 			Name:        name,
@@ -183,10 +182,23 @@ func (m *Manager) CreateOrUpdateSession(ctx context.Context, req models.SessionI
 			UpdatedAt:   now,
 		}
 	} else {
-		session.Name = name
-		session.PhoneNumber = phone
-		session.ChannelName = channel
-		session.ChannelID = slugID("channel", channel)
+		if name != "" {
+			session.Name = name
+		} else if strings.TrimSpace(session.Name) == "" {
+			session.Name = "WhatsApp principal"
+		}
+		if phone != "" {
+			session.PhoneNumber = phone
+		} else if strings.TrimSpace(session.PhoneNumber) == "" {
+			session.PhoneNumber = "Aguardando conexao"
+		}
+		if channel != "" {
+			session.ChannelName = channel
+			session.ChannelID = slugID("channel", channel)
+		} else if strings.TrimSpace(session.ChannelName) == "" {
+			session.ChannelName = "WhatsApp"
+			session.ChannelID = slugID("channel", session.ChannelName)
+		}
 		session.UpdatedAt = now
 		if session.Status == "" {
 			session.Status = models.SessionStatusIdle
@@ -295,6 +307,58 @@ func (m *Manager) DisconnectByID(ctx context.Context, sessionID string) (*models
 	})
 
 	return m.store.GetSessionByID(ctx, sessionID)
+}
+
+func (m *Manager) DeleteSessionByID(ctx context.Context, sessionID string) (*models.Session, error) {
+	sessionID = normalizeSessionID(sessionID)
+	session, err := m.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session == nil {
+		return nil, nil
+	}
+
+	client := m.clientForSession(sessionID)
+	if client != nil && client.IsConnected() {
+		client.Disconnect()
+	}
+
+	if strings.TrimSpace(session.DeviceJID) != "" {
+		jid, err := types.ParseJID(session.DeviceJID)
+		if err == nil {
+			deviceStore, err := m.container.GetDevice(ctx, jid)
+			if err != nil {
+				return nil, fmt.Errorf("get device for session %s: %w", sessionID, err)
+			}
+			if deviceStore != nil {
+				if err := deviceStore.Delete(ctx); err != nil {
+					return nil, fmt.Errorf("delete device for session %s: %w", sessionID, err)
+				}
+			}
+		}
+	}
+
+	if err := m.store.DeleteSessionByID(ctx, sessionID); err != nil {
+		return nil, err
+	}
+
+	m.mu.Lock()
+	delete(m.runtimes, sessionID)
+	if sessionID == models.DefaultSessionID {
+		m.client = nil
+		m.connecting = false
+	}
+	m.mu.Unlock()
+
+	m.broadcast(models.RealtimeEvent{
+		SessionID:  sessionID,
+		Kind:       "connection",
+		Status:     string(models.SessionStatusDisconnected),
+		OccurredAt: models.NowString(),
+	})
+
+	return session, nil
 }
 
 func (m *Manager) GetSession(ctx context.Context) (*models.Session, error) {
@@ -1432,9 +1496,13 @@ func (m *Manager) handlePairSuccess(sessionID string, event *appstateevents.Pair
 	if event == nil {
 		return
 	}
+	phoneNumber := sessionPhoneNumberFromJID(event.ID)
 	_ = m.updateSessionByID(context.Background(), sessionID, func(current *models.Session) {
 		current.Status = models.SessionStatusSyncing
 		current.DeviceJID = event.ID.String()
+		if phoneNumber != "" {
+			current.PhoneNumber = phoneNumber
+		}
 		current.BusinessName = event.BusinessName
 		current.Platform = event.Platform
 		current.LastError = ""
@@ -1445,9 +1513,14 @@ func (m *Manager) handlePairSuccess(sessionID string, event *appstateevents.Pair
 func (m *Manager) handleConnected(sessionID string) {
 	ctx := context.Background()
 	client := m.clientForSession(sessionID)
+	deviceJID := ownDeviceJID(client)
+	phoneNumber := sessionPhoneNumberFromJIDString(deviceJID)
 	_ = m.updateSessionByID(ctx, sessionID, func(current *models.Session) {
 		current.Status = models.SessionStatusActive
-		current.DeviceJID = ownDeviceJID(client)
+		current.DeviceJID = deviceJID
+		if phoneNumber != "" {
+			current.PhoneNumber = phoneNumber
+		}
 		current.QRCode = ""
 		current.QRCodeDataURL = ""
 		current.LastError = ""
@@ -2429,6 +2502,22 @@ func ownDeviceJID(client *whatsmeow.Client) string {
 		return ""
 	}
 	return client.Store.ID.String()
+}
+
+func sessionPhoneNumberFromJIDString(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return ""
+	}
+	jid, err := types.ParseJID(trimmed)
+	if err != nil {
+		return ""
+	}
+	return sessionPhoneNumberFromJID(jid)
+}
+
+func sessionPhoneNumberFromJID(jid types.JID) string {
+	return strings.TrimSpace(jid.User)
 }
 
 func (m *Manager) storeHistoryLIDMappings(ctx context.Context, client *whatsmeow.Client, mappings []*waHistorySync.PhoneNumberToLIDMapping) {

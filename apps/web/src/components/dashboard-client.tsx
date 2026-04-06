@@ -29,6 +29,7 @@ import {
   SlidersHorizontal,
   Smile,
   Sparkles,
+  Trash2,
   Wifi,
   X,
 } from 'lucide-react';
@@ -384,11 +385,8 @@ export function DashboardClient({ initialOverview }: Props) {
   const [typingConversationId, setTypingConversationId] = useState<string | null>(
     null,
   );
-  const [sessionForm, setSessionForm] = useState({
-    name: '',
-    phoneNumber: '',
-    channelName: '',
-  });
+  const [sessionForm, setSessionForm] = useState({ name: '' });
+  const [sessionToDelete, setSessionToDelete] = useState<SessionRecord | null>(null);
   const [newUserForm, setNewUserForm] = useState({
     name: '',
     email: '',
@@ -954,16 +952,26 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [router]);
 
   useEffect(() => {
-    if (!isAuthReady || overview.sessions.length === 0) {
+    if (!isAuthReady) {
       return;
     }
 
-    if (!selectedSessionId) {
-      setSelectedSessionId(overview.sessions[0].id);
+    if (overview.sessions.length === 0) {
+      if (selectedSessionId) {
+        setSelectedSessionId('');
+      }
+      return;
     }
 
-    if (activeView === 'settings' && !selectedSessionId) {
-      setActiveView('dashboard');
+    const hasSelectedSession = overview.sessions.some((session) => session.id === selectedSessionId);
+
+    if (!selectedSessionId || !hasSelectedSession) {
+      const nextSelectedSessionId = overview.sessions[0].id;
+      setSelectedSessionId(nextSelectedSessionId);
+      if (activeView === 'settings' && !selectedSessionId) {
+        setActiveView('dashboard');
+      }
+      return;
     }
   }, [activeView, isAuthReady, overview.sessions, selectedSessionId]);
 
@@ -2782,8 +2790,6 @@ export function DashboardClient({ initialOverview }: Props) {
     const payload = {
       id: buildWorkspaceSessionId(sessionForm),
       name: sessionForm.name.trim(),
-      phoneNumber: sessionForm.phoneNumber.trim(),
-      channelName: sessionForm.channelName.trim(),
     };
 
     if (!payload.name) {
@@ -2808,11 +2814,11 @@ export function DashboardClient({ initialOverview }: Props) {
 
       const createdSession = (await response.json()) as SessionRecord;
 
-      setSessionForm({ name: '', phoneNumber: '', channelName: '' });
+      setSessionForm({ name: '' });
       await loadOverview();
       setSelectedSessionId(createdSession.id);
       navigateToView('settings');
-    }, { successMessage: 'Session created' });
+    }, { successMessage: 'Sessao criada' });
   };
 
   const connectSession = (sessionId: string) => {
@@ -2851,6 +2857,38 @@ export function DashboardClient({ initialOverview }: Props) {
 
       await loadOverview();
     }, { successMessage: 'Session disconnected' });
+  };
+
+  const deleteSession = (session: SessionRecord) => {
+    if (!canManageWorkspaceSessions) {
+      return;
+    }
+
+    runAction(async () => {
+      const response = await authenticatedFetch(
+        `${apiUrl}/whatsapp/sessions/${session.id}`,
+        { method: 'DELETE' },
+      );
+
+      if (!response.ok) {
+        throw new Error('Nao foi possivel remover a sessao.');
+      }
+
+      const remainingSessions = overview.sessions.filter((item) => item.id !== session.id);
+      if (selectedSessionId === session.id) {
+        const nextSelectedSessionId = remainingSessions[0]?.id ?? '';
+        setSelectedSessionId(nextSelectedSessionId);
+        if (!nextSelectedSessionId) {
+          setSelectedConversationId('');
+          setSelectedContactId('');
+          setMessages([]);
+          navigateToView('settings');
+        }
+      }
+
+      setSessionToDelete(null);
+      await loadOverview();
+    }, { successMessage: 'Sessao removida' });
   };
 
   const sendMessage = useCallback((text: string) => {
@@ -4350,20 +4388,9 @@ export function DashboardClient({ initialOverview }: Props) {
                     placeholder="Nome operacional"
                     value={sessionForm.name}
                   />
-                  <Field
-                    onChange={(value) =>
-                      setSessionForm((current) => ({ ...current, phoneNumber: value }))
-                    }
-                    placeholder="Numero do WhatsApp"
-                    value={sessionForm.phoneNumber}
-                  />
-                  <Field
-                    onChange={(value) =>
-                      setSessionForm((current) => ({ ...current, channelName: value }))
-                    }
-                    placeholder="Fila / canal"
-                    value={sessionForm.channelName}
-                  />
+                  <div className="rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-[var(--muted)]">
+                    O numero do WhatsApp sera preenchido automaticamente apos autenticar a sessao.
+                  </div>
                   <button
                     className="w-full rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
                     onClick={createSession}
@@ -4410,7 +4437,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     })
                   ) : (
                     <EmptyStateCard
-                      description="Preencha os dados acima para provisionar o primeiro numero operacional deste workspace."
+                      description="Defina um nome operacional para provisionar o primeiro numero deste workspace. O telefone entra automaticamente depois da autenticacao."
                       title="Nenhuma sessao criada ainda"
                     />
                   )}
@@ -4461,6 +4488,14 @@ export function DashboardClient({ initialOverview }: Props) {
                       >
                         <Wifi className="h-4 w-4" strokeWidth={2.1} />
                         Desconectar
+                      </button>
+                      <button
+                        className="inline-flex items-center gap-2 rounded-full border border-rose-500/20 bg-rose-500/10 px-4 py-2 text-sm text-rose-100 hover:bg-rose-500/15"
+                        onClick={() => setSessionToDelete(selectedSession)}
+                        type="button"
+                      >
+                        <Trash2 className="h-4 w-4" strokeWidth={2.1} />
+                        Remover sessao
                       </button>
                     </div>
 
@@ -4857,6 +4892,44 @@ export function DashboardClient({ initialOverview }: Props) {
             void confirmDeleteQuickReply();
           }}
         />
+      ) : null}
+      {sessionToDelete ? (
+        <KanbanModal
+          description="Remova a sessao do workspace e descarte o login salvo desse numero."
+          onClose={() => setSessionToDelete(null)}
+          title="Remover sessao"
+        >
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-50">
+              <p className="font-semibold text-white">{sessionToDelete.name}</p>
+              <p className="mt-1 text-rose-100/80">
+                {sessionToDelete.phoneNumber} · {sessionToDelete.channelName}
+              </p>
+              <p className="mt-3 text-rose-100/80">
+                Essa acao remove a sessao, limpa os dados operacionais vinculados e exige nova autenticacao se ela for criada outra vez.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                className="rounded-full bg-white/6 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                onClick={() => setSessionToDelete(null)}
+                type="button"
+              >
+                Cancelar
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-400"
+                onClick={() => {
+                  void deleteSession(sessionToDelete);
+                }}
+                type="button"
+              >
+                <Trash2 className="h-4 w-4" strokeWidth={2.1} />
+                Remover sessao
+              </button>
+            </div>
+          </div>
+        </KanbanModal>
       ) : null}
       {showCreateBoardModal ? (
         <KanbanModal
@@ -8200,10 +8273,8 @@ function buildConversationCacheKey(sessionId: string, conversationId: string) {
 
 function buildWorkspaceSessionId(input: {
   name: string;
-  phoneNumber: string;
-  channelName: string;
 }) {
-  const base = [input.name, input.phoneNumber, input.channelName]
+  const base = [input.name]
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean)
     .join('-')

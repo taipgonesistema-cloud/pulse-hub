@@ -393,6 +393,43 @@ func (s *Store) SaveSession(ctx context.Context, session models.Session) error {
 	return nil
 }
 
+func (s *Store) DeleteSessionByID(ctx context.Context, sessionID string) (err error) {
+	sessionID = normalizeSessionID(sessionID)
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete session %s: %w", sessionID, err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	queries := []struct {
+		name  string
+		query string
+	}{
+		{name: "delete contact crm profiles", query: `DELETE FROM contact_crm_profile WHERE session_id = $1`},
+		{name: "delete contact kanban stages", query: `DELETE FROM contact_kanban_stage WHERE session_id = $1`},
+		{name: "delete messages", query: `DELETE FROM messages WHERE session_id = $1`},
+		{name: "delete chats", query: `DELETE FROM chats WHERE session_id = $1`},
+		{name: "delete session", query: `DELETE FROM app_session WHERE id = $1`},
+	}
+
+	for _, item := range queries {
+		if _, err = tx.ExecContext(ctx, item.query, sessionID); err != nil {
+			return fmt.Errorf("%s %s: %w", item.name, sessionID, err)
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete session %s: %w", sessionID, err)
+	}
+
+	return nil
+}
+
 func normalizeSessionID(sessionID string) string {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
