@@ -220,6 +220,7 @@ type Props = {
 type RealtimeSocketEvent = {
   sessionId: string;
   chatJid?: string;
+  messageId?: string;
   kind:
     | 'connection'
     | 'chat.new'
@@ -230,6 +231,7 @@ type RealtimeSocketEvent = {
     | 'kanban.contact.updated'
     | 'quick_reply.updated';
   direction?: 'incoming' | 'outgoing';
+  status?: SessionRecord['status'];
   text?: string;
   payload?: string;
   occurredAt?: string;
@@ -548,6 +550,16 @@ export function DashboardClient({ initialOverview }: Props) {
     })),
     [overview.conversations, overview.sessions],
   );
+
+  const trackedConversationSessionIds = useMemo(() => {
+    if (conversationSessionScope === 'all') {
+      return conversationSessionFilterIds.length > 0
+        ? conversationSessionFilterIds
+        : overview.sessions.map((session) => session.id);
+    }
+
+    return selectedSession?.id ? [selectedSession.id] : [];
+  }, [conversationSessionFilterIds, conversationSessionScope, overview.sessions, selectedSession?.id]);
 
   const sessionConversations = useMemo(
     () => filterConversations(allSessionConversations, conversationFilter),
@@ -1636,6 +1648,8 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const realtimeContextRef = useRef({
     isConversationsView: false,
+    conversationSessionScope: 'selected' as 'selected' | 'all',
+    trackedSessionIds: [] as string[],
     activeSessionId: null as string | null,
     activeConversationId: null as string | null,
   });
@@ -1652,10 +1666,18 @@ export function DashboardClient({ initialOverview }: Props) {
   useEffect(() => {
     realtimeContextRef.current = {
       isConversationsView,
+      conversationSessionScope,
+      trackedSessionIds: trackedConversationSessionIds,
       activeSessionId,
       activeConversationId,
     };
-  }, [activeConversationId, activeSessionId, isConversationsView]);
+  }, [
+    activeConversationId,
+    activeSessionId,
+    conversationSessionScope,
+    isConversationsView,
+    trackedConversationSessionIds,
+  ]);
 
   useEffect(() => {
     loadOverviewRef.current = loadOverview;
@@ -2044,22 +2066,62 @@ export function DashboardClient({ initialOverview }: Props) {
           return;
         }
 
+        const shouldRefreshOverviewForEvent = () => {
+          if (payload.kind === 'connection') {
+            return true;
+          }
+
+          if (
+            payload.kind !== 'chat.new' &&
+            payload.kind !== 'message.new' &&
+            payload.kind !== 'message.ack'
+          ) {
+            return false;
+          }
+
+          if (!payload.sessionId) {
+            return true;
+          }
+
+          const {
+            isConversationsView,
+            conversationSessionScope,
+            trackedSessionIds,
+            activeSessionId,
+          } = realtimeContextRef.current;
+
+          if (!isConversationsView) {
+            return true;
+          }
+
+          if (conversationSessionScope === 'all') {
+            return trackedSessionIds.length === 0 || trackedSessionIds.includes(payload.sessionId);
+          }
+
+          return !activeSessionId || payload.sessionId === activeSessionId;
+        };
+
         if (payload.kind === 'connection') {
-          scheduleOverviewRefresh();
+          if (payload.sessionId && payload.status) {
+            setOverview((current) => ({
+              ...current,
+              sessions: current.sessions.map((session) => {
+                if (session.id !== payload.sessionId) {
+                  return session;
+                }
+
+                return {
+                  ...session,
+                  status: payload.status ?? session.status,
+                  lastError: payload.text ?? (payload.status === 'error' ? session.lastError : null),
+                };
+              }),
+            }));
+          }
         }
 
-        if (
-          payload.kind === 'chat.new' ||
-          payload.kind === 'message.new' ||
-          payload.kind === 'message.ack'
-        ) {
-          if (
-            !payload.sessionId ||
-            !realtimeContextRef.current.activeSessionId ||
-            payload.sessionId === realtimeContextRef.current.activeSessionId
-          ) {
-            scheduleOverviewRefresh();
-          }
+        if (shouldRefreshOverviewForEvent()) {
+          scheduleOverviewRefresh();
         }
 
         if (payload.kind === 'kanban.stage.updated') {
@@ -2105,15 +2167,15 @@ export function DashboardClient({ initialOverview }: Props) {
           isConversationsView &&
           activeSessionId &&
           activeConversationId &&
-          payload.kind === 'message.new' &&
+          (payload.kind === 'message.new' || payload.kind === 'message.ack') &&
           payload.sessionId === activeSessionId &&
           payload.chatJid === activeConversationId
         ) {
-          if (payload.direction === 'incoming' && isConversationActivelyViewedRef.current(activeSessionId, activeConversationId)) {
+          if (payload.kind === 'message.new' && payload.direction === 'incoming' && isConversationActivelyViewedRef.current(activeSessionId, activeConversationId)) {
             void markConversationAsReadRef.current(activeSessionId, activeConversationId).catch(() => undefined);
           }
 
-          const delay = payload.direction === 'incoming' ? 300 : 0;
+          const delay = payload.kind === 'message.new' && payload.direction === 'incoming' ? 300 : 0;
           window.setTimeout(() => {
             void loadMessagesRef.current(activeSessionId, activeConversationId, {
               showLoading: false,
