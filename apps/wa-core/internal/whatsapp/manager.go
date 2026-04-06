@@ -41,7 +41,13 @@ type Manager struct {
 	container         *sqlstore.Container
 	client            *whatsmeow.Client
 	connecting        bool
+	runtimes          map[string]*sessionRuntime
 	lastGroupNameSync time.Time
+}
+
+type sessionRuntime struct {
+	client     *whatsmeow.Client
+	connecting bool
 }
 
 func NewManager(
@@ -62,43 +68,89 @@ func NewManager(
 		store:     store,
 		hub:       hub,
 		container: container,
+		runtimes:  make(map[string]*sessionRuntime),
 	}
 
 	return manager, nil
 }
 
-func (m *Manager) Start(ctx context.Context) error {
-	if err := m.ensureClient(ctx); err != nil {
-		return err
+func normalizeSessionID(sessionID string) string {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return models.DefaultSessionID
 	}
+	return sessionID
+}
 
-	session, err := m.store.GetSession(ctx)
-	if err != nil || session == nil {
-		return err
+func (m *Manager) runtimeForSession(sessionID string) *sessionRuntime {
+	sessionID = normalizeSessionID(sessionID)
+	runtime, ok := m.runtimes[sessionID]
+	if !ok {
+		runtime = &sessionRuntime{}
+		m.runtimes[sessionID] = runtime
 	}
+	return runtime
+}
 
-	if m.client.Store != nil && m.client.Store.ID != nil {
-		go func() {
-			if _, err := m.InitSession(context.Background(), models.SessionInitRequest{}); err != nil {
-				m.logger.Error("auto reconnect failed", "error", err)
-			}
-		}()
+func (m *Manager) clientForSession(sessionID string) *whatsmeow.Client {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	runtime := m.runtimes[normalizeSessionID(sessionID)]
+	if runtime == nil {
 		return nil
 	}
+	return runtime.client
+}
 
-	if session.Status == models.SessionStatusActive || session.Status == models.SessionStatusSyncing || session.Status == models.SessionStatusInitializing {
-		_ = m.updateSession(ctx, func(current *models.Session) {
-			current.Status = models.SessionStatusDisconnected
-			current.LastError = "Sessao aguardando nova conexao."
-			current.QRCode = ""
-			current.QRCodeDataURL = ""
-		})
+func (m *Manager) isSessionConnecting(sessionID string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	runtime := m.runtimes[normalizeSessionID(sessionID)]
+	return runtime != nil && runtime.connecting
+}
+
+func (m *Manager) setConnectingForSession(sessionID string, value bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.runtimeForSession(sessionID).connecting = value
+}
+
+func (m *Manager) Start(ctx context.Context) error {
+	sessions, err := m.store.ListSessions(ctx)
+	if err != nil {
+		return err
+	}
+	for _, session := range sessions {
+		if strings.TrimSpace(session.DeviceJID) != "" {
+			if _, err := m.ensureClientForSession(ctx, session.ID); err != nil {
+				return err
+			}
+			client := m.clientForSession(session.ID)
+			if client != nil && client.Store != nil && client.Store.ID != nil {
+				go func(sessionID string) {
+					if _, err := m.InitSession(context.Background(), models.SessionInitRequest{ID: sessionID}); err != nil {
+						m.logger.Error("auto reconnect failed", "session_id", sessionID, "error", err)
+					}
+				}(session.ID)
+				continue
+			}
+		}
+
+		if session.Status == models.SessionStatusActive || session.Status == models.SessionStatusSyncing || session.Status == models.SessionStatusInitializing {
+			_ = m.updateSessionByID(ctx, session.ID, func(current *models.Session) {
+				current.Status = models.SessionStatusDisconnected
+				current.LastError = "Sessao aguardando nova conexao."
+				current.QRCode = ""
+				current.QRCodeDataURL = ""
+			})
+		}
 	}
 
 	return nil
 }
 
 func (m *Manager) CreateOrUpdateSession(ctx context.Context, req models.SessionInitRequest) (*models.Session, error) {
+	sessionID := strings.TrimSpace(req.ID)
 	name := strings.TrimSpace(req.Name)
 	phone := strings.TrimSpace(req.PhoneNumber)
 	channel := strings.TrimSpace(req.ChannelName)
@@ -114,14 +166,14 @@ func (m *Manager) CreateOrUpdateSession(ctx context.Context, req models.SessionI
 	}
 
 	now := models.NowString()
-	session, err := m.store.GetSession(ctx)
+	session, err := m.store.GetSessionByID(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
 
 	if session == nil {
 		session = &models.Session{
-			ID:          models.DefaultSessionID,
+			ID:          normalizeSessionID(sessionID),
 			Name:        name,
 			PhoneNumber: phone,
 			ChannelID:   slugID("channel", channel),
@@ -145,12 +197,13 @@ func (m *Manager) CreateOrUpdateSession(ctx context.Context, req models.SessionI
 		return nil, err
 	}
 
-	updated, err := m.store.GetSession(ctx)
+	updated, err := m.store.GetSessionByID(ctx, session.ID)
 	if err != nil {
 		return nil, err
 	}
 
 	m.broadcast(models.RealtimeEvent{
+		SessionID:  session.ID,
 		Kind:       "connection",
 		Status:     string(updated.Status),
 		OccurredAt: models.NowString(),
@@ -160,69 +213,72 @@ func (m *Manager) CreateOrUpdateSession(ctx context.Context, req models.SessionI
 }
 
 func (m *Manager) InitSession(ctx context.Context, req models.SessionInitRequest) (*models.Session, error) {
+	sessionID := normalizeSessionID(req.ID)
+	req.ID = sessionID
 	_, err := m.CreateOrUpdateSession(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := m.ensureClient(ctx); err != nil {
+	if _, err := m.ensureClientForSession(ctx, sessionID); err != nil {
 		return nil, err
 	}
 
-	m.mu.Lock()
-	if m.client.IsConnected() {
-		m.mu.Unlock()
-		_ = m.updateSession(ctx, func(current *models.Session) {
+	client := m.clientForSession(sessionID)
+	if client == nil {
+		return nil, errors.New("session client is not initialized")
+	}
+	if client.IsConnected() {
+		_ = m.updateSessionByID(ctx, sessionID, func(current *models.Session) {
 			current.Status = models.SessionStatusActive
 			current.LastError = ""
 			current.ConnectedAt = models.NowString()
 		})
-		return m.store.GetSession(ctx)
+		return m.store.GetSessionByID(ctx, sessionID)
 	}
-	if m.connecting {
-		m.mu.Unlock()
-		return m.store.GetSession(ctx)
+	if m.isSessionConnecting(sessionID) {
+		return m.store.GetSessionByID(ctx, sessionID)
 	}
-	m.connecting = true
-	client := m.client
-	m.mu.Unlock()
+	m.setConnectingForSession(sessionID, true)
 
 	if client.Store != nil && client.Store.ID == nil {
 		qrChan, err := client.GetQRChannel(context.Background())
 		if err != nil {
-			m.setConnecting(false)
-			_ = m.failSession(ctx, fmt.Sprintf("falha ao abrir QR channel: %v", err))
+			m.setConnectingForSession(sessionID, false)
+			_ = m.failSessionByID(ctx, sessionID, fmt.Sprintf("falha ao abrir QR channel: %v", err))
 			return nil, err
 		}
-		go m.consumeQRChannel(qrChan)
+		go m.consumeQRChannel(sessionID, qrChan)
 	}
 
-	_ = m.updateSession(ctx, func(current *models.Session) {
+	_ = m.updateSessionByID(ctx, sessionID, func(current *models.Session) {
 		current.Status = models.SessionStatusInitializing
 		current.LastError = ""
 	})
 
 	go func() {
-		defer m.setConnecting(false)
+		defer m.setConnectingForSession(sessionID, false)
 		if err := client.Connect(); err != nil {
-			m.logger.Error("whatsmeow connect failed", "error", err)
-			_ = m.failSession(context.Background(), err.Error())
+			m.logger.Error("whatsmeow connect failed", "session_id", sessionID, "error", err)
+			_ = m.failSessionByID(context.Background(), sessionID, err.Error())
 		}
 	}()
 
-	return m.store.GetSession(ctx)
+	return m.store.GetSessionByID(ctx, sessionID)
 }
 
 func (m *Manager) Disconnect(ctx context.Context) (*models.Session, error) {
-	m.mu.RLock()
-	client := m.client
-	m.mu.RUnlock()
+	return m.DisconnectByID(ctx, models.DefaultSessionID)
+}
+
+func (m *Manager) DisconnectByID(ctx context.Context, sessionID string) (*models.Session, error) {
+	client := m.clientForSession(sessionID)
 
 	if client != nil && client.IsConnected() {
 		client.Disconnect()
 	}
 
-	if err := m.updateSession(ctx, func(current *models.Session) {
+	if err := m.updateSessionByID(ctx, sessionID, func(current *models.Session) {
 		current.Status = models.SessionStatusDisconnected
 		current.QRCode = ""
 		current.QRCodeDataURL = ""
@@ -232,20 +288,33 @@ func (m *Manager) Disconnect(ctx context.Context) (*models.Session, error) {
 	}
 
 	m.broadcast(models.RealtimeEvent{
+		SessionID:  sessionID,
 		Kind:       "connection",
 		Status:     string(models.SessionStatusDisconnected),
 		OccurredAt: models.NowString(),
 	})
 
-	return m.store.GetSession(ctx)
+	return m.store.GetSessionByID(ctx, sessionID)
 }
 
 func (m *Manager) GetSession(ctx context.Context) (*models.Session, error) {
 	return m.store.GetSession(ctx)
 }
 
+func (m *Manager) GetSessionByID(ctx context.Context, sessionID string) (*models.Session, error) {
+	return m.store.GetSessionByID(ctx, sessionID)
+}
+
+func (m *Manager) ListSessions(ctx context.Context) ([]models.Session, error) {
+	return m.store.ListSessions(ctx)
+}
+
 func (m *Manager) GetQR(ctx context.Context) (*models.SessionQRResponse, error) {
-	session, err := m.store.GetSession(ctx)
+	return m.GetQRByID(ctx, models.DefaultSessionID)
+}
+
+func (m *Manager) GetQRByID(ctx context.Context, sessionID string) (*models.SessionQRResponse, error) {
+	session, err := m.store.GetSessionByID(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +334,11 @@ func (m *Manager) GetQR(ctx context.Context) (*models.SessionQRResponse, error) 
 }
 
 func (m *Manager) GetStatus(ctx context.Context) (*models.SessionStatusResponse, error) {
-	session, err := m.store.GetSession(ctx)
+	return m.GetStatusByID(ctx, models.DefaultSessionID)
+}
+
+func (m *Manager) GetStatusByID(ctx context.Context, sessionID string) (*models.SessionStatusResponse, error) {
+	session, err := m.store.GetSessionByID(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -273,10 +346,9 @@ func (m *Manager) GetStatus(ctx context.Context) (*models.SessionStatusResponse,
 		return &models.SessionStatusResponse{Status: models.SessionStatusIdle}, nil
 	}
 
-	m.mu.RLock()
-	connected := m.client != nil && m.client.IsConnected()
-	authenticated := m.client != nil && m.client.IsLoggedIn()
-	m.mu.RUnlock()
+	client := m.clientForSession(sessionID)
+	connected := client != nil && client.IsConnected()
+	authenticated := client != nil && client.IsLoggedIn()
 
 	return &models.SessionStatusResponse{
 		Status:        session.Status,
@@ -291,9 +363,11 @@ func (m *Manager) GetStatus(ctx context.Context) (*models.SessionStatusResponse,
 }
 
 func (m *Manager) SyncContacts(ctx context.Context) error {
-	m.mu.RLock()
-	client := m.client
-	m.mu.RUnlock()
+	return m.SyncContactsBySession(ctx, models.DefaultSessionID)
+}
+
+func (m *Manager) SyncContactsBySession(ctx context.Context, sessionID string) error {
+	client := m.clientForSession(sessionID)
 	if client == nil || client.Store == nil || client.Store.Contacts == nil {
 		return nil
 	}
@@ -346,10 +420,12 @@ func (m *Manager) SyncContacts(ctx context.Context) error {
 }
 
 func (m *Manager) SyncGroupNames(ctx context.Context) error {
-	m.mu.RLock()
-	client := m.client
+	return m.SyncGroupNamesBySession(ctx, models.DefaultSessionID)
+}
+
+func (m *Manager) SyncGroupNamesBySession(ctx context.Context, sessionID string) error {
+	client := m.clientForSession(sessionID)
 	connected := client != nil && client.IsConnected()
-	m.mu.RUnlock()
 	if !connected {
 		return nil
 	}
@@ -369,7 +445,7 @@ func (m *Manager) SyncGroupNames(ctx context.Context) error {
 			continue
 		}
 
-		if err := m.upsertConversationIdentity(ctx, group.JID.String(), name, true); err != nil {
+		if err := m.upsertConversationIdentityBySession(ctx, sessionID, group.JID.String(), name, true); err != nil {
 			m.logger.Warn("sync joined group name failed", "jid", group.JID.String(), "error", err)
 		}
 	}
@@ -389,12 +465,16 @@ func (m *Manager) ListContacts(ctx context.Context) ([]models.Contact, error) {
 }
 
 func (m *Manager) GetProfilePhoto(ctx context.Context, jid string, forceRefresh bool) (*models.PhotoResponse, error) {
-	canonicalJID, err := m.ResolvePhotoJID(ctx, jid)
+	return m.GetProfilePhotoBySession(ctx, models.DefaultSessionID, jid, forceRefresh)
+}
+
+func (m *Manager) GetProfilePhotoBySession(ctx context.Context, sessionID, jid string, forceRefresh bool) (*models.PhotoResponse, error) {
+	canonicalJID, err := m.ResolvePhotoJIDBySession(ctx, sessionID, jid)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := m.refreshProfilePhoto(ctx, canonicalJID, "", forceRefresh); err != nil {
+	if err := m.refreshProfilePhotoBySession(ctx, sessionID, canonicalJID, "", forceRefresh); err != nil {
 		var unauthorized bool
 		if errors.Is(err, whatsmeow.ErrProfilePictureUnauthorized) || errors.Is(err, whatsmeow.ErrProfilePictureNotSet) {
 			unauthorized = true
@@ -422,16 +502,20 @@ func (m *Manager) GetProfilePhoto(ctx context.Context, jid string, forceRefresh 
 }
 
 func (m *Manager) ListChats(ctx context.Context) ([]models.Chat, error) {
-	chats, err := m.store.ListChats(ctx)
+	return m.ListChatsBySession(ctx, models.DefaultSessionID)
+}
+
+func (m *Manager) ListChatsBySession(ctx context.Context, sessionID string) ([]models.Chat, error) {
+	chats, err := m.store.ListChatsBySession(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
 
-	if m.shouldRefreshGroupNames(chats) {
-		if err := m.SyncGroupNames(ctx); err != nil {
+	if m.shouldRefreshGroupNamesForSession(sessionID, chats) {
+		if err := m.SyncGroupNamesBySession(ctx, sessionID); err != nil {
 			m.logger.Warn("sync group names before list chats failed", "error", err)
 		} else {
-			refreshedChats, refreshErr := m.store.ListChats(ctx)
+			refreshedChats, refreshErr := m.store.ListChatsBySession(ctx, sessionID)
 			if refreshErr == nil {
 				chats = refreshedChats
 			}
@@ -442,11 +526,15 @@ func (m *Manager) ListChats(ctx context.Context) ([]models.Chat, error) {
 }
 
 func (m *Manager) shouldRefreshGroupNames(chats []models.Chat) bool {
+	return m.shouldRefreshGroupNamesForSession(models.DefaultSessionID, chats)
+}
+
+func (m *Manager) shouldRefreshGroupNamesForSession(sessionID string, chats []models.Chat) bool {
 	m.mu.RLock()
 	lastSync := m.lastGroupNameSync
-	client := m.client
-	connected := client != nil && client.IsConnected()
 	m.mu.RUnlock()
+	client := m.clientForSession(sessionID)
+	connected := client != nil && client.IsConnected()
 
 	if !connected || time.Since(lastSync) < 5*time.Minute {
 		return false
@@ -465,23 +553,27 @@ func (m *Manager) shouldRefreshGroupNames(chats []models.Chat) bool {
 }
 
 func (m *Manager) ListMessages(ctx context.Context, chatJID string) ([]models.Message, error) {
-	resolved, err := m.ResolveConversationJID(ctx, chatJID)
+	return m.ListMessagesBySession(ctx, models.DefaultSessionID, chatJID)
+}
+
+func (m *Manager) ListMessagesBySession(ctx context.Context, sessionID, chatJID string) ([]models.Message, error) {
+	resolved, err := m.ResolveConversationJIDBySession(ctx, sessionID, chatJID)
 	if err != nil {
 		return nil, err
 	}
 	if resolved == chatJID {
-		messages, err := m.store.ListMessagesByChat(ctx, chatJID)
+		messages, err := m.store.ListMessagesByChatForSession(ctx, sessionID, chatJID)
 		if err != nil {
 			return nil, err
 		}
 		return filterRenderableMessages(messages), nil
 	}
 
-	primary, err := m.store.ListMessagesByChat(ctx, resolved)
+	primary, err := m.store.ListMessagesByChatForSession(ctx, sessionID, resolved)
 	if err != nil {
 		return nil, err
 	}
-	secondary, err := m.store.ListMessagesByChat(ctx, chatJID)
+	secondary, err := m.store.ListMessagesByChatForSession(ctx, sessionID, chatJID)
 	if err != nil {
 		return nil, err
 	}
@@ -489,15 +581,17 @@ func (m *Manager) ListMessages(ctx context.Context, chatJID string) ([]models.Me
 }
 
 func (m *Manager) ResolveConversationJID(ctx context.Context, chatJID string) (string, error) {
+	return m.ResolveConversationJIDBySession(ctx, models.DefaultSessionID, chatJID)
+}
+
+func (m *Manager) ResolveConversationJIDBySession(ctx context.Context, sessionID, chatJID string) (string, error) {
 	parsed, err := types.ParseJID(strings.TrimSpace(chatJID))
 	if err != nil {
 		return "", fmt.Errorf("invalid jid: %w", err)
 	}
 	parsed = parsed.ToNonAD()
 
-	m.mu.RLock()
-	client := m.client
-	m.mu.RUnlock()
+	client := m.clientForSession(sessionID)
 	if client == nil || client.Store == nil {
 		return parsed.String(), nil
 	}
@@ -513,6 +607,10 @@ func (m *Manager) ResolveConversationJID(ctx context.Context, chatJID string) (s
 }
 
 func (m *Manager) CanonicalConversationJID(ctx context.Context, chatJID string) (string, error) {
+	return m.CanonicalConversationJIDBySession(ctx, models.DefaultSessionID, chatJID)
+}
+
+func (m *Manager) CanonicalConversationJIDBySession(ctx context.Context, sessionID, chatJID string) (string, error) {
 	parsed, err := types.ParseJID(strings.TrimSpace(chatJID))
 	if err != nil {
 		return "", fmt.Errorf("invalid jid: %w", err)
@@ -523,9 +621,7 @@ func (m *Manager) CanonicalConversationJID(ctx context.Context, chatJID string) 
 		return parsed.String(), nil
 	}
 
-	m.mu.RLock()
-	client := m.client
-	m.mu.RUnlock()
+	client := m.clientForSession(sessionID)
 	if client == nil || client.Store == nil || client.Store.LIDs == nil {
 		return parsed.String(), nil
 	}
@@ -542,11 +638,15 @@ func (m *Manager) CanonicalConversationJID(ctx context.Context, chatJID string) 
 }
 
 func (m *Manager) ResolvePhotoJID(ctx context.Context, jid string) (string, error) {
-	canonical, err := m.CanonicalConversationJID(ctx, jid)
+	return m.ResolvePhotoJIDBySession(ctx, models.DefaultSessionID, jid)
+}
+
+func (m *Manager) ResolvePhotoJIDBySession(ctx context.Context, sessionID, jid string) (string, error) {
+	canonical, err := m.CanonicalConversationJIDBySession(ctx, sessionID, jid)
 	if err == nil && canonical != "" {
 		return canonical, nil
 	}
-	resolved, resolveErr := m.ResolveConversationJID(ctx, jid)
+	resolved, resolveErr := m.ResolveConversationJIDBySession(ctx, sessionID, jid)
 	if resolveErr == nil && resolved != "" {
 		return resolved, nil
 	}
@@ -561,6 +661,10 @@ func (m *Manager) ResolvePhotoJID(ctx context.Context, jid string) (string, erro
 }
 
 func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*models.Message, error) {
+	return m.SendTextBySession(ctx, models.DefaultSessionID, req)
+}
+
+func (m *Manager) SendTextBySession(ctx context.Context, sessionID string, req models.SendTextRequest) (*models.Message, error) {
 	text := strings.TrimSpace(req.Text)
 	if text == "" {
 		return nil, errors.New("message text is required")
@@ -575,10 +679,8 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 		return nil, err
 	}
 
-	m.mu.RLock()
-	client := m.client
+	client := m.clientForSession(sessionID)
 	connected := client != nil && client.IsConnected()
-	m.mu.RUnlock()
 	if !connected {
 		return nil, errors.New("session is not connected")
 	}
@@ -588,7 +690,7 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 		return nil, err
 	}
 
-	contextInfo, err := m.buildReplyContext(ctx, normalizedJID.String(), req.ReplyToMessageID)
+	contextInfo, err := m.buildReplyContextBySession(ctx, sessionID, normalizedJID.String(), req.ReplyToMessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -608,6 +710,7 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 
 	author := "Operador"
 	message := models.Message{
+		SessionID: normalizeSessionID(sessionID),
 		ID:        string(resp.ID),
 		ChatJID:   normalizedJID.String(),
 		SenderJID: ownDeviceJID(client),
@@ -620,16 +723,17 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 		Timestamp: resp.Timestamp.UTC().Format(time.RFC3339),
 	}
 
-	if err := m.ensureChatRecord(ctx, normalizedJID.String(), text, resp.Timestamp, true); err != nil {
+	if err := m.ensureChatRecord(ctx, sessionID, normalizedJID.String(), text, resp.Timestamp, true); err != nil {
 		return nil, err
 	}
-	created, err := m.store.SaveMessage(ctx, message)
+	created, err := m.store.SaveMessageBySession(ctx, sessionID, message)
 	if err != nil {
 		return nil, err
 	}
 
 	if created {
 		m.broadcast(models.RealtimeEvent{
+			SessionID:  normalizeSessionID(sessionID),
 			Kind:       "message.new",
 			ChatJID:    message.ChatJID,
 			MessageID:  message.ID,
@@ -643,6 +747,10 @@ func (m *Manager) SendText(ctx context.Context, req models.SendTextRequest) (*mo
 }
 
 func (m *Manager) SendMedia(ctx context.Context, req models.SendMediaRequest) (*models.Message, error) {
+	return m.SendMediaBySession(ctx, models.DefaultSessionID, req)
+}
+
+func (m *Manager) SendMediaBySession(ctx context.Context, sessionID string, req models.SendMediaRequest) (*models.Message, error) {
 	if len(req.Data) == 0 {
 		return nil, errors.New("media file is required")
 	}
@@ -656,10 +764,8 @@ func (m *Manager) SendMedia(ctx context.Context, req models.SendMediaRequest) (*
 		return nil, err
 	}
 
-	m.mu.RLock()
-	client := m.client
+	client := m.clientForSession(sessionID)
 	connected := client != nil && client.IsConnected()
-	m.mu.RUnlock()
 	if !connected {
 		return nil, errors.New("session is not connected")
 	}
@@ -674,7 +780,7 @@ func (m *Manager) SendMedia(ctx context.Context, req models.SendMediaRequest) (*
 		return nil, err
 	}
 
-	contextInfo, err := m.buildReplyContext(ctx, normalizedJID.String(), req.ReplyToMessageID)
+	contextInfo, err := m.buildReplyContextBySession(ctx, sessionID, normalizedJID.String(), req.ReplyToMessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -692,6 +798,7 @@ func (m *Manager) SendMedia(ctx context.Context, req models.SendMediaRequest) (*
 	}
 
 	message := models.Message{
+		SessionID: normalizeSessionID(sessionID),
 		ID:        string(resp.ID),
 		ChatJID:   normalizedJID.String(),
 		SenderJID: ownDeviceJID(client),
@@ -706,15 +813,16 @@ func (m *Manager) SendMedia(ctx context.Context, req models.SendMediaRequest) (*
 		Timestamp: resp.Timestamp.UTC().Format(time.RFC3339),
 	}
 
-	if err := m.ensureChatRecord(ctx, normalizedJID.String(), displayText, resp.Timestamp, true); err != nil {
+	if err := m.ensureChatRecord(ctx, sessionID, normalizedJID.String(), displayText, resp.Timestamp, true); err != nil {
 		return nil, err
 	}
-	created, err := m.store.SaveMessage(ctx, message)
+	created, err := m.store.SaveMessageBySession(ctx, sessionID, message)
 	if err != nil {
 		return nil, err
 	}
 	if created {
 		m.broadcast(models.RealtimeEvent{
+			SessionID:  normalizeSessionID(sessionID),
 			Kind:       "message.new",
 			ChatJID:    message.ChatJID,
 			MessageID:  message.ID,
@@ -739,6 +847,10 @@ func buildTextMessageProto(text string, contextInfo *waE2E.ContextInfo) *waE2E.M
 }
 
 func (m *Manager) SendReaction(ctx context.Context, req models.SendReactionRequest) (*models.Message, error) {
+	return m.SendReactionBySession(ctx, models.DefaultSessionID, req)
+}
+
+func (m *Manager) SendReactionBySession(ctx context.Context, sessionID string, req models.SendReactionRequest) (*models.Message, error) {
 	emoji := strings.TrimSpace(req.Emoji)
 	if emoji == "" {
 		return nil, errors.New("reaction emoji is required")
@@ -753,10 +865,8 @@ func (m *Manager) SendReaction(ctx context.Context, req models.SendReactionReque
 		return nil, err
 	}
 
-	m.mu.RLock()
-	client := m.client
+	client := m.clientForSession(sessionID)
 	connected := client != nil && client.IsConnected()
-	m.mu.RUnlock()
 	if !connected {
 		return nil, errors.New("session is not connected")
 	}
@@ -771,14 +881,14 @@ func (m *Manager) SendReaction(ctx context.Context, req models.SendReactionReque
 		return nil, errors.New("reaction target message is required")
 	}
 
-	target, err := m.store.GetMessageByID(ctx, targetMessageID)
+	target, err := m.store.GetMessageByIDForSession(ctx, sessionID, targetMessageID)
 	if err != nil {
 		return nil, err
 	}
 	if target == nil {
 		return nil, errors.New("reaction target message not found")
 	}
-	belongsToConversation, err := m.sameConversationJID(ctx, target.ChatJID, normalizedJID.String())
+	belongsToConversation, err := m.sameConversationJIDBySession(ctx, sessionID, target.ChatJID, normalizedJID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -809,6 +919,7 @@ func (m *Manager) SendReaction(ctx context.Context, req models.SendReactionReque
 	}
 
 	message := models.Message{
+		SessionID: normalizeSessionID(sessionID),
 		ID:        string(resp.ID),
 		ChatJID:   normalizedJID.String(),
 		SenderJID: ownDeviceJID(client),
@@ -821,12 +932,13 @@ func (m *Manager) SendReaction(ctx context.Context, req models.SendReactionReque
 		Timestamp: resp.Timestamp.UTC().Format(time.RFC3339),
 	}
 
-	created, err := m.store.SaveMessage(ctx, message)
+	created, err := m.store.SaveMessageBySession(ctx, sessionID, message)
 	if err != nil {
 		return nil, err
 	}
 	if created {
 		m.broadcast(models.RealtimeEvent{
+			SessionID:  normalizeSessionID(sessionID),
 			Kind:       "message.new",
 			ChatJID:    message.ChatJID,
 			MessageID:  message.ID,
@@ -840,19 +952,23 @@ func (m *Manager) SendReaction(ctx context.Context, req models.SendReactionReque
 }
 
 func (m *Manager) buildReplyContext(ctx context.Context, chatJID, replyToMessageID string) (*waE2E.ContextInfo, error) {
+	return m.buildReplyContextBySession(ctx, models.DefaultSessionID, chatJID, replyToMessageID)
+}
+
+func (m *Manager) buildReplyContextBySession(ctx context.Context, sessionID, chatJID, replyToMessageID string) (*waE2E.ContextInfo, error) {
 	replyToMessageID = strings.TrimSpace(replyToMessageID)
 	if replyToMessageID == "" {
 		return nil, nil
 	}
 
-	target, err := m.store.GetMessageByID(ctx, replyToMessageID)
+	target, err := m.store.GetMessageByIDForSession(ctx, sessionID, replyToMessageID)
 	if err != nil {
 		return nil, err
 	}
 	if target == nil {
 		return nil, errors.New("reply target message not found")
 	}
-	belongsToConversation, err := m.sameConversationJID(ctx, target.ChatJID, chatJID)
+	belongsToConversation, err := m.sameConversationJIDBySession(ctx, sessionID, target.ChatJID, chatJID)
 	if err != nil {
 		return nil, err
 	}
@@ -920,6 +1036,10 @@ func quotedMessageParticipant(message models.Message) string {
 }
 
 func (m *Manager) sameConversationJID(ctx context.Context, left, right string) (bool, error) {
+	return m.sameConversationJIDBySession(ctx, models.DefaultSessionID, left, right)
+}
+
+func (m *Manager) sameConversationJIDBySession(ctx context.Context, sessionID, left, right string) (bool, error) {
 	left = strings.TrimSpace(left)
 	right = strings.TrimSpace(right)
 	if left == "" || right == "" {
@@ -929,11 +1049,11 @@ func (m *Manager) sameConversationJID(ctx context.Context, left, right string) (
 		return true, nil
 	}
 
-	leftResolved, err := m.ResolveConversationJID(ctx, left)
+	leftResolved, err := m.ResolveConversationJIDBySession(ctx, sessionID, left)
 	if err != nil {
 		return false, err
 	}
-	rightResolved, err := m.ResolveConversationJID(ctx, right)
+	rightResolved, err := m.ResolveConversationJIDBySession(ctx, sessionID, right)
 	if err != nil {
 		return false, err
 	}
@@ -941,11 +1061,11 @@ func (m *Manager) sameConversationJID(ctx context.Context, left, right string) (
 		return true, nil
 	}
 
-	leftCanonical, err := m.CanonicalConversationJID(ctx, left)
+	leftCanonical, err := m.CanonicalConversationJIDBySession(ctx, sessionID, left)
 	if err != nil {
 		return false, err
 	}
-	rightCanonical, err := m.CanonicalConversationJID(ctx, right)
+	rightCanonical, err := m.CanonicalConversationJIDBySession(ctx, sessionID, right)
 	if err != nil {
 		return false, err
 	}
@@ -998,7 +1118,11 @@ func buildReactionMessageKey(message models.Message) *waCommon.MessageKey {
 }
 
 func (m *Manager) GetMessageMedia(ctx context.Context, messageID string) ([]byte, string, string, error) {
-	stored, err := m.store.GetMessageByID(ctx, messageID)
+	return m.GetMessageMediaBySession(ctx, models.DefaultSessionID, messageID)
+}
+
+func (m *Manager) GetMessageMediaBySession(ctx context.Context, sessionID, messageID string) ([]byte, string, string, error) {
+	stored, err := m.store.GetMessageByIDForSession(ctx, sessionID, messageID)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -1009,10 +1133,8 @@ func (m *Manager) GetMessageMedia(ctx context.Context, messageID string) ([]byte
 		return nil, "", "", errors.New("message has no stored media payload")
 	}
 
-	m.mu.RLock()
-	client := m.client
+	client := m.clientForSession(sessionID)
 	connected := client != nil && client.IsConnected()
-	m.mu.RUnlock()
 	if !connected {
 		return nil, "", "", errors.New("session is not connected")
 	}
@@ -1047,21 +1169,23 @@ func (m *Manager) GetMessageMedia(ctx context.Context, messageID string) ([]byte
 }
 
 func (m *Manager) MarkChatRead(ctx context.Context, chatJID string) error {
-	resolved, err := m.ResolveConversationJID(ctx, chatJID)
+	return m.MarkChatReadBySession(ctx, models.DefaultSessionID, chatJID)
+}
+
+func (m *Manager) MarkChatReadBySession(ctx context.Context, sessionID, chatJID string) error {
+	resolved, err := m.ResolveConversationJIDBySession(ctx, sessionID, chatJID)
 	if err != nil {
 		return err
 	}
 	chatJID = resolved
 
-	grouped, err := m.store.ListUnreadMessageGroupsByChat(ctx, chatJID)
+	grouped, err := m.store.ListUnreadMessageGroupsByChatForSession(ctx, sessionID, chatJID)
 	if err != nil {
 		return err
 	}
 
-	m.mu.RLock()
-	client := m.client
+	client := m.clientForSession(sessionID)
 	connected := client != nil && client.IsConnected()
-	m.mu.RUnlock()
 
 	if connected {
 		chat, err := types.ParseJID(chatJID)
@@ -1088,46 +1212,85 @@ func (m *Manager) MarkChatRead(ctx context.Context, chatJID string) error {
 		}
 	}
 
-	return m.store.MarkChatRead(ctx, chatJID)
+	return m.store.MarkChatReadBySession(ctx, sessionID, chatJID)
 }
 
 func (m *Manager) ensureClient(ctx context.Context) error {
+	_, err := m.ensureClientForSession(ctx, models.DefaultSessionID)
+	return err
+}
+
+func (m *Manager) ensureClientForSession(ctx context.Context, sessionID string) (*whatsmeow.Client, error) {
+	sessionID = normalizeSessionID(sessionID)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.client != nil {
-		return nil
+	runtime := m.runtimeForSession(sessionID)
+	if runtime.client != nil {
+		return runtime.client, nil
 	}
 
-	deviceStore, err := m.container.GetFirstDevice(ctx)
+	deviceStore, err := m.loadDeviceStoreForSession(ctx, sessionID)
 	if err != nil {
-		return fmt.Errorf("get first device: %w", err)
+		return nil, err
 	}
 
 	client := whatsmeow.NewClient(deviceStore, waLog.Stdout("Client", "INFO", true))
 	client.AddEventHandler(func(evt interface{}) {
-		go m.handleEvent(evt)
+		go m.handleEvent(sessionID, evt)
 	})
 	client.SetForceActiveDeliveryReceipts(true)
 
-	m.client = client
-	return nil
+	runtime.client = client
+	if sessionID == models.DefaultSessionID {
+		m.client = client
+	}
+	return client, nil
+}
+
+func (m *Manager) loadDeviceStoreForSession(ctx context.Context, sessionID string) (*wmstore.Device, error) {
+	session, err := m.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session != nil && strings.TrimSpace(session.DeviceJID) != "" {
+		jid, err := types.ParseJID(session.DeviceJID)
+		if err == nil {
+			deviceStore, err := m.container.GetDevice(ctx, jid)
+			if err == nil {
+				return deviceStore, nil
+			}
+		}
+	}
+	if sessionID == models.DefaultSessionID {
+		deviceStore, err := m.container.GetFirstDevice(ctx)
+		if err == nil {
+			return deviceStore, nil
+		}
+	}
+	return m.container.NewDevice(), nil
 }
 
 func (m *Manager) setConnecting(value bool) {
+	m.setConnectingForSession(models.DefaultSessionID, value)
 	m.mu.Lock()
 	m.connecting = value
 	m.mu.Unlock()
 }
 
 func (m *Manager) updateSession(ctx context.Context, mutate func(*models.Session)) error {
-	session, err := m.store.GetSession(ctx)
+	return m.updateSessionByID(ctx, models.DefaultSessionID, mutate)
+}
+
+func (m *Manager) updateSessionByID(ctx context.Context, sessionID string, mutate func(*models.Session)) error {
+	sessionID = normalizeSessionID(sessionID)
+	session, err := m.store.GetSessionByID(ctx, sessionID)
 	if err != nil {
 		return err
 	}
 	if session == nil {
 		session = &models.Session{
-			ID:          models.DefaultSessionID,
+			ID:          sessionID,
 			Name:        "WhatsApp principal",
 			PhoneNumber: "Nao informado",
 			ChannelID:   slugID("channel", "WhatsApp"),
@@ -1146,7 +1309,11 @@ func (m *Manager) updateSession(ctx context.Context, mutate func(*models.Session
 }
 
 func (m *Manager) failSession(ctx context.Context, message string) error {
-	if err := m.updateSession(ctx, func(current *models.Session) {
+	return m.failSessionByID(ctx, models.DefaultSessionID, message)
+}
+
+func (m *Manager) failSessionByID(ctx context.Context, sessionID, message string) error {
+	if err := m.updateSessionByID(ctx, sessionID, func(current *models.Session) {
 		current.Status = models.SessionStatusError
 		current.LastError = message
 	}); err != nil {
@@ -1154,6 +1321,7 @@ func (m *Manager) failSession(ctx context.Context, message string) error {
 	}
 
 	m.broadcast(models.RealtimeEvent{
+		SessionID:  sessionID,
 		Kind:       "connection",
 		Status:     string(models.SessionStatusError),
 		Text:       message,
@@ -1163,7 +1331,7 @@ func (m *Manager) failSession(ctx context.Context, message string) error {
 	return nil
 }
 
-func (m *Manager) consumeQRChannel(qrChan <-chan whatsmeow.QRChannelItem) {
+func (m *Manager) consumeQRChannel(sessionID string, qrChan <-chan whatsmeow.QRChannelItem) {
 	for item := range qrChan {
 		switch item.Event {
 		case whatsmeow.QRChannelEventCode:
@@ -1172,149 +1340,152 @@ func (m *Manager) consumeQRChannel(qrChan <-chan whatsmeow.QRChannelItem) {
 				m.logger.Warn("generate qr image failed", "error", err)
 				continue
 			}
-			_ = m.updateSession(context.Background(), func(current *models.Session) {
+			_ = m.updateSessionByID(context.Background(), sessionID, func(current *models.Session) {
 				current.Status = models.SessionStatusQRReady
 				current.QRCode = item.Code
 				current.QRCodeDataURL = dataURL
 				current.LastError = ""
 			})
 			m.broadcast(models.RealtimeEvent{
+				SessionID:  sessionID,
 				Kind:       "connection",
 				Status:     string(models.SessionStatusQRReady),
 				OccurredAt: models.NowString(),
 			})
 		case whatsmeow.QRChannelSuccess.Event:
-			_ = m.updateSession(context.Background(), func(current *models.Session) {
+			_ = m.updateSessionByID(context.Background(), sessionID, func(current *models.Session) {
 				current.Status = models.SessionStatusSyncing
 				current.QRCode = ""
 				current.QRCodeDataURL = ""
 				current.LastError = ""
 			})
 			m.broadcast(models.RealtimeEvent{
+				SessionID:  sessionID,
 				Kind:       "connection",
 				Status:     string(models.SessionStatusSyncing),
 				OccurredAt: models.NowString(),
 			})
 		case whatsmeow.QRChannelTimeout.Event:
-			_ = m.failSession(context.Background(), "QR code expirou antes do scan.")
+			_ = m.failSessionByID(context.Background(), sessionID, "QR code expirou antes do scan.")
 		case whatsmeow.QRChannelEventError:
-			_ = m.failSession(context.Background(), fmt.Sprintf("QR error: %v", item.Error))
+			_ = m.failSessionByID(context.Background(), sessionID, fmt.Sprintf("QR error: %v", item.Error))
 		case whatsmeow.QRChannelErrUnexpectedEvent.Event:
-			_ = m.failSession(context.Background(), "Evento inesperado durante o pareamento por QR.")
+			_ = m.failSessionByID(context.Background(), sessionID, "Evento inesperado durante o pareamento por QR.")
 		case whatsmeow.QRChannelClientOutdated.Event:
-			_ = m.failSession(context.Background(), "Cliente WhatsApp Web desatualizado para esse pareamento.")
+			_ = m.failSessionByID(context.Background(), sessionID, "Cliente WhatsApp Web desatualizado para esse pareamento.")
 		case whatsmeow.QRChannelScannedWithoutMultidevice.Event:
-			_ = m.failSession(context.Background(), "QR escaneado sem suporte a multidevice.")
+			_ = m.failSessionByID(context.Background(), sessionID, "QR escaneado sem suporte a multidevice.")
 		}
 	}
 }
 
-func (m *Manager) handleEvent(evt interface{}) {
+func (m *Manager) handleEvent(sessionID string, evt interface{}) {
 	switch event := evt.(type) {
 	case appstateevents.PairSuccess:
-		m.handlePairSuccess(&event)
+		m.handlePairSuccess(sessionID, &event)
 	case *appstateevents.PairSuccess:
-		m.handlePairSuccess(event)
+		m.handlePairSuccess(sessionID, event)
 	case appstateevents.Connected, *appstateevents.Connected:
-		m.handleConnected()
+		m.handleConnected(sessionID)
 	case appstateevents.Disconnected, *appstateevents.Disconnected:
-		m.handleDisconnected()
+		m.handleDisconnected(sessionID)
 	case appstateevents.LoggedOut:
-		m.handleLoggedOut(&event)
+		m.handleLoggedOut(sessionID, &event)
 	case *appstateevents.LoggedOut:
-		m.handleLoggedOut(event)
+		m.handleLoggedOut(sessionID, event)
 	case appstateevents.ConnectFailure:
-		m.handleConnectFailure(&event)
+		m.handleConnectFailure(sessionID, &event)
 	case *appstateevents.ConnectFailure:
-		m.handleConnectFailure(event)
+		m.handleConnectFailure(sessionID, event)
 	case appstateevents.Message:
-		m.handleRealtimeMessage(&event)
+		m.handleRealtimeMessage(sessionID, &event)
 	case *appstateevents.Message:
-		m.handleRealtimeMessage(event)
+		m.handleRealtimeMessage(sessionID, event)
 	case appstateevents.HistorySync:
-		m.handleHistorySync(&event)
+		m.handleHistorySync(sessionID, &event)
 	case *appstateevents.HistorySync:
-		m.handleHistorySync(event)
+		m.handleHistorySync(sessionID, event)
 	case appstateevents.Receipt:
-		m.handleReceipt(&event)
+		m.handleReceipt(sessionID, &event)
 	case *appstateevents.Receipt:
-		m.handleReceipt(event)
+		m.handleReceipt(sessionID, event)
 	case appstateevents.Contact, *appstateevents.Contact, appstateevents.PushName, *appstateevents.PushName, appstateevents.BusinessName, *appstateevents.BusinessName:
-		if err := m.SyncContacts(context.Background()); err != nil {
+		if err := m.SyncContactsBySession(context.Background(), sessionID); err != nil {
 			m.logger.Warn("sync contacts after contact event failed", "error", err)
 		}
 	case appstateevents.Picture:
-		m.handlePicture(&event)
+		m.handlePicture(sessionID, &event)
 	case *appstateevents.Picture:
-		m.handlePicture(event)
+		m.handlePicture(sessionID, event)
 	case appstateevents.GroupInfo:
-		m.handleGroupInfo(&event)
+		m.handleGroupInfo(sessionID, &event)
 	case *appstateevents.GroupInfo:
-		m.handleGroupInfo(event)
+		m.handleGroupInfo(sessionID, event)
 	case appstateevents.JoinedGroup:
-		m.handleJoinedGroup(&event)
+		m.handleJoinedGroup(sessionID, &event)
 	case *appstateevents.JoinedGroup:
-		m.handleJoinedGroup(event)
+		m.handleJoinedGroup(sessionID, event)
 	}
 }
 
-func (m *Manager) handlePairSuccess(event *appstateevents.PairSuccess) {
+func (m *Manager) handlePairSuccess(sessionID string, event *appstateevents.PairSuccess) {
 	if event == nil {
 		return
 	}
-	_ = m.updateSession(context.Background(), func(current *models.Session) {
+	_ = m.updateSessionByID(context.Background(), sessionID, func(current *models.Session) {
 		current.Status = models.SessionStatusSyncing
 		current.DeviceJID = event.ID.String()
 		current.BusinessName = event.BusinessName
 		current.Platform = event.Platform
 		current.LastError = ""
 	})
-	m.broadcast(models.RealtimeEvent{Kind: "connection", Status: string(models.SessionStatusSyncing), OccurredAt: models.NowString()})
+	m.broadcast(models.RealtimeEvent{SessionID: sessionID, Kind: "connection", Status: string(models.SessionStatusSyncing), OccurredAt: models.NowString()})
 }
 
-func (m *Manager) handleConnected() {
+func (m *Manager) handleConnected(sessionID string) {
 	ctx := context.Background()
-	_ = m.updateSession(ctx, func(current *models.Session) {
+	client := m.clientForSession(sessionID)
+	_ = m.updateSessionByID(ctx, sessionID, func(current *models.Session) {
 		current.Status = models.SessionStatusActive
-		current.DeviceJID = ownDeviceJID(m.client)
+		current.DeviceJID = ownDeviceJID(client)
 		current.QRCode = ""
 		current.QRCodeDataURL = ""
 		current.LastError = ""
 		current.ConnectedAt = models.NowString()
 	})
-	if err := m.SyncContacts(ctx); err != nil {
+	if err := m.SyncContactsBySession(ctx, sessionID); err != nil {
 		m.logger.Warn("sync contacts after connect failed", "error", err)
 	}
-	if err := m.SyncGroupNames(ctx); err != nil {
+	if err := m.SyncGroupNamesBySession(ctx, sessionID); err != nil {
 		m.logger.Warn("sync group names after connect failed", "error", err)
 	}
-	m.broadcast(models.RealtimeEvent{Kind: "connection", Status: string(models.SessionStatusActive), OccurredAt: models.NowString()})
+	m.broadcast(models.RealtimeEvent{SessionID: sessionID, Kind: "connection", Status: string(models.SessionStatusActive), OccurredAt: models.NowString()})
 }
 
-func (m *Manager) handleDisconnected() {
-	_ = m.updateSession(context.Background(), func(current *models.Session) {
+func (m *Manager) handleDisconnected(sessionID string) {
+	_ = m.updateSessionByID(context.Background(), sessionID, func(current *models.Session) {
 		current.Status = models.SessionStatusDisconnected
 		current.LastError = ""
 	})
-	m.broadcast(models.RealtimeEvent{Kind: "connection", Status: string(models.SessionStatusDisconnected), OccurredAt: models.NowString()})
+	m.broadcast(models.RealtimeEvent{SessionID: sessionID, Kind: "connection", Status: string(models.SessionStatusDisconnected), OccurredAt: models.NowString()})
 }
 
-func (m *Manager) handleLoggedOut(event *appstateevents.LoggedOut) {
+func (m *Manager) handleLoggedOut(sessionID string, event *appstateevents.LoggedOut) {
 	if event == nil {
 		return
 	}
 	message := event.Reason.String()
-	_ = m.updateSession(context.Background(), func(current *models.Session) {
+	_ = m.updateSessionByID(context.Background(), sessionID, func(current *models.Session) {
 		current.Status = models.SessionStatusDisconnected
 		current.QRCode = ""
 		current.QRCodeDataURL = ""
 		current.LastError = message
 	})
-	m.resetClient()
-	m.broadcast(models.RealtimeEvent{Kind: "connection", Status: string(models.SessionStatusDisconnected), Text: message, OccurredAt: models.NowString()})
+	m.resetClientByID(sessionID)
+	m.broadcast(models.RealtimeEvent{SessionID: sessionID, Kind: "connection", Status: string(models.SessionStatusDisconnected), Text: message, OccurredAt: models.NowString()})
 }
 
-func (m *Manager) handleConnectFailure(event *appstateevents.ConnectFailure) {
+func (m *Manager) handleConnectFailure(sessionID string, event *appstateevents.ConnectFailure) {
 	if event == nil {
 		return
 	}
@@ -1322,13 +1493,13 @@ func (m *Manager) handleConnectFailure(event *appstateevents.ConnectFailure) {
 	if message == "" {
 		message = event.Reason.String()
 	}
-	_ = m.failSession(context.Background(), message)
+	_ = m.failSessionByID(context.Background(), sessionID, message)
 	if event.Reason.IsLoggedOut() {
-		m.resetClient()
+		m.resetClientByID(sessionID)
 	}
 }
 
-func (m *Manager) handleRealtimeMessage(evt *appstateevents.Message) {
+func (m *Manager) handleRealtimeMessage(sessionID string, evt *appstateevents.Message) {
 	if evt == nil || evt.Message == nil {
 		return
 	}
@@ -1342,6 +1513,7 @@ func (m *Manager) handleRealtimeMessage(evt *appstateevents.Message) {
 
 	if err := m.ingestMessage(
 		context.Background(),
+		sessionID,
 		evt.Info.Chat.String(),
 		evt.Info.Sender.String(),
 		evt.Info.IsFromMe,
@@ -1358,13 +1530,13 @@ func (m *Manager) handleRealtimeMessage(evt *appstateevents.Message) {
 	}
 }
 
-func (m *Manager) handleHistorySync(evt *appstateevents.HistorySync) {
+func (m *Manager) handleHistorySync(sessionID string, evt *appstateevents.HistorySync) {
 	if evt == nil || evt.Data == nil {
 		return
 	}
 
 	m.mu.RLock()
-	client := m.client
+	client := m.clientForSession(sessionID)
 	m.mu.RUnlock()
 	if client == nil {
 		return
@@ -1382,12 +1554,12 @@ func (m *Manager) handleHistorySync(evt *appstateevents.HistorySync) {
 
 		preferredName := bestHistoryConversationName(conversation, chatJID.String())
 		if preferredName != "" {
-			if err := m.upsertConversationIdentity(context.Background(), chatJID.String(), preferredName, strings.HasSuffix(chatJID.String(), "@g.us")); err != nil {
+			if err := m.upsertConversationIdentityBySession(context.Background(), sessionID, chatJID.String(), preferredName, strings.HasSuffix(chatJID.String(), "@g.us")); err != nil {
 				m.logger.Warn("sync conversation identity failed", "chat_jid", chatJID.String(), "error", err)
 			}
 		}
 
-		if err := m.ensureChatRecord(context.Background(), chatJID.String(), "", time.Now(), false); err != nil {
+		if err := m.ensureChatRecord(context.Background(), sessionID, chatJID.String(), "", time.Now(), false); err != nil {
 			m.logger.Warn("ensure chat from history failed", "chat_jid", chatJID.String(), "error", err)
 		}
 
@@ -1405,6 +1577,7 @@ func (m *Manager) handleHistorySync(evt *appstateevents.HistorySync) {
 
 			if err := m.ingestMessage(
 				context.Background(),
+				sessionID,
 				parsed.Info.Chat.String(),
 				parsed.Info.Sender.String(),
 				parsed.Info.IsFromMe,
@@ -1423,25 +1596,26 @@ func (m *Manager) handleHistorySync(evt *appstateevents.HistorySync) {
 	}
 
 	if hadChat {
-		m.broadcast(models.RealtimeEvent{Kind: "chat.new", OccurredAt: models.NowString()})
+		m.broadcast(models.RealtimeEvent{SessionID: sessionID, Kind: "chat.new", OccurredAt: models.NowString()})
 	}
 
-	if err := m.SyncContacts(context.Background()); err != nil {
+	if err := m.SyncContactsBySession(context.Background(), sessionID); err != nil {
 		m.logger.Warn("sync contacts after history failed", "error", err)
 	}
 }
 
-func (m *Manager) handleReceipt(evt *appstateevents.Receipt) {
+func (m *Manager) handleReceipt(sessionID string, evt *appstateevents.Receipt) {
 	if evt == nil {
 		return
 	}
 	ackStatus := receiptStatus(evt.Type)
 	for _, messageID := range evt.MessageIDs {
-		if err := m.store.UpdateMessageAck(context.Background(), string(messageID), ackStatus); err != nil {
+		if err := m.store.UpdateMessageAckBySession(context.Background(), sessionID, string(messageID), ackStatus); err != nil {
 			m.logger.Warn("update message ack failed", "message_id", messageID, "error", err)
 			continue
 		}
 		m.broadcast(models.RealtimeEvent{
+			SessionID:  sessionID,
 			Kind:       "message.ack",
 			ChatJID:    evt.Chat.String(),
 			MessageID:  string(messageID),
@@ -1451,7 +1625,7 @@ func (m *Manager) handleReceipt(evt *appstateevents.Receipt) {
 	}
 }
 
-func (m *Manager) handlePicture(evt *appstateevents.Picture) {
+func (m *Manager) handlePicture(sessionID string, evt *appstateevents.Picture) {
 	if evt == nil {
 		return
 	}
@@ -1462,12 +1636,12 @@ func (m *Manager) handlePicture(evt *appstateevents.Picture) {
 		}
 		return
 	}
-	if err := m.refreshProfilePhoto(ctx, evt.JID.String(), evt.PictureID, false); err != nil {
+	if err := m.refreshProfilePhotoBySession(ctx, sessionID, evt.JID.String(), evt.PictureID, false); err != nil {
 		m.logger.Warn("refresh picture failed", "jid", evt.JID.String(), "error", err)
 	}
 }
 
-func (m *Manager) handleGroupInfo(evt *appstateevents.GroupInfo) {
+func (m *Manager) handleGroupInfo(sessionID string, evt *appstateevents.GroupInfo) {
 	if evt == nil {
 		return
 	}
@@ -1478,12 +1652,12 @@ func (m *Manager) handleGroupInfo(evt *appstateevents.GroupInfo) {
 	if name == "" {
 		return
 	}
-	if err := m.upsertConversationIdentity(context.Background(), evt.JID.String(), name, true); err != nil {
+	if err := m.upsertConversationIdentityBySession(context.Background(), sessionID, evt.JID.String(), name, true); err != nil {
 		m.logger.Warn("sync group info name failed", "jid", evt.JID.String(), "error", err)
 	}
 }
 
-func (m *Manager) handleJoinedGroup(evt *appstateevents.JoinedGroup) {
+func (m *Manager) handleJoinedGroup(sessionID string, evt *appstateevents.JoinedGroup) {
 	if evt == nil {
 		return
 	}
@@ -1494,13 +1668,14 @@ func (m *Manager) handleJoinedGroup(evt *appstateevents.JoinedGroup) {
 	if name == "" {
 		return
 	}
-	if err := m.upsertConversationIdentity(context.Background(), evt.JID.String(), name, true); err != nil {
+	if err := m.upsertConversationIdentityBySession(context.Background(), sessionID, evt.JID.String(), name, true); err != nil {
 		m.logger.Warn("sync joined group name failed", "jid", evt.JID.String(), "error", err)
 	}
 }
 
 func (m *Manager) ingestMessage(
 	ctx context.Context,
+	sessionID string,
 	chatJID string,
 	senderJID string,
 	fromMe bool,
@@ -1517,12 +1692,13 @@ func (m *Manager) ingestMessage(
 		return nil
 	}
 
-	if err := m.ensureChatRecord(ctx, chatJID, body, timestamp, fromMe); err != nil {
+	if err := m.ensureChatRecord(ctx, sessionID, chatJID, body, timestamp, fromMe); err != nil {
 		return err
 	}
 
-	author := m.resolveAuthor(ctx, chatJID, senderJID, fromMe)
+	author := m.resolveAuthorBySession(ctx, sessionID, chatJID, senderJID, fromMe)
 	message := models.Message{
+		SessionID: normalizeSessionID(sessionID),
 		ID:        messageID,
 		ChatJID:   chatJID,
 		SenderJID: senderJID,
@@ -1537,7 +1713,7 @@ func (m *Manager) ingestMessage(
 		Timestamp: timestamp.UTC().Format(time.RFC3339),
 	}
 
-	created, err := m.store.SaveMessage(ctx, message)
+	created, err := m.store.SaveMessageBySession(ctx, sessionID, message)
 	if err != nil {
 		return err
 	}
@@ -1551,6 +1727,7 @@ func (m *Manager) ingestMessage(
 	}
 
 	m.broadcast(models.RealtimeEvent{
+		SessionID:  sessionID,
 		Kind:       "message.new",
 		ChatJID:    chatJID,
 		MessageID:  messageID,
@@ -1562,14 +1739,15 @@ func (m *Manager) ingestMessage(
 	return nil
 }
 
-func (m *Manager) ensureChatRecord(ctx context.Context, chatJID, preview string, timestamp time.Time, fromMe bool) error {
-	chatName := m.resolveChatName(ctx, chatJID)
-	existing, err := m.store.GetChat(ctx, chatJID)
+func (m *Manager) ensureChatRecord(ctx context.Context, sessionID, chatJID, preview string, timestamp time.Time, fromMe bool) error {
+	chatName := m.resolveChatNameBySession(ctx, sessionID, chatJID)
+	existing, err := m.store.GetChatForSession(ctx, sessionID, chatJID)
 	if err != nil {
 		return err
 	}
 
 	chat := models.Chat{
+		SessionID:       normalizeSessionID(sessionID),
 		JID:             chatJID,
 		Name:            chatName,
 		ContactJID:      chatJID,
@@ -1589,12 +1767,13 @@ func (m *Manager) ensureChatRecord(ctx context.Context, chatJID, preview string,
 		}
 	}
 
-	created, err := m.store.UpsertChat(ctx, chat)
+	created, err := m.store.UpsertChatForSession(ctx, sessionID, chat)
 	if err != nil {
 		return err
 	}
 	if created {
 		m.broadcast(models.RealtimeEvent{
+			SessionID:  sessionID,
 			Kind:       "chat.new",
 			ChatJID:    chatJID,
 			OccurredAt: models.NowString(),
@@ -1603,7 +1782,7 @@ func (m *Manager) ensureChatRecord(ctx context.Context, chatJID, preview string,
 
 	if !strings.HasSuffix(chatJID, "@g.us") {
 		go func() {
-			if err := m.refreshProfilePhoto(context.Background(), chatJID, "", false); err != nil {
+			if err := m.refreshProfilePhotoBySession(context.Background(), sessionID, chatJID, "", false); err != nil {
 				if !errors.Is(err, whatsmeow.ErrProfilePictureUnauthorized) && !errors.Is(err, whatsmeow.ErrProfilePictureNotSet) {
 					m.logger.Debug("refresh profile photo skipped", "jid", chatJID, "error", err)
 				}
@@ -1616,10 +1795,12 @@ func (m *Manager) ensureChatRecord(ctx context.Context, chatJID, preview string,
 }
 
 func (m *Manager) refreshProfilePhoto(ctx context.Context, jidText string, pictureID string, forceRefresh bool) error {
-	m.mu.RLock()
-	client := m.client
+	return m.refreshProfilePhotoBySession(ctx, models.DefaultSessionID, jidText, pictureID, forceRefresh)
+}
+
+func (m *Manager) refreshProfilePhotoBySession(ctx context.Context, sessionID, jidText string, pictureID string, forceRefresh bool) error {
+	client := m.clientForSession(sessionID)
 	connected := client != nil && client.IsConnected()
-	m.mu.RUnlock()
 	if !connected || jidText == "" || shouldIgnoreJID(jidText) {
 		return nil
 	}
@@ -1634,7 +1815,7 @@ func (m *Manager) refreshProfilePhoto(ctx context.Context, jidText string, pictu
 		return err
 	}
 	if contact == nil {
-		contact = &models.Contact{JID: jidText, DisplayName: m.resolveChatName(ctx, jidText), UpdatedAt: models.NowString()}
+		contact = &models.Contact{JID: jidText, DisplayName: m.resolveChatNameBySession(ctx, sessionID, jidText), UpdatedAt: models.NowString()}
 		if err := m.store.UpsertContact(ctx, *contact); err != nil {
 			return err
 		}
@@ -1663,11 +1844,15 @@ func (m *Manager) refreshProfilePhoto(ctx context.Context, jidText string, pictu
 }
 
 func (m *Manager) resolveAuthor(ctx context.Context, chatJID, senderJID string, fromMe bool) string {
+	return m.resolveAuthorBySession(ctx, models.DefaultSessionID, chatJID, senderJID, fromMe)
+}
+
+func (m *Manager) resolveAuthorBySession(ctx context.Context, sessionID, chatJID, senderJID string, fromMe bool) string {
 	if fromMe {
 		return "Operador"
 	}
 	if senderJID != "" && senderJID != chatJID {
-		if name := m.resolveParticipantName(ctx, senderJID); name != "" {
+		if name := m.resolveParticipantNameBySession(ctx, sessionID, senderJID); name != "" {
 			return name
 		}
 		return localPart(senderJID)
@@ -1679,16 +1864,20 @@ func (m *Manager) resolveAuthor(ctx context.Context, chatJID, senderJID string, 
 }
 
 func (m *Manager) resolveParticipantName(ctx context.Context, jid string) string {
+	return m.resolveParticipantNameBySession(ctx, models.DefaultSessionID, jid)
+}
+
+func (m *Manager) resolveParticipantNameBySession(ctx context.Context, sessionID, jid string) string {
 	jid = strings.TrimSpace(jid)
 	if jid == "" {
 		return ""
 	}
 
 	candidates := []string{jid}
-	if canonical, err := m.CanonicalConversationJID(ctx, jid); err == nil && canonical != "" && canonical != jid {
+	if canonical, err := m.CanonicalConversationJIDBySession(ctx, sessionID, jid); err == nil && canonical != "" && canonical != jid {
 		candidates = append(candidates, canonical)
 	}
-	if resolved, err := m.ResolveConversationJID(ctx, jid); err == nil && resolved != "" && resolved != jid {
+	if resolved, err := m.ResolveConversationJIDBySession(ctx, sessionID, jid); err == nil && resolved != "" && resolved != jid {
 		candidates = append(candidates, resolved)
 	}
 
@@ -1730,6 +1919,13 @@ func (m *Manager) resolveParticipantName(ctx context.Context, jid string) string
 }
 
 func (m *Manager) resolveChatName(ctx context.Context, chatJID string) string {
+	return m.resolveChatNameBySession(ctx, models.DefaultSessionID, chatJID)
+}
+
+func (m *Manager) resolveChatNameBySession(ctx context.Context, sessionID, chatJID string) string {
+	if chat, err := m.store.GetChatForSession(ctx, sessionID, chatJID); err == nil && chat != nil && isMeaningfulDisplayName(chat.Name, chatJID) {
+		return chat.Name
+	}
 	if chat, err := m.store.GetChat(ctx, chatJID); err == nil && chat != nil && isMeaningfulDisplayName(chat.Name, chatJID) {
 		return chat.Name
 	}
@@ -1740,17 +1936,22 @@ func (m *Manager) resolveChatName(ctx context.Context, chatJID string) string {
 }
 
 func (m *Manager) upsertConversationIdentity(ctx context.Context, chatJID, preferredName string, isGroup bool) error {
+	return m.upsertConversationIdentityBySession(ctx, models.DefaultSessionID, chatJID, preferredName, isGroup)
+}
+
+func (m *Manager) upsertConversationIdentityBySession(ctx context.Context, sessionID, chatJID, preferredName string, isGroup bool) error {
 	preferredName = normalizePreferredName(preferredName)
 	if preferredName == "" || !isMeaningfulDisplayName(preferredName, chatJID) {
 		return nil
 	}
 
-	chat, err := m.store.GetChat(ctx, chatJID)
+	chat, err := m.store.GetChatForSession(ctx, sessionID, chatJID)
 	if err != nil {
 		return err
 	}
 	if chat == nil {
 		chat = &models.Chat{
+			SessionID:  normalizeSessionID(sessionID),
 			JID:        chatJID,
 			ContactJID: chatJID,
 			IsGroup:    isGroup,
@@ -1761,7 +1962,7 @@ func (m *Manager) upsertConversationIdentity(ctx context.Context, chatJID, prefe
 		chat.Name = preferredName
 	}
 	chat.UpdatedAt = models.NowString()
-	if _, err := m.store.UpsertChat(ctx, *chat); err != nil {
+	if _, err := m.store.UpsertChatForSession(ctx, sessionID, *chat); err != nil {
 		return err
 	}
 
@@ -1800,21 +2001,34 @@ func (m *Manager) broadcast(event models.RealtimeEvent) {
 }
 
 func (m *Manager) resetClient() {
+	m.resetClientByID(models.DefaultSessionID)
+}
+
+func (m *Manager) resetClientByID(sessionID string) {
+	sessionID = normalizeSessionID(sessionID)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.client = nil
-	m.connecting = false
-	deviceStore, err := m.container.GetFirstDevice(context.Background())
+	runtime := m.runtimeForSession(sessionID)
+	runtime.client = nil
+	runtime.connecting = false
+	if sessionID == models.DefaultSessionID {
+		m.client = nil
+		m.connecting = false
+	}
+	deviceStore, err := m.loadDeviceStoreForSession(context.Background(), sessionID)
 	if err != nil {
-		m.logger.Error("reset device store failed", "error", err)
+		m.logger.Error("reset device store failed", "session_id", sessionID, "error", err)
 		return
 	}
 	client := whatsmeow.NewClient(deviceStore, waLog.Stdout("Client", "INFO", true))
 	client.AddEventHandler(func(evt interface{}) {
-		go m.handleEvent(evt)
+		go m.handleEvent(sessionID, evt)
 	})
 	client.SetForceActiveDeliveryReceipts(true)
-	m.client = client
+	runtime.client = client
+	if sessionID == models.DefaultSessionID {
+		m.client = client
+	}
 }
 
 func qrDataURL(code string) (string, error) {

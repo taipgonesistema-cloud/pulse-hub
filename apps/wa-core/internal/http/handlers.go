@@ -207,7 +207,7 @@ func (a *API) handleSessionQR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	qr, err := a.manager.GetQR(r.Context())
+	qr, err := a.manager.GetQRByID(r.Context(), models.DefaultSessionID)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
@@ -220,7 +220,7 @@ func (a *API) handleSessionStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status, err := a.manager.GetStatus(r.Context())
+	status, err := a.manager.GetStatusByID(r.Context(), models.DefaultSessionID)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
@@ -238,18 +238,19 @@ func (a *API) handleContacts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleContactPhoto(w http.ResponseWriter, r *http.Request) {
+	sessionID := strings.TrimSpace(r.URL.Query().Get("sessionId"))
 	jid, err := pathJID(chi.URLParam(r, "jid"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	photo, err := a.manager.GetProfilePhoto(r.Context(), jid, shouldRedirectPhoto(r))
+	photo, err := a.manager.GetProfilePhotoBySession(r.Context(), sessionID, jid, shouldRedirectPhoto(r))
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
-	photo.ProxyURL = avatarProxyPath(photo.CanonicalJID, photo.PhotoID)
+	photo.ProxyURL = avatarProxyPath(sessionID, photo.CanonicalJID, photo.PhotoID)
 
 	if shouldRedirectPhoto(r) {
 		if photo.PhotoURL == "" {
@@ -325,13 +326,14 @@ func (a *API) handleSendMedia(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleMessageMedia(w http.ResponseWriter, r *http.Request) {
+	sessionID := strings.TrimSpace(r.URL.Query().Get("sessionId"))
 	messageID := strings.TrimSpace(chi.URLParam(r, "id"))
 	if messageID == "" {
 		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "message id is required"})
 		return
 	}
 
-	data, mimeType, fileName, err := a.manager.GetMessageMedia(r.Context(), messageID)
+	data, mimeType, fileName, err := a.manager.GetMessageMediaBySession(r.Context(), sessionID, messageID)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
 		return
@@ -540,12 +542,8 @@ func (a *API) handleConnectSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !a.isDefaultSession(chi.URLParam(r, "id")) {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
-		return
-	}
-
-	session, err := a.manager.InitSession(r.Context(), models.SessionInitRequest{})
+	sessionID := strings.TrimSpace(chi.URLParam(r, "id"))
+	session, err := a.manager.InitSession(r.Context(), models.SessionInitRequest{ID: sessionID})
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
 		return
@@ -574,12 +572,8 @@ func (a *API) handleDisconnectSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !a.isDefaultSession(chi.URLParam(r, "id")) {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
-		return
-	}
-
-	session, err := a.manager.Disconnect(r.Context())
+	sessionID := strings.TrimSpace(chi.URLParam(r, "id"))
+	session, err := a.manager.DisconnectByID(r.Context(), sessionID)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
@@ -606,12 +600,8 @@ func (a *API) handleSessionQRCompat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !a.isDefaultSession(chi.URLParam(r, "id")) {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
-		return
-	}
-
-	session, err := a.manager.GetSession(r.Context())
+	sessionID := strings.TrimSpace(chi.URLParam(r, "id"))
+	session, err := a.manager.GetSessionByID(r.Context(), sessionID)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
@@ -625,10 +615,17 @@ func (a *API) handleSessionQRCompat(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
-	qr, err := a.manager.GetQR(r.Context())
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, err)
-		return
+	qr := &models.SessionQRResponse{
+		Status:       session.Status,
+		Code:         session.QRCode,
+		ImageDataURL: session.QRCodeDataURL,
+	}
+	if session.ID == models.DefaultSessionID {
+		qr, err = a.manager.GetQR(r.Context())
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, err)
+			return
+		}
 	}
 	respondJSON(w, http.StatusOK, map[string]any{
 		"session": compat,
@@ -641,12 +638,18 @@ func (a *API) handleSessionQRCompat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleConversations(w http.ResponseWriter, r *http.Request) {
-	if !a.isDefaultSession(chi.URLParam(r, "id")) {
+	sessionID := strings.TrimSpace(chi.URLParam(r, "id"))
+	session, err := a.manager.GetSessionByID(r.Context(), sessionID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if session == nil {
 		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
 		return
 	}
 
-	conversations, err := a.buildConversationRecords(r.Context())
+	conversations, err := a.buildConversationRecordsForSession(r.Context(), session)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
@@ -655,10 +658,7 @@ func (a *API) handleConversations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleConversationMessages(w http.ResponseWriter, r *http.Request) {
-	if !a.isDefaultSession(chi.URLParam(r, "id")) {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
-		return
-	}
+	sessionID := strings.TrimSpace(chi.URLParam(r, "id"))
 
 	jid, err := pathJID(chi.URLParam(r, "jid"))
 	if err != nil {
@@ -666,7 +666,7 @@ func (a *API) handleConversationMessages(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	messages, err := a.manager.ListMessages(r.Context(), jid)
+	messages, err := a.manager.ListMessagesBySession(r.Context(), sessionID, jid)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
@@ -681,10 +681,7 @@ func (a *API) handleConversationMessages(w http.ResponseWriter, r *http.Request)
 }
 
 func (a *API) handleConversationSend(w http.ResponseWriter, r *http.Request) {
-	if !a.isDefaultSession(chi.URLParam(r, "id")) {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
-		return
-	}
+	sessionID := strings.TrimSpace(chi.URLParam(r, "id"))
 
 	jid, err := pathJID(chi.URLParam(r, "jid"))
 	if err != nil {
@@ -702,7 +699,7 @@ func (a *API) handleConversationSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message, err := a.manager.SendText(r.Context(), models.SendTextRequest{
+	message, err := a.manager.SendTextBySession(r.Context(), sessionID, models.SendTextRequest{
 		JID:              jid,
 		Text:             request.Body,
 		ReplyToMessageID: request.ReplyToMessageID,
@@ -722,10 +719,7 @@ func (a *API) handleConversationSend(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleConversationSendMedia(w http.ResponseWriter, r *http.Request) {
-	if !a.isDefaultSession(chi.URLParam(r, "id")) {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
-		return
-	}
+	sessionID := strings.TrimSpace(chi.URLParam(r, "id"))
 
 	jid, err := pathJID(chi.URLParam(r, "jid"))
 	if err != nil {
@@ -739,7 +733,7 @@ func (a *API) handleConversationSendMedia(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	message, err := a.manager.SendMedia(r.Context(), req)
+	message, err := a.manager.SendMediaBySession(r.Context(), sessionID, req)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
 		return
@@ -755,10 +749,7 @@ func (a *API) handleConversationSendMedia(w http.ResponseWriter, r *http.Request
 }
 
 func (a *API) handleConversationReaction(w http.ResponseWriter, r *http.Request) {
-	if !a.isDefaultSession(chi.URLParam(r, "id")) {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
-		return
-	}
+	sessionID := strings.TrimSpace(chi.URLParam(r, "id"))
 
 	jid, err := pathJID(chi.URLParam(r, "jid"))
 	if err != nil {
@@ -774,7 +765,7 @@ func (a *API) handleConversationReaction(w http.ResponseWriter, r *http.Request)
 
 	request.JID = jid
 
-	message, err := a.manager.SendReaction(r.Context(), request)
+	message, err := a.manager.SendReactionBySession(r.Context(), sessionID, request)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err)
 		return
@@ -790,10 +781,7 @@ func (a *API) handleConversationReaction(w http.ResponseWriter, r *http.Request)
 }
 
 func (a *API) handleConversationRead(w http.ResponseWriter, r *http.Request) {
-	if !a.isDefaultSession(chi.URLParam(r, "id")) {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
-		return
-	}
+	sessionID := strings.TrimSpace(chi.URLParam(r, "id"))
 
 	jid, err := pathJID(chi.URLParam(r, "jid"))
 	if err != nil {
@@ -801,7 +789,7 @@ func (a *API) handleConversationRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.manager.MarkChatRead(r.Context(), jid); err != nil {
+	if err := a.manager.MarkChatReadBySession(r.Context(), sessionID, jid); err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -2354,32 +2342,37 @@ func averageInt(values []int) int {
 }
 
 func (a *API) buildSessionRecords(ctx context.Context) ([]models.SessionRecord, error) {
-	session, err := a.manager.GetSession(ctx)
+	sessions, err := a.manager.ListSessions(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if session == nil {
+	if len(sessions) == 0 {
 		return []models.SessionRecord{}, nil
 	}
 
-	compat, err := a.sessionToCompat(ctx, session)
-	if err != nil {
-		return nil, err
+	items := make([]models.SessionRecord, 0, len(sessions))
+	for index := range sessions {
+		compat, err := a.sessionToCompat(ctx, &sessions[index])
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, compat)
 	}
-	return []models.SessionRecord{compat}, nil
+
+	return items, nil
 }
 
 func (a *API) sessionToCompat(ctx context.Context, session *models.Session) (models.SessionRecord, error) {
-	chats, err := a.manager.ListChats(ctx)
+	waiting := 0
+	unread := 0
+	chats, err := a.manager.ListChatsBySession(ctx, session.ID)
 	if err != nil {
 		return models.SessionRecord{}, err
 	}
 
-	waiting := 0
-	unread := 0
 	seen := make(map[string]struct{}, len(chats))
 	for _, chat := range chats {
-		canonicalJID, err := a.manager.CanonicalConversationJID(ctx, chat.JID)
+		canonicalJID, err := a.manager.CanonicalConversationJIDBySession(ctx, session.ID, chat.JID)
 		if err != nil {
 			canonicalJID = chat.JID
 		}
@@ -2421,16 +2414,20 @@ func (a *API) sessionToCompat(ctx context.Context, session *models.Session) (mod
 }
 
 func (a *API) buildConversationRecords(ctx context.Context) ([]models.ConversationRecord, error) {
-	chats, err := a.manager.ListChats(ctx)
-	if err != nil {
-		return nil, err
-	}
 	session, err := a.manager.GetSession(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if session == nil {
 		return []models.ConversationRecord{}, nil
+	}
+	return a.buildConversationRecordsForSession(ctx, session)
+}
+
+func (a *API) buildConversationRecordsForSession(ctx context.Context, session *models.Session) ([]models.ConversationRecord, error) {
+	chats, err := a.manager.ListChatsBySession(ctx, session.ID)
+	if err != nil {
+		return nil, err
 	}
 
 	contacts, err := a.manager.ListContacts(ctx)
@@ -2445,7 +2442,7 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 	conversationsByID := make(map[string]models.ConversationRecord, len(chats))
 	latestMessageByConversation := make(map[string]models.Message, len(chats))
 	for _, chat := range chats {
-		canonicalJID, err := a.manager.CanonicalConversationJID(ctx, chat.JID)
+		canonicalJID, err := a.manager.CanonicalConversationJIDBySession(ctx, session.ID, chat.JID)
 		if err != nil {
 			canonicalJID = chat.JID
 		}
@@ -2469,7 +2466,7 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 
 		latestMessage, ok := latestMessageByConversation[canonicalJID]
 		if !ok {
-			messages, err := a.manager.ListMessages(ctx, chat.JID)
+			messages, err := a.manager.ListMessagesBySession(ctx, session.ID, chat.JID)
 			if err == nil && len(messages) > 0 {
 				latestMessage = latestPreviewMessage(messages)
 				latestMessageByConversation[canonicalJID] = latestMessage
@@ -2488,7 +2485,7 @@ func (a *API) buildConversationRecords(ctx context.Context) ([]models.Conversati
 			SessionID:     session.ID,
 			SessionName:   session.Name,
 			Contact:       name,
-			AvatarURL:     avatarProxyPath(canonicalJID, contact.PhotoID),
+			AvatarURL:     avatarProxyPath(session.ID, canonicalJID, contact.PhotoID),
 			ParticipantID: canonicalJID,
 			Owner:         "Sem responsavel",
 			Status:        "Atendimento geral",
@@ -2551,6 +2548,9 @@ func (a *API) buildMessageRecord(ctx context.Context, message models.Message, co
 	mediaURL := ""
 	if message.Kind != "" && message.Kind != "text" && message.Kind != "media" {
 		mediaURL = "/messages/" + url.PathEscape(message.ID) + "/media"
+		if strings.TrimSpace(message.SessionID) != "" {
+			mediaURL += "?sessionId=" + url.QueryEscape(message.SessionID)
+		}
 	}
 	body, err := a.resolveMessageBody(ctx, message)
 	if err != nil {
@@ -2957,11 +2957,14 @@ func shouldRedirectPhoto(r *http.Request) bool {
 	return value == "1" || value == "true" || value == "yes"
 }
 
-func avatarProxyPath(jid, photoID string) string {
+func avatarProxyPath(sessionID, jid, photoID string) string {
 	if strings.TrimSpace(jid) == "" {
 		return ""
 	}
 	path := "/contacts/" + url.PathEscape(jid) + "/photo?redirect=1"
+	if strings.TrimSpace(sessionID) != "" {
+		path += "&sessionId=" + url.QueryEscape(sessionID)
+	}
 	if strings.TrimSpace(photoID) != "" {
 		path += "&v=" + url.QueryEscape(photoID)
 	}

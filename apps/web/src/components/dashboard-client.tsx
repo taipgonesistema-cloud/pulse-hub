@@ -1948,13 +1948,22 @@ export function DashboardClient({ initialOverview }: Props) {
           return;
         }
 
+        if (payload.kind === 'connection') {
+          scheduleOverviewRefresh();
+        }
+
         if (
-          payload.kind === 'connection' ||
           payload.kind === 'chat.new' ||
           payload.kind === 'message.new' ||
           payload.kind === 'message.ack'
         ) {
-          scheduleOverviewRefresh();
+          if (
+            !payload.sessionId ||
+            !realtimeContextRef.current.activeSessionId ||
+            payload.sessionId === realtimeContextRef.current.activeSessionId
+          ) {
+            scheduleOverviewRefresh();
+          }
         }
 
         if (payload.kind === 'kanban.stage.updated') {
@@ -2001,6 +2010,7 @@ export function DashboardClient({ initialOverview }: Props) {
           activeSessionId &&
           activeConversationId &&
           payload.kind === 'message.new' &&
+          payload.sessionId === activeSessionId &&
           payload.chatJid === activeConversationId
         ) {
           if (payload.direction === 'incoming' && isConversationActivelyViewedRef.current(activeSessionId, activeConversationId)) {
@@ -2769,11 +2779,27 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
+    const payload = {
+      id: buildWorkspaceSessionId(sessionForm),
+      name: sessionForm.name.trim(),
+      phoneNumber: sessionForm.phoneNumber.trim(),
+      channelName: sessionForm.channelName.trim(),
+    };
+
+    if (!payload.name) {
+      pushToast({
+        tone: 'error',
+        title: 'Nome obrigatorio',
+        description: 'Defina um nome operacional para a nova sessao.',
+      });
+      return;
+    }
+
     runAction(async () => {
       const response = await authenticatedFetch(`${apiUrl}/whatsapp/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sessionForm),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -8170,6 +8196,22 @@ function normalizeConversationKey(value: string) {
 
 function buildConversationCacheKey(sessionId: string, conversationId: string) {
   return `${sessionId}:${conversationId}`;
+}
+
+function buildWorkspaceSessionId(input: {
+  name: string;
+  phoneNumber: string;
+  channelName: string;
+}) {
+  const base = [input.name, input.phoneNumber, input.channelName]
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+    .join('-')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  const suffix = Date.now().toString(36).slice(-6);
+  return base ? `${base}-${suffix}` : `session-${suffix}`;
 }
 
 function buildToastKey(toast: Pick<ToastItem, 'tone' | 'title' | 'description'>) {

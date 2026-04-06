@@ -62,6 +62,7 @@ type Contact struct {
 }
 
 type Chat struct {
+	SessionID       string `json:"sessionId,omitempty"`
 	JID             string `json:"jid"`
 	Name            string `json:"name"`
 	ContactJID      string `json:"contactJid,omitempty"`
@@ -74,6 +75,7 @@ type Chat struct {
 }
 
 type Message struct {
+	SessionID string `json:"sessionId,omitempty"`
 	ID        string `json:"id"`
 	ChatJID   string `json:"chatJid"`
 	SenderJID string `json:"senderJid,omitempty"`
@@ -89,6 +91,7 @@ type Message struct {
 }
 
 type SessionInitRequest struct {
+	ID          string `json:"id,omitempty"`
 	Name        string `json:"name"`
 	PhoneNumber string `json:"phoneNumber"`
 	ChannelName string `json:"channelName"`

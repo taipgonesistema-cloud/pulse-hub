@@ -92,6 +92,8 @@ func (s *Store) migrate(ctx context.Context) error {
 
 	CREATE TABLE IF NOT EXISTS chats (
 		jid TEXT PRIMARY KEY,
+		session_id TEXT NOT NULL DEFAULT 'default',
+		remote_jid TEXT NOT NULL DEFAULT '',
 		name TEXT NOT NULL,
 		contact_jid TEXT NOT NULL DEFAULT '',
 		is_group BOOLEAN NOT NULL DEFAULT FALSE,
@@ -104,7 +106,10 @@ func (s *Store) migrate(ctx context.Context) error {
 
 	CREATE TABLE IF NOT EXISTS messages (
 		id TEXT PRIMARY KEY,
+		session_id TEXT NOT NULL DEFAULT 'default',
+		remote_id TEXT NOT NULL DEFAULT '',
 		chat_jid TEXT NOT NULL,
+		remote_chat_jid TEXT NOT NULL DEFAULT '',
 		sender_jid TEXT NOT NULL DEFAULT '',
 		author TEXT NOT NULL DEFAULT '',
 		from_me BOOLEAN NOT NULL DEFAULT FALSE,
@@ -214,10 +219,17 @@ func (s *Store) migrate(ctx context.Context) error {
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'text';
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS mime_type TEXT NOT NULL DEFAULT '';
 	ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT NOT NULL DEFAULT '';
+	ALTER TABLE chats ADD COLUMN IF NOT EXISTS session_id TEXT NOT NULL DEFAULT 'default';
+	ALTER TABLE chats ADD COLUMN IF NOT EXISTS remote_jid TEXT NOT NULL DEFAULT '';
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS session_id TEXT NOT NULL DEFAULT 'default';
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS remote_id TEXT NOT NULL DEFAULT '';
+	ALTER TABLE messages ADD COLUMN IF NOT EXISTS remote_chat_jid TEXT NOT NULL DEFAULT '';
 
 	CREATE INDEX IF NOT EXISTS idx_contacts_display_name ON contacts(display_name);
 	CREATE INDEX IF NOT EXISTS idx_chats_last_message_at ON chats(last_message_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_chats_session_id ON chats(session_id, last_message_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp ON messages(chat_jid, timestamp ASC);
+	CREATE INDEX IF NOT EXISTS idx_messages_session_remote_id ON messages(session_id, remote_id);
 	CREATE INDEX IF NOT EXISTS idx_contact_kanban_stage_updated_at ON contact_kanban_stage(updated_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_contact_kanban_board_updated_at ON contact_kanban_board(updated_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_contact_crm_profile_updated_at ON contact_crm_profile(updated_at DESC);
@@ -242,13 +254,18 @@ func (s *Store) migrate(ctx context.Context) error {
 }
 
 func (s *Store) GetSession(ctx context.Context) (*models.Session, error) {
+	return s.GetSessionByID(ctx, models.DefaultSessionID)
+}
+
+func (s *Store) GetSessionByID(ctx context.Context, sessionID string) (*models.Session, error) {
+	sessionID = normalizeSessionID(sessionID)
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, name, phone_number, channel_id, channel_name, status, qr_code,
 			qr_code_data_url, last_error, device_jid, business_name, platform,
 			connected_at, created_at, updated_at
 		FROM app_session
 		WHERE id = $1
-	`, models.DefaultSessionID)
+	`, sessionID)
 
 	var session models.Session
 	if err := row.Scan(
@@ -271,16 +288,59 @@ func (s *Store) GetSession(ctx context.Context) (*models.Session, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("get session: %w", err)
+		return nil, fmt.Errorf("get session %s: %w", sessionID, err)
 	}
 
 	return &session, nil
 }
 
-func (s *Store) SaveSession(ctx context.Context, session models.Session) error {
-	if session.ID == "" {
-		session.ID = models.DefaultSessionID
+func (s *Store) ListSessions(ctx context.Context) ([]models.Session, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, name, phone_number, channel_id, channel_name, status, qr_code,
+			qr_code_data_url, last_error, device_jid, business_name, platform,
+			connected_at, created_at, updated_at
+		FROM app_session
+		ORDER BY created_at ASC, id ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
 	}
+	defer rows.Close()
+
+	items := make([]models.Session, 0)
+	for rows.Next() {
+		var session models.Session
+		if err := rows.Scan(
+			&session.ID,
+			&session.Name,
+			&session.PhoneNumber,
+			&session.ChannelID,
+			&session.ChannelName,
+			&session.Status,
+			&session.QRCode,
+			&session.QRCodeDataURL,
+			&session.LastError,
+			&session.DeviceJID,
+			&session.BusinessName,
+			&session.Platform,
+			&session.ConnectedAt,
+			&session.CreatedAt,
+			&session.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan session: %w", err)
+		}
+		items = append(items, session)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate sessions: %w", err)
+	}
+
+	return items, nil
+}
+
+func (s *Store) SaveSession(ctx context.Context, session models.Session) error {
+	session.ID = normalizeSessionID(session.ID)
 	if session.CreatedAt == "" {
 		session.CreatedAt = models.NowString()
 	}
@@ -331,6 +391,32 @@ func (s *Store) SaveSession(ctx context.Context, session models.Session) error {
 	}
 
 	return nil
+}
+
+func normalizeSessionID(sessionID string) string {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return models.DefaultSessionID
+	}
+	return sessionID
+}
+
+func storageChatKey(sessionID, remoteJID string) string {
+	sessionID = normalizeSessionID(sessionID)
+	remoteJID = strings.TrimSpace(remoteJID)
+	if sessionID == models.DefaultSessionID {
+		return remoteJID
+	}
+	return sessionID + "::" + remoteJID
+}
+
+func storageMessageKey(sessionID, remoteID string) string {
+	sessionID = normalizeSessionID(sessionID)
+	remoteID = strings.TrimSpace(remoteID)
+	if sessionID == models.DefaultSessionID {
+		return remoteID
+	}
+	return sessionID + "::" + remoteID
 }
 
 func (s *Store) EnsureSeedUser(ctx context.Context, email, name, passwordHash string, role models.AuthRole) (*models.AuthUser, error) {
@@ -1099,6 +1185,16 @@ func (s *Store) ListContacts(ctx context.Context) ([]models.Contact, error) {
 }
 
 func (s *Store) UpsertChat(ctx context.Context, chat models.Chat) (bool, error) {
+	return s.UpsertChatForSession(ctx, models.DefaultSessionID, chat)
+}
+
+func (s *Store) UpsertChatForSession(ctx context.Context, sessionID string, chat models.Chat) (bool, error) {
+	sessionID = normalizeSessionID(sessionID)
+	chat.SessionID = sessionID
+	chat.JID = strings.TrimSpace(chat.JID)
+	if chat.JID == "" {
+		return false, errors.New("chat jid is required")
+	}
 	if chat.Name == "" {
 		chat.Name = chat.JID
 	}
@@ -1106,18 +1202,21 @@ func (s *Store) UpsertChat(ctx context.Context, chat models.Chat) (bool, error) 
 		chat.UpdatedAt = models.NowString()
 	}
 
-	existing, err := s.GetChat(ctx, chat.JID)
+	existing, err := s.GetChatForSession(ctx, sessionID, chat.JID)
 	if err != nil {
 		return false, err
 	}
+	storageJID := storageChatKey(sessionID, chat.JID)
 
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO chats (
-			jid, name, contact_jid, is_group, unread_count, last_message_id,
+			jid, session_id, remote_jid, name, contact_jid, is_group, unread_count, last_message_id,
 			last_message_text, last_message_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT(jid) DO UPDATE SET
+			session_id = excluded.session_id,
+			remote_jid = excluded.remote_jid,
 			name = excluded.name,
 			contact_jid = excluded.contact_jid,
 			is_group = excluded.is_group,
@@ -1127,6 +1226,8 @@ func (s *Store) UpsertChat(ctx context.Context, chat models.Chat) (bool, error) 
 			last_message_at = CASE WHEN excluded.last_message_at = '' THEN chats.last_message_at ELSE excluded.last_message_at END,
 			updated_at = excluded.updated_at
 	`,
+		storageJID,
+		sessionID,
 		chat.JID,
 		chat.Name,
 		chat.ContactJID,
@@ -1145,16 +1246,26 @@ func (s *Store) UpsertChat(ctx context.Context, chat models.Chat) (bool, error) 
 }
 
 func (s *Store) GetChat(ctx context.Context, jid string) (*models.Chat, error) {
+	return s.GetChatForSession(ctx, models.DefaultSessionID, jid)
+}
+
+func (s *Store) GetChatForSession(ctx context.Context, sessionID, jid string) (*models.Chat, error) {
+	sessionID = normalizeSessionID(sessionID)
+	storageJID := storageChatKey(sessionID, jid)
 	row := s.db.QueryRowContext(ctx, `
-		SELECT jid, name, contact_jid, is_group, unread_count, last_message_id,
+		SELECT jid, session_id, remote_jid, name, contact_jid, is_group, unread_count, last_message_id,
 			last_message_text, last_message_at, updated_at
 		FROM chats
 		WHERE jid = $1
-	`, jid)
+	`, storageJID)
 
 	var chat models.Chat
+	var sessionIDValue string
+	var remoteJID string
 	if err := row.Scan(
 		&chat.JID,
+		&sessionIDValue,
+		&remoteJID,
 		&chat.Name,
 		&chat.ContactJID,
 		&chat.IsGroup,
@@ -1167,29 +1278,43 @@ func (s *Store) GetChat(ctx context.Context, jid string) (*models.Chat, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("get chat %s: %w", jid, err)
+		return nil, fmt.Errorf("get chat %s for session %s: %w", jid, sessionID, err)
+	}
+	chat.SessionID = normalizeSessionID(sessionIDValue)
+	if strings.TrimSpace(remoteJID) != "" {
+		chat.JID = strings.TrimSpace(remoteJID)
 	}
 
 	return &chat, nil
 }
 
 func (s *Store) ListChats(ctx context.Context) ([]models.Chat, error) {
+	return s.ListChatsBySession(ctx, models.DefaultSessionID)
+}
+
+func (s *Store) ListChatsBySession(ctx context.Context, sessionID string) ([]models.Chat, error) {
+	sessionID = normalizeSessionID(sessionID)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT jid, name, contact_jid, is_group, unread_count, last_message_id,
+		SELECT jid, session_id, remote_jid, name, contact_jid, is_group, unread_count, last_message_id,
 			last_message_text, last_message_at, updated_at
 		FROM chats
+		WHERE session_id = $1
 		ORDER BY CASE WHEN last_message_at = '' THEN updated_at ELSE last_message_at END DESC, name ASC
-	`)
+	`, sessionID)
 	if err != nil {
-		return nil, fmt.Errorf("list chats: %w", err)
+		return nil, fmt.Errorf("list chats for session %s: %w", sessionID, err)
 	}
 	defer rows.Close()
 
 	chats := make([]models.Chat, 0)
 	for rows.Next() {
 		var chat models.Chat
+		var sessionIDValue string
+		var remoteJID string
 		if err := rows.Scan(
 			&chat.JID,
+			&sessionIDValue,
+			&remoteJID,
 			&chat.Name,
 			&chat.ContactJID,
 			&chat.IsGroup,
@@ -1201,6 +1326,10 @@ func (s *Store) ListChats(ctx context.Context) ([]models.Chat, error) {
 		); err != nil {
 			return nil, fmt.Errorf("scan chat: %w", err)
 		}
+		chat.SessionID = normalizeSessionID(sessionIDValue)
+		if strings.TrimSpace(remoteJID) != "" {
+			chat.JID = strings.TrimSpace(remoteJID)
+		}
 		chats = append(chats, chat)
 	}
 
@@ -1208,60 +1337,23 @@ func (s *Store) ListChats(ctx context.Context) ([]models.Chat, error) {
 }
 
 func (s *Store) SaveMessage(ctx context.Context, message models.Message) (bool, error) {
-	message.Timestamp = strings.TrimSpace(message.Timestamp)
-	if message.Timestamp == "" {
-		message.Timestamp = models.NowString()
-	}
+	return s.SaveMessageBySession(ctx, models.DefaultSessionID, message)
+	/*
+		message.Timestamp = strings.TrimSpace(message.Timestamp)
+		if message.Timestamp == "" {
+			message.Timestamp = models.NowString()
+		}
 
-	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO messages (
-			id, chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type,
-			file_name, text, raw_json, timestamp, created_at
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-		ON CONFLICT (id) DO NOTHING
-	`,
-		message.ID,
-		message.ChatJID,
-		message.SenderJID,
-		message.Author,
-		message.FromMe,
-		message.AckStatus,
-		message.Kind,
-		message.MimeType,
-		message.FileName,
-		message.Text,
-		message.RawJSON,
-		message.Timestamp,
-		models.NowString(),
-	)
-	if err != nil {
-		return false, fmt.Errorf("insert message %s: %w", message.ID, err)
-	}
-
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("rows affected for message %s: %w", message.ID, err)
-	}
-
-	if affected == 0 {
-		_, err = s.db.ExecContext(ctx, `
-			UPDATE messages
-			SET sender_jid = CASE WHEN $1 = '' THEN sender_jid ELSE $1 END,
-				author = CASE WHEN $2 = '' THEN author ELSE $2 END,
-				from_me = CASE WHEN from_me = TRUE THEN TRUE ELSE $3 END,
-				ack_status = CASE WHEN $4 = '' THEN ack_status ELSE $4 END,
-				kind = CASE WHEN $5 = '' THEN kind ELSE $5 END,
-				mime_type = CASE WHEN $6 = '' THEN mime_type ELSE $6 END,
-				file_name = CASE WHEN $7 = '' THEN file_name ELSE $7 END,
-				text = CASE
-					WHEN ($8 = '' OR $8 = '[midia]') AND text <> '' AND text <> '[midia]' THEN text
-					ELSE $8
-				END,
-				raw_json = CASE WHEN $9 = '' THEN raw_json ELSE $9 END,
-				timestamp = CASE WHEN $10 = '' THEN timestamp ELSE $10 END
-			WHERE id = $11
+		res, err := s.db.ExecContext(ctx, `
+			INSERT INTO messages (
+				id, chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type,
+				file_name, text, raw_json, timestamp, created_at
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			ON CONFLICT (id) DO NOTHING
 		`,
+			message.ID,
+			message.ChatJID,
 			message.SenderJID,
 			message.Author,
 			message.FromMe,
@@ -1272,62 +1364,137 @@ func (s *Store) SaveMessage(ctx context.Context, message models.Message) (bool, 
 			message.Text,
 			message.RawJSON,
 			message.Timestamp,
-			message.ID,
+			models.NowString(),
 		)
 		if err != nil {
-			return false, fmt.Errorf("update message %s: %w", message.ID, err)
+			return false, fmt.Errorf("insert message %s: %w", message.ID, err)
 		}
-		return false, nil
-	}
 
-	if message.Kind == "reaction" {
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return false, fmt.Errorf("rows affected for message %s: %w", message.ID, err)
+		}
+
+		if affected == 0 {
+			_, err = s.db.ExecContext(ctx, `
+				UPDATE messages
+				SET sender_jid = CASE WHEN $1 = '' THEN sender_jid ELSE $1 END,
+					author = CASE WHEN $2 = '' THEN author ELSE $2 END,
+					from_me = CASE WHEN from_me = TRUE THEN TRUE ELSE $3 END,
+					ack_status = CASE WHEN $4 = '' THEN ack_status ELSE $4 END,
+					kind = CASE WHEN $5 = '' THEN kind ELSE $5 END,
+					mime_type = CASE WHEN $6 = '' THEN mime_type ELSE $6 END,
+					file_name = CASE WHEN $7 = '' THEN file_name ELSE $7 END,
+					text = CASE
+						WHEN ($8 = '' OR $8 = '[midia]') AND text <> '' AND text <> '[midia]' THEN text
+						ELSE $8
+					END,
+					raw_json = CASE WHEN $9 = '' THEN raw_json ELSE $9 END,
+					timestamp = CASE WHEN $10 = '' THEN timestamp ELSE $10 END
+				WHERE id = $11
+			`,
+				message.SenderJID,
+				message.Author,
+				message.FromMe,
+				message.AckStatus,
+				message.Kind,
+				message.MimeType,
+				message.FileName,
+				message.Text,
+				message.RawJSON,
+				message.Timestamp,
+				message.ID,
+			)
+			if err != nil {
+				return false, fmt.Errorf("update message %s: %w", message.ID, err)
+			}
+			return false, nil
+		}
+
+		if message.Kind == "reaction" {
+			return true, nil
+		}
+
+		chat, err := s.GetChat(ctx, message.ChatJID)
+		if err != nil {
+			return true, err
+		}
+		if chat == nil {
+			chat = &models.Chat{
+				JID:       message.ChatJID,
+				Name:      message.ChatJID,
+				UpdatedAt: models.NowString(),
+			}
+		}
+
+		if !message.FromMe {
+			chat.UnreadCount++
+		}
+		chat.LastMessageID = message.ID
+		chat.LastMessageText = message.Text
+		chat.LastMessageAt = message.Timestamp
+		chat.UpdatedAt = models.NowString()
+
+		_, err = s.UpsertChat(ctx, *chat)
+		if err != nil {
+			return true, err
+		}
+
 		return true, nil
-	}
-
-	chat, err := s.GetChat(ctx, message.ChatJID)
-	if err != nil {
-		return true, err
-	}
-	if chat == nil {
-		chat = &models.Chat{
-			JID:       message.ChatJID,
-			Name:      message.ChatJID,
-			UpdatedAt: models.NowString(),
-		}
-	}
-
-	if !message.FromMe {
-		chat.UnreadCount++
-	}
-	chat.LastMessageID = message.ID
-	chat.LastMessageText = message.Text
-	chat.LastMessageAt = message.Timestamp
-	chat.UpdatedAt = models.NowString()
-
-	_, err = s.UpsertChat(ctx, *chat)
-	if err != nil {
-		return true, err
-	}
-
-	return true, nil
+	*/
 }
 
 func (s *Store) ListMessagesByChat(ctx context.Context, chatJID string) ([]models.Message, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type, file_name, text, raw_json, timestamp
-		FROM messages
-		WHERE chat_jid = $1
-		ORDER BY timestamp ASC, id ASC
-	`, chatJID)
-	if err != nil {
-		return nil, fmt.Errorf("list messages for chat %s: %w", chatJID, err)
-	}
-	defer rows.Close()
+	return s.ListMessagesByChatForSession(ctx, models.DefaultSessionID, chatJID)
+	/*
+		rows, err := s.db.QueryContext(ctx, `
+			SELECT id, chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type, file_name, text, raw_json, timestamp
+			FROM messages
+			WHERE chat_jid = $1
+			ORDER BY timestamp ASC, id ASC
+		`, chatJID)
+		if err != nil {
+			return nil, fmt.Errorf("list messages for chat %s: %w", chatJID, err)
+		}
+		defer rows.Close()
 
-	messages := make([]models.Message, 0)
-	for rows.Next() {
+		messages := make([]models.Message, 0)
+		for rows.Next() {
+			var message models.Message
+			if err := rows.Scan(
+				&message.ID,
+				&message.ChatJID,
+				&message.SenderJID,
+				&message.Author,
+				&message.FromMe,
+				&message.AckStatus,
+				&message.Kind,
+				&message.MimeType,
+				&message.FileName,
+				&message.Text,
+				&message.RawJSON,
+				&message.Timestamp,
+			); err != nil {
+				return nil, fmt.Errorf("scan message: %w", err)
+			}
+			messages = append(messages, message)
+		}
+
+		return messages, rows.Err()
+	*/
+}
+
+func (s *Store) GetMessageByID(ctx context.Context, messageID string) (*models.Message, error) {
+	return s.GetMessageByIDForSession(ctx, models.DefaultSessionID, messageID)
+	/*
+		row := s.db.QueryRowContext(ctx, `
+			SELECT id, chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type, file_name, text, raw_json, timestamp
+			FROM messages
+			WHERE id = $1
+		`, messageID)
+
 		var message models.Message
-		if err := rows.Scan(
+		if err := row.Scan(
 			&message.ID,
 			&message.ChatJID,
 			&message.SenderJID,
@@ -1341,47 +1508,119 @@ func (s *Store) ListMessagesByChat(ctx context.Context, chatJID string) ([]model
 			&message.RawJSON,
 			&message.Timestamp,
 		); err != nil {
-			return nil, fmt.Errorf("scan message: %w", err)
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("get message %s: %w", messageID, err)
 		}
-		messages = append(messages, message)
-	}
 
-	return messages, rows.Err()
-}
-
-func (s *Store) GetMessageByID(ctx context.Context, messageID string) (*models.Message, error) {
-	row := s.db.QueryRowContext(ctx, `
-		SELECT id, chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type, file_name, text, raw_json, timestamp
-		FROM messages
-		WHERE id = $1
-	`, messageID)
-
-	var message models.Message
-	if err := row.Scan(
-		&message.ID,
-		&message.ChatJID,
-		&message.SenderJID,
-		&message.Author,
-		&message.FromMe,
-		&message.AckStatus,
-		&message.Kind,
-		&message.MimeType,
-		&message.FileName,
-		&message.Text,
-		&message.RawJSON,
-		&message.Timestamp,
-	); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("get message %s: %w", messageID, err)
-	}
-
-	return &message, nil
+		return &message, nil
+	*/
 }
 
 func (s *Store) ListUnreadMessageGroupsByChat(ctx context.Context, chatJID string) (map[string][]models.Message, error) {
-	messages, err := s.ListMessagesByChat(ctx, chatJID)
+	return s.ListUnreadMessageGroupsByChatForSession(ctx, models.DefaultSessionID, chatJID)
+	/*
+		messages, err := s.ListMessagesByChat(ctx, chatJID)
+		if err != nil {
+			return nil, err
+		}
+
+		grouped := make(map[string][]models.Message)
+		for _, message := range messages {
+			if message.FromMe || message.AckStatus == "read" || message.AckStatus == "read-self" || message.AckStatus == "played" {
+				continue
+			}
+			sender := message.SenderJID
+			if sender == "" {
+				sender = message.ChatJID
+			}
+			grouped[sender] = append(grouped[sender], message)
+		}
+
+		for sender := range grouped {
+			sort.Slice(grouped[sender], func(i, j int) bool {
+				return grouped[sender][i].Timestamp < grouped[sender][j].Timestamp
+			})
+		}
+
+		return grouped, nil
+	*/
+}
+
+func (s *Store) MarkChatRead(ctx context.Context, chatJID string) error {
+	return s.MarkChatReadBySession(ctx, models.DefaultSessionID, chatJID)
+}
+
+func (s *Store) UpdateMessageAck(ctx context.Context, messageID, ackStatus string) error {
+	return s.UpdateMessageAckBySession(ctx, models.DefaultSessionID, messageID, ackStatus)
+	/*
+		_, err := s.db.ExecContext(ctx, `UPDATE messages SET ack_status = $1 WHERE id = $2`, ackStatus, messageID)
+		if err != nil {
+			return fmt.Errorf("update ack for message %s: %w", messageID, err)
+		}
+		return nil
+	*/
+}
+
+func (s *Store) UpdateMessageAckBySession(ctx context.Context, sessionID, messageID, ackStatus string) error {
+	sessionID = normalizeSessionID(sessionID)
+	storageID := storageMessageKey(sessionID, messageID)
+	_, err := s.db.ExecContext(ctx, `UPDATE messages SET ack_status = $1 WHERE id = $2`, ackStatus, storageID)
+	if err != nil {
+		return fmt.Errorf("update ack for message %s in session %s: %w", messageID, sessionID, err)
+	}
+	return nil
+}
+
+func (s *Store) UpsertChatBySession(ctx context.Context, sessionID string, chat models.Chat) (bool, error) {
+	return s.UpsertChatForSession(ctx, sessionID, chat)
+}
+
+func (s *Store) GetChatBySession(ctx context.Context, sessionID, jid string) (*models.Chat, error) {
+	return s.GetChatForSession(ctx, sessionID, jid)
+}
+
+func (s *Store) ListChatsScoped(ctx context.Context, sessionID string) ([]models.Chat, error) {
+	return s.ListChatsBySession(ctx, sessionID)
+}
+
+func (s *Store) SaveMessageBySession(ctx context.Context, sessionID string, message models.Message) (bool, error) {
+	sessionID = normalizeSessionID(sessionID)
+	message.SessionID = sessionID
+	message.ID = strings.TrimSpace(message.ID)
+	message.ChatJID = strings.TrimSpace(message.ChatJID)
+	if message.ID == "" || message.ChatJID == "" {
+		return false, errors.New("message id and chat jid are required")
+	}
+	message.Timestamp = strings.TrimSpace(message.Timestamp)
+	if message.Timestamp == "" {
+		message.Timestamp = models.NowString()
+	}
+
+	storageID := storageMessageKey(sessionID, message.ID)
+	storageChatJID := storageChatKey(sessionID, message.ChatJID)
+	res, err := s.db.ExecContext(ctx, `
+		INSERT INTO messages (
+			id, session_id, remote_id, chat_jid, remote_chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type,
+			file_name, text, raw_json, timestamp, created_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+		ON CONFLICT (id) DO NOTHING
+	`, storageID, sessionID, message.ID, storageChatJID, message.ChatJID, message.SenderJID, message.Author, message.FromMe, message.AckStatus, message.Kind, message.MimeType, message.FileName, message.Text, message.RawJSON, message.Timestamp, models.NowString())
+	if err != nil {
+		return false, fmt.Errorf("insert message %s in session %s: %w", message.ID, sessionID, err)
+	}
+
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("rows affected for message %s in session %s: %w", message.ID, sessionID, err)
+	}
+	return affected > 0, nil
+}
+
+func (s *Store) ListUnreadMessageGroupsByChatForSession(ctx context.Context, sessionID, chatJID string) (map[string][]models.Message, error) {
+	messages, err := s.ListMessagesByChatForSession(ctx, sessionID, chatJID)
 	if err != nil {
 		return nil, err
 	}
@@ -1407,27 +1646,82 @@ func (s *Store) ListUnreadMessageGroupsByChat(ctx context.Context, chatJID strin
 	return grouped, nil
 }
 
-func (s *Store) MarkChatRead(ctx context.Context, chatJID string) error {
-	if _, err := s.db.ExecContext(ctx, `UPDATE chats SET unread_count = 0, updated_at = $1 WHERE jid = $2`, models.NowString(), chatJID); err != nil {
-		return fmt.Errorf("mark chat read %s: %w", chatJID, err)
+func (s *Store) ListMessagesByChatForSession(ctx context.Context, sessionID, chatJID string) ([]models.Message, error) {
+	sessionID = normalizeSessionID(sessionID)
+	storageChatJID := storageChatKey(sessionID, chatJID)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, session_id, remote_id, chat_jid, remote_chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type, file_name, text, raw_json, timestamp
+		FROM messages
+		WHERE chat_jid = $1
+		ORDER BY timestamp ASC, id ASC
+	`, storageChatJID)
+	if err != nil {
+		return nil, fmt.Errorf("list messages for chat %s in session %s: %w", chatJID, sessionID, err)
+	}
+	defer rows.Close()
+
+	items := make([]models.Message, 0)
+	for rows.Next() {
+		var message models.Message
+		var storedSessionID, remoteID, remoteChatJID string
+		if err := rows.Scan(&message.ID, &storedSessionID, &remoteID, &message.ChatJID, &remoteChatJID, &message.SenderJID, &message.Author, &message.FromMe, &message.AckStatus, &message.Kind, &message.MimeType, &message.FileName, &message.Text, &message.RawJSON, &message.Timestamp); err != nil {
+			return nil, fmt.Errorf("scan message by session: %w", err)
+		}
+		message.SessionID = normalizeSessionID(storedSessionID)
+		if strings.TrimSpace(remoteID) != "" {
+			message.ID = strings.TrimSpace(remoteID)
+		}
+		if strings.TrimSpace(remoteChatJID) != "" {
+			message.ChatJID = strings.TrimSpace(remoteChatJID)
+		}
+		items = append(items, message)
+	}
+
+	return items, rows.Err()
+}
+
+func (s *Store) GetMessageByIDForSession(ctx context.Context, sessionID, messageID string) (*models.Message, error) {
+	sessionID = normalizeSessionID(sessionID)
+	storageID := storageMessageKey(sessionID, messageID)
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, session_id, remote_id, chat_jid, remote_chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type, file_name, text, raw_json, timestamp
+		FROM messages
+		WHERE id = $1
+	`, storageID)
+
+	var message models.Message
+	var storedSessionID, remoteID, remoteChatJID string
+	if err := row.Scan(&message.ID, &storedSessionID, &remoteID, &message.ChatJID, &remoteChatJID, &message.SenderJID, &message.Author, &message.FromMe, &message.AckStatus, &message.Kind, &message.MimeType, &message.FileName, &message.Text, &message.RawJSON, &message.Timestamp); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("get message %s in session %s: %w", messageID, sessionID, err)
+	}
+	message.SessionID = normalizeSessionID(storedSessionID)
+	if strings.TrimSpace(remoteID) != "" {
+		message.ID = strings.TrimSpace(remoteID)
+	}
+	if strings.TrimSpace(remoteChatJID) != "" {
+		message.ChatJID = strings.TrimSpace(remoteChatJID)
+	}
+	return &message, nil
+}
+
+func (s *Store) MarkChatReadBySession(ctx context.Context, sessionID, chatJID string) error {
+	sessionID = normalizeSessionID(sessionID)
+	storageChatJID := storageChatKey(sessionID, chatJID)
+	if _, err := s.db.ExecContext(ctx, `UPDATE chats SET unread_count = 0, updated_at = $1 WHERE jid = $2`, models.NowString(), storageChatJID); err != nil {
+		return fmt.Errorf("mark chat read %s in session %s: %w", chatJID, sessionID, err)
 	}
 
 	if _, err := s.db.ExecContext(ctx, `
 		UPDATE messages
 		SET ack_status = CASE WHEN from_me = FALSE THEN 'read' ELSE ack_status END
 		WHERE chat_jid = $1
-	`, chatJID); err != nil {
-		return fmt.Errorf("mark messages read for chat %s: %w", chatJID, err)
+	`, storageChatJID); err != nil {
+		return fmt.Errorf("mark messages read for chat %s in session %s: %w", chatJID, sessionID, err)
 	}
 
-	return nil
-}
-
-func (s *Store) UpdateMessageAck(ctx context.Context, messageID, ackStatus string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE messages SET ack_status = $1 WHERE id = $2`, ackStatus, messageID)
-	if err != nil {
-		return fmt.Errorf("update ack for message %s: %w", messageID, err)
-	}
 	return nil
 }
 
