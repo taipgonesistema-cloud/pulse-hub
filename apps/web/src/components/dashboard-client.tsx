@@ -317,6 +317,7 @@ export function DashboardClient({ initialOverview }: Props) {
   );
   const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [visibleMessageCount, setVisibleMessageCount] = useState(INITIAL_VISIBLE_MESSAGE_COUNT);
+  const [newTimelineMessageCount, setNewTimelineMessageCount] = useState(0);
   const [replyTargetMessage, setReplyTargetMessage] = useState<MessageRecord | null>(null);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
@@ -2171,6 +2172,14 @@ export function DashboardClient({ initialOverview }: Props) {
           payload.sessionId === activeSessionId &&
           payload.chatJid === activeConversationId
         ) {
+          if (
+            payload.kind === 'message.new' &&
+            payload.direction === 'incoming' &&
+            !shouldStickToBottomRef.current
+          ) {
+            setNewTimelineMessageCount((current) => current + 1);
+          }
+
           if (payload.kind === 'message.new' && payload.direction === 'incoming' && isConversationActivelyViewedRef.current(activeSessionId, activeConversationId)) {
             void markConversationAsReadRef.current(activeSessionId, activeConversationId).catch(() => undefined);
           }
@@ -2216,6 +2225,7 @@ export function DashboardClient({ initialOverview }: Props) {
   useEffect(() => {
     if (!isConversationsView) {
       setReplyTargetMessage(null);
+      setNewTimelineMessageCount(0);
       return;
     }
 
@@ -2223,8 +2233,9 @@ export function DashboardClient({ initialOverview }: Props) {
     olderMessagesScrollSnapshotRef.current = null;
     shouldStickToBottomRef.current = true;
     setVisibleMessageCount(INITIAL_VISIBLE_MESSAGE_COUNT);
+    setNewTimelineMessageCount(0);
     setReplyTargetMessage(null);
-  }, [activeConversationId, isConversationsView]);
+  }, [activeConversationId, activeSessionId, isConversationsView]);
 
   useLayoutEffect(() => {
     if (!isConversationsView) {
@@ -2286,6 +2297,9 @@ export function DashboardClient({ initialOverview }: Props) {
       container.scrollHeight - container.scrollTop - container.clientHeight;
 
     shouldStickToBottomRef.current = distanceFromBottom <= 96;
+    if (distanceFromBottom <= 96) {
+      setNewTimelineMessageCount(0);
+    }
   }, []);
 
   const registerMessageElement = useCallback((messageId: string, node: HTMLDivElement | null) => {
@@ -2347,6 +2361,17 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     setVisibleMessageCount((current) => current + MESSAGE_PAGE_SIZE);
+  }, []);
+
+  const scrollToLatestMessage = useCallback(() => {
+    const container = messagesRef.current;
+    if (!container) {
+      return;
+    }
+
+    shouldStickToBottomRef.current = true;
+    setNewTimelineMessageCount(0);
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
   }, []);
 
   const scheduleConversationPrefetch = useCallback((sessionId: string, conversationId: string) => {
@@ -5143,6 +5168,19 @@ export function DashboardClient({ initialOverview }: Props) {
                       />
                     </Fragment>
                   ))}
+
+                  {newTimelineMessageCount > 0 ? (
+                    <div className="pointer-events-none sticky bottom-4 z-10 flex justify-center">
+                      <button
+                        className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-[var(--secondary)]/25 bg-[var(--surface-highest)] px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-[var(--secondary)] shadow-[0_18px_34px_-18px_rgba(0,0,0,0.95)] transition hover:border-[var(--secondary)]/40 hover:bg-[var(--surface-high)]"
+                        onClick={scrollToLatestMessage}
+                        type="button"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" strokeWidth={2.1} />
+                        {newTimelineMessageCount} nova{newTimelineMessageCount === 1 ? '' : 's'} mensagem{newTimelineMessageCount === 1 ? '' : 'ens'}
+                      </button>
+                    </div>
+                  ) : null}
 
                   {typingConversationId === selectedConversation?.id ? (
                     <div className="flex max-w-[80%] gap-4">
