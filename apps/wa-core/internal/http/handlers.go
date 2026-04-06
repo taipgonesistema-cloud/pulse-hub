@@ -1479,7 +1479,7 @@ func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOver
 	if err != nil {
 		return nil, err
 	}
-	conversations, err := a.buildConversationRecords(ctx)
+	conversations, err := a.buildAllConversationRecords(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1556,18 +1556,68 @@ func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOver
 	overview.Analytics.HeatmapRows = activityAnalytics.HeatmapRows
 	overview.Analytics.ResolvedTickets = resolvedTickets
 
-	if len(sessions) > 0 {
-		overview.Channels = []models.ChannelRecord{{
-			ID:               sessions[0].ChannelID,
-			Name:             sessions[0].ChannelName,
-			Color:            channelColor(sessions[0].ChannelName),
-			ConnectedNumbers: 1,
-		}}
-	} else {
-		overview.Channels = []models.ChannelRecord{}
-	}
+	overview.Channels = buildDashboardChannels(sessions)
 
 	return overview, nil
+}
+
+func (a *API) buildAllConversationRecords(ctx context.Context) ([]models.ConversationRecord, error) {
+	sessions, err := a.manager.ListSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(sessions) == 0 {
+		return []models.ConversationRecord{}, nil
+	}
+
+	all := make([]models.ConversationRecord, 0)
+	for index := range sessions {
+		items, err := a.buildConversationRecordsForSession(ctx, &sessions[index])
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, items...)
+	}
+
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].LastMessageAt > all[j].LastMessageAt
+	})
+
+	return all, nil
+}
+
+func buildDashboardChannels(sessions []models.SessionRecord) []models.ChannelRecord {
+	if len(sessions) == 0 {
+		return []models.ChannelRecord{}
+	}
+
+	channelMap := make(map[string]*models.ChannelRecord)
+	orderedKeys := make([]string, 0)
+	for _, session := range sessions {
+		key := strings.TrimSpace(session.ChannelID)
+		if key == "" {
+			key = strings.TrimSpace(session.ChannelName)
+		}
+		if key == "" {
+			key = "whatsapp"
+		}
+		if _, ok := channelMap[key]; !ok {
+			channelMap[key] = &models.ChannelRecord{
+				ID:               key,
+				Name:             fallbackText(session.ChannelName, "WhatsApp"),
+				Color:            channelColor(session.ChannelName),
+				ConnectedNumbers: 0,
+			}
+			orderedKeys = append(orderedKeys, key)
+		}
+		channelMap[key].ConnectedNumbers++
+	}
+
+	items := make([]models.ChannelRecord, 0, len(orderedKeys))
+	for _, key := range orderedKeys {
+		items = append(items, *channelMap[key])
+	}
+	return items
 }
 
 type dashboardActivityAnalytics struct {
@@ -2126,7 +2176,7 @@ func (a *API) buildResponseVelocityAnalytics(ctx context.Context) (models.Dashbo
 		},
 	}
 
-	chats, err := a.manager.ListChats(ctx)
+	sessions, err := a.manager.ListSessions(ctx)
 	if err != nil {
 		return analytics, err
 	}
@@ -2141,37 +2191,44 @@ func (a *API) buildResponseVelocityAnalytics(ctx context.Context) (models.Dashbo
 	fastestAt := time.Time{}
 	fastestSeconds := math.MaxInt
 
-	for _, chat := range chats {
-		canonicalJID, err := a.manager.CanonicalConversationJID(ctx, chat.JID)
-		if err != nil {
-			canonicalJID = chat.JID
-		}
-		if !isVisibleConversationJID(canonicalJID) {
-			continue
-		}
-
-		messages, err := a.manager.ListMessages(ctx, chat.JID)
+	for _, session := range sessions {
+		chats, err := a.manager.ListChatsBySession(ctx, session.ID)
 		if err != nil {
 			return analytics, err
 		}
 
-		for _, sample := range collectResponseSamples(messages) {
-			if sample.When.Before(previousCutoff) {
+		for _, chat := range chats {
+			canonicalJID, err := a.manager.CanonicalConversationJIDBySession(ctx, session.ID, chat.JID)
+			if err != nil {
+				canonicalJID = chat.JID
+			}
+			if !isVisibleConversationJID(canonicalJID) {
 				continue
 			}
 
-			if !sample.When.Before(currentCutoff) {
-				currentSamples = append(currentSamples, sample.Seconds)
-				bucketLabel := responseBucketLabel(sample.When)
-				bucketValues[bucketLabel] = append(bucketValues[bucketLabel], sample.Seconds)
-				if sample.Seconds < fastestSeconds {
-					fastestSeconds = sample.Seconds
-					fastestAt = sample.When
+			messages, err := a.manager.ListMessagesBySession(ctx, session.ID, chat.JID)
+			if err != nil {
+				return analytics, err
+			}
+
+			for _, sample := range collectResponseSamples(messages) {
+				if sample.When.Before(previousCutoff) {
+					continue
 				}
-				continue
-			}
 
-			previousSamples = append(previousSamples, sample.Seconds)
+				if !sample.When.Before(currentCutoff) {
+					currentSamples = append(currentSamples, sample.Seconds)
+					bucketLabel := responseBucketLabel(sample.When)
+					bucketValues[bucketLabel] = append(bucketValues[bucketLabel], sample.Seconds)
+					if sample.Seconds < fastestSeconds {
+						fastestSeconds = sample.Seconds
+						fastestAt = sample.When
+					}
+					continue
+				}
+
+				previousSamples = append(previousSamples, sample.Seconds)
+			}
 		}
 	}
 
