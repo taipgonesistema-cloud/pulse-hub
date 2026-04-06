@@ -319,6 +319,9 @@ export function DashboardClient({ initialOverview }: Props) {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all');
+  const [showConversationFilters, setShowConversationFilters] = useState(false);
+  const [conversationSessionScope, setConversationSessionScope] = useState<'selected' | 'all'>('selected');
+  const [conversationSessionFilterIds, setConversationSessionFilterIds] = useState<string[]>([]);
   const [contactsFilter, setContactsFilter] = useState<ConversationFilter>('all');
   const [contactsAudienceFilter, setContactsAudienceFilter] = useState<'all' | 'verified'>('all');
   const [contactsChannelFilter, setContactsChannelFilter] = useState<
@@ -419,6 +422,8 @@ export function DashboardClient({ initialOverview }: Props) {
   const conversationPrefetchTimerRef = useRef<number | null>(null);
   const shouldStickToBottomRef = useRef(true);
   const lastConversationAnchorRef = useRef<string | null>(null);
+  const preserveScrollOnOlderMessagesRef = useRef(false);
+  const olderMessagesScrollSnapshotRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const viewTransitionTimerRef = useRef<number | null>(null);
   const [viewTransition, setViewTransition] = useState<WorkspaceView | null>(null);
   const [openedUnreadMarker, setOpenedUnreadMarker] = useState<{
@@ -477,6 +482,29 @@ export function DashboardClient({ initialOverview }: Props) {
     [overview.sessions, selectedSessionId],
   );
 
+  const selectedConversationScopeSummary = useMemo(() => {
+    if (conversationSessionScope === 'selected') {
+      return selectedSession ? `Sessao atual: ${selectedSession.name}` : 'Sessao atual';
+    }
+
+    if (conversationSessionFilterIds.length === 0) {
+      return 'Todas as sessoes';
+    }
+
+    const names = overview.sessions
+      .filter((session) => conversationSessionFilterIds.includes(session.id))
+      .map((session) => session.name);
+
+    if (names.length === 0) {
+      return 'Todas as sessoes';
+    }
+    if (names.length === 1) {
+      return names[0];
+    }
+
+    return `${names.length} sessoes selecionadas`;
+  }, [conversationSessionFilterIds, conversationSessionScope, overview.sessions, selectedSession]);
+
   const isCreatingSession = pendingSessionAction?.kind === 'create';
   const isConnectingSelectedSession = pendingSessionAction?.kind === 'connect'
     && pendingSessionAction.sessionId === selectedSession?.id;
@@ -495,11 +523,30 @@ export function DashboardClient({ initialOverview }: Props) {
         return [] as ConversationRecord[];
       }
 
-      return overview.conversations.filter(
-        (conversation) => conversation.sessionId === selectedSession?.id,
-      );
+      if (conversationSessionScope === 'selected') {
+        return overview.conversations.filter(
+          (conversation) => conversation.sessionId === selectedSession?.id,
+        );
+      }
+
+      if (conversationSessionFilterIds.length === 0) {
+        return overview.conversations;
+      }
+
+      const allowedSessionIds = new Set(conversationSessionFilterIds);
+      return overview.conversations.filter((conversation) => allowedSessionIds.has(conversation.sessionId));
     },
-    [isConversationsView, overview.conversations, selectedSession?.id],
+    [conversationSessionFilterIds, conversationSessionScope, isConversationsView, overview.conversations, selectedSession?.id],
+  );
+
+  const conversationSessionOptions = useMemo(
+    () => overview.sessions.map((session) => ({
+      id: session.id,
+      name: session.name,
+      count: overview.conversations.filter((conversation) => conversation.sessionId === session.id).length,
+      status: session.status,
+    })),
+    [overview.conversations, overview.sessions],
   );
 
   const sessionConversations = useMemo(
@@ -522,6 +569,7 @@ export function DashboardClient({ initialOverview }: Props) {
       return sessionConversations.filter((conversation) =>
         [
           conversation.contact,
+          conversation.sessionName,
           conversation.participantId,
           conversation.channelName,
           conversation.owner,
@@ -543,11 +591,12 @@ export function DashboardClient({ initialOverview }: Props) {
 
       return (
         visibleSessionConversations.find(
-          (conversation) => conversation.id === selectedConversationId,
+          (conversation) => conversation.id === selectedConversationId
+            && conversation.sessionId === (selectedSessionId || conversation.sessionId),
         ) ?? visibleSessionConversations[0]
       );
     },
-    [isConversationsView, selectedConversationId, visibleSessionConversations],
+    [isConversationsView, selectedConversationId, selectedSessionId, visibleSessionConversations],
   );
 
   const contacts = useMemo(
@@ -716,8 +765,8 @@ export function DashboardClient({ initialOverview }: Props) {
     [contacts, isContactsView],
   );
 
-  const activeSessionId = selectedSession?.id ?? null;
-  const activeSessionStatus = selectedSession?.status ?? null;
+  const activeSessionId = selectedConversation?.sessionId ?? selectedSession?.id ?? null;
+  const activeSessionStatus = overview.sessions.find((session) => session.id === activeSessionId)?.status ?? null;
   const activeConversationId = selectedConversation?.id ?? null;
 
   const isConversationActivelyViewed = useCallback(
@@ -843,12 +892,16 @@ export function DashboardClient({ initialOverview }: Props) {
       return 'Nenhuma sessao selecionada';
     }
 
+    if (conversationSessionScope === 'all') {
+      return `Fila consolidada · ${selectedConversationScopeSummary}`;
+    }
+
     if (!selectedSession) {
       return 'Nenhuma sessao selecionada';
     }
 
     return `Fila ${selectedSession.channelName}`;
-  }, [isConversationsView, selectedSession]);
+  }, [conversationSessionScope, isConversationsView, selectedConversationScopeSummary, selectedSession]);
 
   const signOut = useCallback(() => {
     void signOutRequest().catch(() => undefined).finally(() => {
@@ -921,7 +974,24 @@ export function DashboardClient({ initialOverview }: Props) {
   const resetConversationView = useCallback(() => {
     setGlobalSearch('');
     setConversationFilter('all');
+    setConversationSessionScope('selected');
+    setConversationSessionFilterIds([]);
+    setShowConversationFilters(false);
   }, []);
+
+  const toggleConversationSessionFilter = useCallback((sessionId: string) => {
+    setConversationSessionFilterIds((current) => {
+      if (current.includes(sessionId)) {
+        return current.filter((id) => id !== sessionId);
+      }
+
+      const next = [...current, sessionId];
+      if (next.length === overview.sessions.length) {
+        return [];
+      }
+      return next;
+    });
+  }, [overview.sessions.length]);
 
   const navigateToView = useCallback(
     (nextView: WorkspaceView) => {
@@ -1623,28 +1693,26 @@ export function DashboardClient({ initialOverview }: Props) {
     isConversationActivelyViewedRef.current = isConversationActivelyViewed;
   }, [isConversationActivelyViewed]);
 
-  const openConversation = useCallback((conversationId: string) => {
-    if (!conversationId || conversationId === selectedConversationId) {
+  const openConversation = useCallback((conversation: ConversationRecord) => {
+    if (!conversation.id) {
+      return;
+    }
+
+    if (conversation.id === selectedConversationId && conversation.sessionId === selectedSessionId) {
       return;
     }
 
     shouldStickToBottomRef.current = true;
 
-    const targetConversation = visibleSessionConversations.find(
-      (conversation) => conversation.id === conversationId,
-    );
-
     setOpenedUnreadMarker({
-      conversationId,
-      unreadCount: targetConversation?.unread ?? 0,
+      conversationId: conversation.id,
+      unreadCount: conversation.unread,
     });
 
-    const cacheKey = selectedSession
-      ? buildConversationCacheKey(selectedSession.id, conversationId)
-      : null;
+    const cacheKey = buildConversationCacheKey(conversation.sessionId, conversation.id);
     const cachedMessages = cacheKey ? messageCacheRef.current.get(cacheKey) : undefined;
 
-    setPendingConversationId(conversationId);
+    setPendingConversationId(conversation.id);
     setTypingConversationId(null);
     setIsLoadingMessages(true);
     if (cachedMessages) {
@@ -1652,8 +1720,9 @@ export function DashboardClient({ initialOverview }: Props) {
         areMessageListsEquivalent(current, cachedMessages) ? current : cachedMessages,
       );
     }
-    setSelectedConversationId(conversationId);
-  }, [selectedConversationId, selectedSession, visibleSessionConversations]);
+    setSelectedSessionId(conversation.sessionId);
+    setSelectedConversationId(conversation.id);
+  }, [selectedConversationId, selectedSessionId]);
 
   useEffect(() => {
     if (!isConversationsView) {
@@ -1666,13 +1735,18 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     const currentConversationExists = visibleSessionConversations.some(
-      (conversation) => conversation.id === selectedConversationId,
+      (conversation) => conversation.id === selectedConversationId && conversation.sessionId === activeSessionId,
     );
 
     if (!currentConversationExists) {
-      setSelectedConversationId(visibleSessionConversations[0]?.id ?? '');
+      const nextConversation = visibleSessionConversations[0];
+      setSelectedConversationId(nextConversation?.id ?? '');
+      if (nextConversation) {
+        setSelectedSessionId(nextConversation.sessionId);
+      }
     }
   }, [
+    activeSessionId,
     isConversationsView,
     selectedConversationId,
     selectedSession,
@@ -1687,7 +1761,7 @@ export function DashboardClient({ initialOverview }: Props) {
     setHighlightedMessageId(null);
 
     const currentConversation = visibleSessionConversations.find(
-      (conversation) => conversation.id === activeConversationId,
+      (conversation) => conversation.id === activeConversationId && conversation.sessionId === activeSessionId,
     );
 
     if (!currentConversation) {
@@ -1704,7 +1778,7 @@ export function DashboardClient({ initialOverview }: Props) {
         unreadCount: currentConversation.unread,
       };
     });
-  }, [activeConversationId, isConversationsView, visibleSessionConversations]);
+  }, [activeConversationId, activeSessionId, isConversationsView, visibleSessionConversations]);
 
   useEffect(() => () => {
     if (highlightedMessageTimerRef.current) {
@@ -1716,27 +1790,27 @@ export function DashboardClient({ initialOverview }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!isConversationsView || !selectedSession || visibleSessionConversations.length < 2) {
+    if (!isConversationsView || visibleSessionConversations.length < 2) {
       return;
     }
 
     const currentIndex = visibleSessionConversations.findIndex(
-      (conversation) => conversation.id === activeConversationId,
+      (conversation) => conversation.id === activeConversationId && conversation.sessionId === activeSessionId,
     );
 
     const likelyTargets = [
-      visibleSessionConversations[currentIndex + 1]?.id,
-      visibleSessionConversations[currentIndex - 1]?.id,
-    ].filter((value): value is string => Boolean(value));
+      visibleSessionConversations[currentIndex + 1],
+      visibleSessionConversations[currentIndex - 1],
+    ].filter((value): value is ConversationRecord => Boolean(value));
 
-    for (const conversationId of likelyTargets) {
-      void prefetchConversation(selectedSession.id, conversationId);
+    for (const conversation of likelyTargets) {
+      void prefetchConversation(conversation.sessionId, conversation.id);
     }
   }, [
     activeConversationId,
+    activeSessionId,
     isConversationsView,
     prefetchConversation,
-    selectedSession,
     visibleSessionConversations,
   ]);
 
@@ -1792,7 +1866,7 @@ export function DashboardClient({ initialOverview }: Props) {
             );
 
       if (nextIndex !== currentIndex) {
-        openConversation(visibleSessionConversations[nextIndex].id);
+        openConversation(visibleSessionConversations[nextIndex]);
       }
     };
 
@@ -1830,18 +1904,14 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
-    if (!selectedSession) {
-      return;
-    }
-
     const pageVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
     const intervalMs = isRealtimeConnected
       ? pageVisible
         ? 18000
         : 30000
-      : selectedSession.status === 'active'
+      : activeSessionStatus === 'active'
         ? 8000
-        : ['initializing', 'qr_ready', 'syncing'].includes(selectedSession.status)
+        : ['initializing', 'qr_ready', 'syncing'].includes(activeSessionStatus ?? '')
           ? 10000
           : null;
 
@@ -1854,7 +1924,7 @@ export function DashboardClient({ initialOverview }: Props) {
     }, intervalMs);
 
     return () => window.clearInterval(interval);
-  }, [isAuthReady, isConversationsView, isRealtimeConnected, loadOverview, selectedSession]);
+  }, [activeSessionStatus, isAuthReady, isConversationsView, isRealtimeConnected, loadOverview]);
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -2087,6 +2157,8 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
+    preserveScrollOnOlderMessagesRef.current = false;
+    olderMessagesScrollSnapshotRef.current = null;
     shouldStickToBottomRef.current = true;
     setVisibleMessageCount(INITIAL_VISIBLE_MESSAGE_COUNT);
     setReplyTargetMessage(null);
@@ -2102,6 +2174,19 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     if (!messagesRef.current) {
+      return;
+    }
+
+    if (preserveScrollOnOlderMessagesRef.current) {
+      const snapshot = olderMessagesScrollSnapshotRef.current;
+      preserveScrollOnOlderMessagesRef.current = false;
+      olderMessagesScrollSnapshotRef.current = null;
+
+      if (snapshot) {
+        const container = messagesRef.current;
+        const scrollDelta = container.scrollHeight - snapshot.scrollHeight;
+        container.scrollTop = snapshot.scrollTop + scrollDelta;
+      }
       return;
     }
 
@@ -2125,6 +2210,7 @@ export function DashboardClient({ initialOverview }: Props) {
     isConversationsView,
     messages,
     typingConversationId,
+    visibleMessageCount,
   ]);
 
   const handleMessagesScroll = useCallback(() => {
@@ -2186,6 +2272,20 @@ export function DashboardClient({ initialOverview }: Props) {
       setHighlightedMessageId((current) => (current === messageId ? null : current));
     }, 2200);
   }, [messages, visibleMessageStartIndex]);
+
+  const loadOlderMessages = useCallback(() => {
+    const container = messagesRef.current;
+    if (container) {
+      preserveScrollOnOlderMessagesRef.current = true;
+      olderMessagesScrollSnapshotRef.current = {
+        scrollHeight: container.scrollHeight,
+        scrollTop: container.scrollTop,
+      };
+      shouldStickToBottomRef.current = false;
+    }
+
+    setVisibleMessageCount((current) => current + MESSAGE_PAGE_SIZE);
+  }, []);
 
   const scheduleConversationPrefetch = useCallback((sessionId: string, conversationId: string) => {
     if (conversationPrefetchTimerRef.current) {
@@ -4632,100 +4732,203 @@ export function DashboardClient({ initialOverview }: Props) {
               {queueLabel}
             </p>
           </div>
-          <button
-            className="rounded-full bg-white/5 px-3 py-1.5 text-[11px] text-[var(--muted)] hover:text-white"
-            onClick={() => runAction(loadOverview)}
-            type="button"
-          >
-            Atualizar
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-[11px] text-[var(--muted)] transition hover:bg-white/[0.06] hover:text-white"
+              onClick={() => setShowConversationFilters((current) => !current)}
+              type="button"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2.1} />
+              Filtros
+            </button>
+            <button
+              className="rounded-full bg-white/5 px-3 py-1.5 text-[11px] text-[var(--muted)] hover:text-white"
+              onClick={() => runAction(loadOverview)}
+              type="button"
+            >
+              Atualizar
+            </button>
+          </div>
         </div>
 
-        <div className="mb-4 rounded-[24px] border border-white/6 bg-white/[0.03] p-3">
-          <div className="flex items-center justify-between gap-3 px-1">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-              Filtros da fila
-            </span>
-            {conversationSearchTerm ? (
-              <span className="rounded-full bg-[var(--primary)]/10 px-2.5 py-1 text-[10px] font-semibold text-[var(--primary)]">
-                  {visibleSessionConversations.length} resultado{visibleSessionConversations.length === 1 ? '' : 's'}
+        <div className="mb-4 rounded-[24px] border border-white/6 bg-white/[0.03] px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                Visao da fila
+              </p>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                {selectedConversationScopeSummary}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-300">
+                {visibleSessionConversations.length} resultado{visibleSessionConversations.length === 1 ? '' : 's'}
               </span>
-            ) : null}
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-2 px-1">
-            {overview.channels.length > 0 ? (
-              overview.channels.map((channel) => <ChannelPill key={channel.id} channel={channel} />)
-            ) : (
-              <span className="text-xs text-[var(--muted)]">Nenhum canal sincronizado ainda.</span>
-            )}
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {conversationFilterOptions.map((option) => {
-              const active = conversationFilter === option.id;
-
-              return (
+              {(conversationSearchTerm || conversationFilter !== 'all' || conversationSessionScope !== 'selected' || conversationSessionFilterIds.length > 0) ? (
                 <button
-                  key={option.id}
-                  className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 text-left transition-all ${
-                    active
-                      ? 'border-[var(--primary)]/35 bg-[var(--primary)]/12 shadow-[0_0_0_1px_rgba(127,175,255,0.08)]'
-                      : 'border-white/8 bg-white/4 hover:border-white/12 hover:bg-white/6'
-                  }`}
-                  onClick={() => setConversationFilter(option.id)}
+                  className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)] transition hover:text-white"
+                  onClick={resetConversationView}
                   type="button"
                 >
-                  <span className={`text-[12px] font-medium ${active ? 'text-white' : 'text-zinc-300'}`}>
-                    {option.label}
-                  </span>
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                      active ? 'bg-[var(--primary)]/14 text-[var(--primary)]' : 'bg-white/6 text-zinc-400'
-                    }`}
-                  >
-                    {option.count}
-                  </span>
+                  Limpar filtros
                 </button>
-              );
-            })}
+              ) : null}
+            </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] text-zinc-500">
-            <span>Search `Ctrl/Cmd+K`</span>
-            <span>Switch `Alt+Up/Down`</span>
-          </div>
+          {showConversationFilters ? (
+            <div className="mt-4 space-y-4 border-t border-white/6 pt-4">
+              <div>
+                <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Escopo das sessoes
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2 px-1">
+                  <button
+                    className={`rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
+                      conversationSessionScope === 'selected'
+                        ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-[var(--primary)]'
+                        : 'border-white/8 bg-white/5 text-[var(--muted)] hover:text-white'
+                    }`}
+                    onClick={() => {
+                      setConversationSessionScope('selected');
+                      setConversationSessionFilterIds([]);
+                    }}
+                    type="button"
+                  >
+                    Sessao atual
+                  </button>
+                  <button
+                    className={`rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
+                      conversationSessionScope === 'all'
+                        ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-[var(--primary)]'
+                        : 'border-white/8 bg-white/5 text-[var(--muted)] hover:text-white'
+                    }`}
+                    onClick={() => setConversationSessionScope('all')}
+                    type="button"
+                  >
+                    Todas as sessoes
+                  </button>
+                </div>
+              </div>
+
+              {conversationSessionScope === 'all' ? (
+                <div>
+                  <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Filtrar por nome da sessao
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2 px-1">
+                    <button
+                      className={`rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
+                        conversationSessionFilterIds.length === 0
+                          ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-[var(--primary)]'
+                          : 'border-white/8 bg-white/5 text-[var(--muted)] hover:text-white'
+                      }`}
+                      onClick={() => setConversationSessionFilterIds([])}
+                      type="button"
+                    >
+                      Todas
+                    </button>
+                    {conversationSessionOptions.map((session) => {
+                      const active = conversationSessionFilterIds.includes(session.id);
+
+                      return (
+                        <button
+                          key={session.id}
+                          className={`rounded-full border px-4 py-2 text-[11px] font-semibold transition-all ${
+                            active
+                              ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-white'
+                              : 'border-white/8 bg-white/5 text-[var(--muted)] hover:text-white'
+                          }`}
+                          onClick={() => toggleConversationSessionFilter(session.id)}
+                          type="button"
+                        >
+                          {session.name} · {session.count}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              <div>
+                <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                  Tipo de conversa
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {conversationFilterOptions.map((option) => {
+                    const active = conversationFilter === option.id;
+
+                    return (
+                      <button
+                        key={option.id}
+                        className={`flex items-center justify-between rounded-2xl border px-3 py-2.5 text-left transition-all ${
+                          active
+                            ? 'border-[var(--primary)]/35 bg-[var(--primary)]/12 shadow-[0_0_0_1px_rgba(127,175,255,0.08)]'
+                            : 'border-white/8 bg-white/4 hover:border-white/12 hover:bg-white/6'
+                        }`}
+                        onClick={() => setConversationFilter(option.id)}
+                        type="button"
+                      >
+                        <span className={`text-[12px] font-medium ${active ? 'text-white' : 'text-zinc-300'}`}>
+                          {option.label}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            active ? 'bg-[var(--primary)]/14 text-[var(--primary)]' : 'bg-white/6 text-zinc-400'
+                          }`}
+                        >
+                          {option.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 px-1">
+                {overview.channels.length > 0 ? (
+                  overview.channels.map((channel) => <ChannelPill key={channel.id} channel={channel} />)
+                ) : (
+                  <span className="text-xs text-[var(--muted)]">Nenhum canal sincronizado ainda.</span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] text-zinc-500">
+                <span>Search `Ctrl/Cmd+K`</span>
+                <span>Switch `Alt+Up/Down`</span>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="h-[calc(100vh-11.5rem)] space-y-1.5 overflow-y-auto pr-1">
           {shouldShowInitialSkeleton ? <ListSkeleton rows={6} /> : null}
           {!shouldShowInitialSkeleton ? visibleSessionConversations.map((conversation) => {
-            const active = (pendingConversationId ?? selectedConversation?.id) === conversation.id;
+            const activeConversationKey = `${selectedConversation?.sessionId ?? selectedSessionId}:${pendingConversationId ?? selectedConversation?.id ?? ''}`;
+            const currentConversationKey = `${conversation.sessionId}:${conversation.id}`;
+            const active = activeConversationKey === currentConversationKey;
 
             return (
               <button
-                key={conversation.id}
+                key={`${conversation.sessionId}:${conversation.id}`}
                 className={`w-full rounded-[18px] p-2.5 text-left transition-all ${
                   active
                     ? 'bg-[var(--surface-highest)] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]'
                     : 'hover:bg-white/5'
                 }`}
                 onFocus={() => {
-                  if (selectedSession) {
-                    scheduleConversationPrefetch(selectedSession.id, conversation.id);
-                  }
+                  scheduleConversationPrefetch(conversation.sessionId, conversation.id);
                 }}
                 onMouseEnter={() => {
-                  if (selectedSession) {
-                    scheduleConversationPrefetch(selectedSession.id, conversation.id);
-                  }
+                  scheduleConversationPrefetch(conversation.sessionId, conversation.id);
                 }}
                 onMouseLeave={() => {
                   if (conversationPrefetchTimerRef.current) {
                     window.clearTimeout(conversationPrefetchTimerRef.current);
                   }
                 }}
-                onClick={() => openConversation(conversation.id)}
+                onClick={() => openConversation(conversation)}
                 type="button"
               >
                 <div className="flex gap-3">
@@ -4763,6 +4966,11 @@ export function DashboardClient({ initialOverview }: Props) {
                       <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--primary)]">
                         {isGroupConversation(conversation) ? 'Grupo' : 'Conversa'}
                       </span>
+                      {conversationSessionScope === 'all' ? (
+                        <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-sky-200">
+                          {conversation.sessionName}
+                        </span>
+                      ) : null}
                       <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">
                         {conversation.status}
                       </span>
@@ -4773,13 +4981,15 @@ export function DashboardClient({ initialOverview }: Props) {
             );
           }) : null}
 
-          {selectedSession && !shouldShowInitialSkeleton && visibleSessionConversations.length === 0 ? (
+          {(selectedSession || conversationSessionScope === 'all') && !shouldShowInitialSkeleton && visibleSessionConversations.length === 0 ? (
             <EmptyStateCard
-              actionLabel={conversationSearchTerm || conversationFilter !== 'all' ? 'Limpar busca e filtros' : 'Atualizar fila'}
+              actionLabel={conversationSearchTerm || conversationFilter !== 'all' || conversationSessionScope !== 'selected' || conversationSessionFilterIds.length > 0 ? 'Limpar busca e filtros' : 'Atualizar fila'}
               description={conversationSearchTerm
                 ? 'Nenhuma conversa combina com a busca atual. Limpe o termo ou ajuste os filtros para continuar navegando.'
-                : 'A sessao atual ainda nao trouxe conversas para esta fila. Atualize a sincronizacao ou aguarde novas mensagens.'}
-              onAction={conversationSearchTerm || conversationFilter !== 'all'
+                : conversationSessionScope === 'all'
+                  ? 'Nenhuma conversa apareceu nas sessoes filtradas. Ajuste os nomes selecionados ou aguarde novas mensagens.'
+                  : 'A sessao atual ainda nao trouxe conversas para esta fila. Atualize a sincronizacao ou aguarde novas mensagens.'}
+              onAction={conversationSearchTerm || conversationFilter !== 'all' || conversationSessionScope !== 'selected' || conversationSessionFilterIds.length > 0
                 ? resetConversationView
                 : () => runAction(loadOverview)}
               title="Nenhuma conversa disponivel"
@@ -4806,6 +5016,11 @@ export function DashboardClient({ initialOverview }: Props) {
                     {selectedConversation?.contact ?? selectedSession.name}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+                    {conversationSessionScope === 'all' && selectedConversation ? (
+                      <span className="rounded-full bg-sky-500/12 px-3 py-1 text-sky-100">
+                        {selectedConversation.sessionName}
+                      </span>
+                    ) : null}
                     <span className="rounded-full bg-[var(--surface-high)] px-3 py-1">
                       {selectedSession.phoneNumber}
                     </span>
@@ -4835,7 +5050,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     <div className="flex justify-center pb-2">
                       <button
                         className="rounded-full bg-white/5 px-4 py-2 text-xs font-semibold text-[var(--muted)] transition hover:bg-white/10 hover:text-white"
-                        onClick={() => setVisibleMessageCount((current) => current + MESSAGE_PAGE_SIZE)}
+                        onClick={loadOlderMessages}
                         type="button"
                       >
                         Carregar {Math.min(MESSAGE_PAGE_SIZE, visibleMessageStartIndex)} mensagens anteriores
