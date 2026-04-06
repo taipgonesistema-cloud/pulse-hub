@@ -289,6 +289,11 @@ type ContactKanbanStageRecord = {
   updatedAt: string;
 };
 
+type PendingSessionAction = {
+  kind: 'create' | 'connect' | 'disconnect' | 'delete';
+  sessionId?: string;
+};
+
 export function DashboardClient({ initialOverview }: Props) {
   const router = useRouter();
   const [overview, setOverview] = useState(() => sanitizeOverview(initialOverview));
@@ -387,6 +392,7 @@ export function DashboardClient({ initialOverview }: Props) {
   );
   const [sessionForm, setSessionForm] = useState({ name: '' });
   const [sessionToDelete, setSessionToDelete] = useState<SessionRecord | null>(null);
+  const [pendingSessionAction, setPendingSessionAction] = useState<PendingSessionAction | null>(null);
   const [newUserForm, setNewUserForm] = useState({
     name: '',
     email: '',
@@ -470,6 +476,18 @@ export function DashboardClient({ initialOverview }: Props) {
       overview.sessions[0],
     [overview.sessions, selectedSessionId],
   );
+
+  const isCreatingSession = pendingSessionAction?.kind === 'create';
+  const isConnectingSelectedSession = pendingSessionAction?.kind === 'connect'
+    && pendingSessionAction.sessionId === selectedSession?.id;
+  const isDisconnectingSelectedSession = pendingSessionAction?.kind === 'disconnect'
+    && pendingSessionAction.sessionId === selectedSession?.id;
+  const isDeletingSelectedSession = pendingSessionAction?.kind === 'delete'
+    && pendingSessionAction.sessionId === selectedSession?.id;
+  const pendingSelectedSessionActionLabel =
+    isConnectingSelectedSession ? 'Conectando sessao e preparando autenticacao...' :
+      isDisconnectingSelectedSession ? 'Desconectando sessao...' :
+        isDeletingSelectedSession ? 'Removendo sessao e limpando dados vinculados...' : '';
 
   const allSessionConversations = useMemo(
     () => {
@@ -2212,6 +2230,32 @@ export function DashboardClient({ initialOverview }: Props) {
     });
   }, [executeAction]);
 
+  const runSessionAction = useCallback(
+    async (
+      action: PendingSessionAction,
+      handler: () => Promise<void>,
+      options?: { successMessage?: string },
+    ) => {
+      setPendingSessionAction(action);
+      try {
+        const startedAt = Date.now();
+        const completed = await executeAction(handler, options);
+        const elapsed = Date.now() - startedAt;
+        if (elapsed < 450) {
+          await wait(450 - elapsed);
+        }
+        return completed;
+      } finally {
+        setPendingSessionAction((current) => (
+          current?.kind === action.kind && current?.sessionId === action.sessionId
+            ? null
+            : current
+        ));
+      }
+    },
+    [executeAction],
+  );
+
   const revokeWorkspaceUserSession = useCallback(
     async (userId: string, sessionId: string) => {
       const completed = await executeAction(async () => {
@@ -2783,7 +2827,7 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [canManageInstagram, executeAction, instagramCaption, instagramFile, instagramImageUrl, instagramPublishMode, loadInstagramIntegrationStatus, pushToast]);
 
   const createSession = () => {
-    if (!canManageWorkspaceSessions) {
+    if (!canManageWorkspaceSessions || pendingSessionAction) {
       return;
     }
 
@@ -2801,7 +2845,7 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
-    runAction(async () => {
+    void runSessionAction({ kind: 'create' }, async () => {
       const response = await authenticatedFetch(`${apiUrl}/whatsapp/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2822,11 +2866,11 @@ export function DashboardClient({ initialOverview }: Props) {
   };
 
   const connectSession = (sessionId: string) => {
-    if (!canManageWorkspaceSessions) {
+    if (!canManageWorkspaceSessions || pendingSessionAction) {
       return;
     }
 
-    runAction(async () => {
+    void runSessionAction({ kind: 'connect', sessionId }, async () => {
       const response = await authenticatedFetch(
         `${apiUrl}/whatsapp/sessions/${sessionId}/connect`,
         { method: 'POST' },
@@ -2841,11 +2885,11 @@ export function DashboardClient({ initialOverview }: Props) {
   };
 
   const disconnectSession = (sessionId: string) => {
-    if (!canManageWorkspaceSessions) {
+    if (!canManageWorkspaceSessions || pendingSessionAction) {
       return;
     }
 
-    runAction(async () => {
+    void runSessionAction({ kind: 'disconnect', sessionId }, async () => {
       const response = await authenticatedFetch(
         `${apiUrl}/whatsapp/sessions/${sessionId}/disconnect`,
         { method: 'POST' },
@@ -2860,11 +2904,11 @@ export function DashboardClient({ initialOverview }: Props) {
   };
 
   const deleteSession = (session: SessionRecord) => {
-    if (!canManageWorkspaceSessions) {
+    if (!canManageWorkspaceSessions || pendingSessionAction) {
       return;
     }
 
-    runAction(async () => {
+    void runSessionAction({ kind: 'delete', sessionId: session.id }, async () => {
       const response = await authenticatedFetch(
         `${apiUrl}/whatsapp/sessions/${session.id}`,
         { method: 'DELETE' },
@@ -4392,11 +4436,17 @@ export function DashboardClient({ initialOverview }: Props) {
                     O numero do WhatsApp sera preenchido automaticamente apos autenticar a sessao.
                   </div>
                   <button
-                    className="w-full rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black"
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black disabled:cursor-wait disabled:opacity-75"
+                    disabled={isCreatingSession}
                     onClick={createSession}
                     type="button"
                   >
-                    Criar sessao
+                    {isCreatingSession ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" strokeWidth={2.1} />
+                        Criando sessao...
+                      </>
+                    ) : 'Criar sessao'}
                   </button>
                 </div>
               </div>
@@ -4415,11 +4465,12 @@ export function DashboardClient({ initialOverview }: Props) {
                       return (
                         <button
                           key={session.id}
-                          className={`flex w-full items-center justify-between rounded-[24px] border px-4 py-4 text-left transition ${
-                            active
+                          className={`flex w-full items-center justify-between rounded-[24px] border px-4 py-4 text-left transition disabled:cursor-wait disabled:opacity-80 ${
+                             active
                               ? 'border-[var(--primary)]/30 bg-[var(--primary)]/10'
                               : 'border-white/6 bg-white/4 hover:bg-white/6'
-                          }`}
+                           }`}
+                          disabled={Boolean(pendingSessionAction)}
                           onClick={() => setSelectedSessionId(session.id)}
                           type="button"
                         >
@@ -4429,9 +4480,16 @@ export function DashboardClient({ initialOverview }: Props) {
                               {session.phoneNumber} · {session.channelName}
                             </p>
                           </div>
-                          <span className={`rounded-full px-3 py-1 text-xs ${statusTone[session.status]}`}>
-                            {statusLabel[session.status]}
-                          </span>
+                          {pendingSessionAction?.sessionId === session.id ? (
+                            <span className="inline-flex items-center gap-2 rounded-full bg-white/8 px-3 py-1 text-xs text-white">
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" strokeWidth={2.2} />
+                              Processando
+                            </span>
+                          ) : (
+                            <span className={`rounded-full px-3 py-1 text-xs ${statusTone[session.status]}`}>
+                              {statusLabel[session.status]}
+                            </span>
+                          )}
                         </button>
                       );
                     })
@@ -4474,23 +4532,34 @@ export function DashboardClient({ initialOverview }: Props) {
 
                     <div className="mt-6 flex flex-wrap gap-3">
                       <button
-                        className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
+                        className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black disabled:cursor-wait disabled:opacity-75"
+                        disabled={Boolean(pendingSessionAction)}
                         onClick={() => connectSession(selectedSession.id)}
                         type="button"
                       >
-                        <QrCode className="h-4 w-4" strokeWidth={2.1} />
-                        Gerar QR / conectar
+                        {isConnectingSelectedSession ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" strokeWidth={2.1} />
+                        ) : (
+                          <QrCode className="h-4 w-4" strokeWidth={2.1} />
+                        )}
+                        {isConnectingSelectedSession ? 'Conectando...' : 'Gerar QR / conectar'}
                       </button>
                       <button
-                        className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
+                        className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white disabled:cursor-wait disabled:opacity-60"
+                        disabled={Boolean(pendingSessionAction)}
                         onClick={() => disconnectSession(selectedSession.id)}
                         type="button"
                       >
-                        <Wifi className="h-4 w-4" strokeWidth={2.1} />
-                        Desconectar
+                        {isDisconnectingSelectedSession ? (
+                          <RefreshCw className="h-4 w-4 animate-spin" strokeWidth={2.1} />
+                        ) : (
+                          <Wifi className="h-4 w-4" strokeWidth={2.1} />
+                        )}
+                        {isDisconnectingSelectedSession ? 'Desconectando...' : 'Desconectar'}
                       </button>
                       <button
-                        className="inline-flex items-center gap-2 rounded-full border border-rose-500/20 bg-rose-500/10 px-4 py-2 text-sm text-rose-100 hover:bg-rose-500/15"
+                        className="inline-flex items-center gap-2 rounded-full border border-rose-500/20 bg-rose-500/10 px-4 py-2 text-sm text-rose-100 hover:bg-rose-500/15 disabled:cursor-wait disabled:opacity-60"
+                        disabled={Boolean(pendingSessionAction)}
                         onClick={() => setSessionToDelete(selectedSession)}
                         type="button"
                       >
@@ -4498,6 +4567,13 @@ export function DashboardClient({ initialOverview }: Props) {
                         Remover sessao
                       </button>
                     </div>
+
+                    {pendingSelectedSessionActionLabel ? (
+                      <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-3 py-2 text-xs text-[var(--muted)]">
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin text-[var(--primary)]" strokeWidth={2.2} />
+                        {pendingSelectedSessionActionLabel}
+                      </div>
+                    ) : null}
 
                     {selectedSession.lastError ? (
                       <div className="mt-6 rounded-[24px] border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
@@ -4912,20 +4988,26 @@ export function DashboardClient({ initialOverview }: Props) {
             <div className="flex justify-end gap-2">
               <button
                 className="rounded-full bg-white/6 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                disabled={isDeletingSelectedSession}
                 onClick={() => setSessionToDelete(null)}
                 type="button"
               >
                 Cancelar
               </button>
               <button
-                className="inline-flex items-center gap-2 rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-400"
+                className="inline-flex items-center gap-2 rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:cursor-wait disabled:opacity-75"
+                disabled={isDeletingSelectedSession}
                 onClick={() => {
                   void deleteSession(sessionToDelete);
                 }}
                 type="button"
               >
-                <Trash2 className="h-4 w-4" strokeWidth={2.1} />
-                Remover sessao
+                {isDeletingSelectedSession ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" strokeWidth={2.1} />
+                ) : (
+                  <Trash2 className="h-4 w-4" strokeWidth={2.1} />
+                )}
+                {isDeletingSelectedSession ? 'Removendo...' : 'Remover sessao'}
               </button>
             </div>
           </div>
@@ -8283,6 +8365,12 @@ function buildWorkspaceSessionId(input: {
 
   const suffix = Date.now().toString(36).slice(-6);
   return base ? `${base}-${suffix}` : `session-${suffix}`;
+}
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function buildToastKey(toast: Pick<ToastItem, 'tone' | 'title' | 'description'>) {
