@@ -344,6 +344,8 @@ export function DashboardClient({ initialOverview }: Props) {
     emoji: '',
     color: '#7FAFFF',
   });
+  const [showConversationLabelsModal, setShowConversationLabelsModal] = useState(false);
+  const [conversationLabelSearch, setConversationLabelSearch] = useState('');
   const [showCreateBoardModal, setShowCreateBoardModal] = useState(false);
   const [newBoardForm, setNewBoardForm] = useState({ label: '', description: '' });
   const [contactKanbanStageMap, setContactKanbanStageMap] = useState<
@@ -632,6 +634,27 @@ export function DashboardClient({ initialOverview }: Props) {
     },
     [isConversationsView, selectedConversationId, selectedSessionId, visibleSessionConversations],
   );
+
+  const activeConversationCRMProfile = useMemo(
+    () => (selectedConversation ? contactCrmProfileMap[buildContactKanbanKey(selectedConversation)] : undefined),
+    [contactCrmProfileMap, selectedConversation],
+  );
+
+  const activeConversationLabels = useMemo(
+    () => resolveContactLabels(activeConversationCRMProfile?.tags, contactLabels),
+    [activeConversationCRMProfile?.tags, contactLabels],
+  );
+
+  const filteredConversationLabels = useMemo(() => {
+    const term = conversationLabelSearch.trim().toLowerCase();
+    if (!term) {
+      return contactLabels;
+    }
+
+    return contactLabels.filter((label) =>
+      [label.name, label.emoji ?? '', label.color].join(' ').toLowerCase().includes(term),
+    );
+  }, [contactLabels, conversationLabelSearch]);
 
   const contacts = useMemo(
     () => (isContactsView ? overview.conversations : ([] as ConversationRecord[])),
@@ -2288,6 +2311,8 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!isConversationsView) {
       setReplyTargetMessage(null);
       setNewTimelineMessageCount(0);
+      setShowConversationLabelsModal(false);
+      setConversationLabelSearch('');
       return;
     }
 
@@ -2296,6 +2321,8 @@ export function DashboardClient({ initialOverview }: Props) {
     shouldStickToBottomRef.current = true;
     setVisibleMessageCount(INITIAL_VISIBLE_MESSAGE_COUNT);
     setNewTimelineMessageCount(0);
+    setShowConversationLabelsModal(false);
+    setConversationLabelSearch('');
     setReplyTargetMessage(null);
   }, [activeConversationId, activeSessionId, isConversationsView]);
 
@@ -2838,6 +2865,19 @@ export function DashboardClient({ initialOverview }: Props) {
     },
     [authUser?.email, authUser?.name, authenticatedFetch, contactCrmProfileMap, executeAction],
   );
+
+  const toggleConversationContactLabel = useCallback(async (labelId: string) => {
+    if (!selectedConversation) {
+      return;
+    }
+
+    const currentTags = activeConversationCRMProfile?.tags ?? [];
+    const nextTags = currentTags.includes(labelId)
+      ? currentTags.filter((item) => item !== labelId)
+      : [...currentTags, labelId];
+
+    await saveContactCRMProfile(selectedConversation, { tags: nextTags });
+  }, [activeConversationCRMProfile?.tags, saveContactCRMProfile, selectedConversation]);
 
   const resetContactLabelForm = useCallback(() => {
     setContactLabelForm({ id: '', name: '', emoji: '', color: '#7FAFFF' });
@@ -5441,9 +5481,37 @@ export function DashboardClient({ initialOverview }: Props) {
                     <span className={`rounded-full px-3 py-1 ${statusTone[selectedSession.status]}`}>
                       {statusLabel[selectedSession.status]}
                     </span>
+                    {activeConversationLabels.slice(0, 3).map((label) => (
+                      <span
+                        key={label.id}
+                        className="inline-flex items-center gap-1 rounded-full border px-3 py-1 font-semibold"
+                        style={buildContactLabelStyle(label.color)}
+                      >
+                        {label.emoji ? <span>{label.emoji}</span> : null}
+                        <span>{label.name}</span>
+                      </span>
+                    ))}
+                    {activeConversationLabels.length > 3 ? (
+                      <span className="rounded-full bg-white/5 px-3 py-1 text-zinc-300">
+                        +{activeConversationLabels.length - 3} etiquetas
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>
+
+              {selectedConversation ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+                    onClick={() => setShowConversationLabelsModal(true)}
+                    type="button"
+                  >
+                    <BadgeCheck className="h-4 w-4" strokeWidth={2.1} />
+                    Etiquetas {activeConversationLabels.length > 0 ? `(${activeConversationLabels.length})` : ''}
+                  </button>
+                </div>
+              ) : null}
 
             </div>
 
@@ -5610,6 +5678,112 @@ export function DashboardClient({ initialOverview }: Props) {
             void confirmDeleteQuickReply();
           }}
         />
+      ) : null}
+      {showConversationLabelsModal && selectedConversation ? (
+        <KanbanModal
+          description="Aplique etiquetas diretamente ao contato da conversa atual para destacar contexto, campanha ou prioridade visual."
+          onClose={() => setShowConversationLabelsModal(false)}
+          title="Etiquetas do contato"
+        >
+          <div className="space-y-4">
+            <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
+              <div className="flex items-center gap-3">
+                <AvatarBadge label={selectedConversation.contact} small src={selectedConversation.avatarUrl} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-white">{selectedConversation.contact}</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">{selectedConversation.participantId}</p>
+                </div>
+                <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
+                  {activeConversationLabels.length} etiqueta{activeConversationLabels.length === 1 ? '' : 's'}
+                </span>
+              </div>
+
+              <div className="mt-4 rounded-[20px] border border-white/8 bg-black/10 px-4 py-3">
+                <div className="flex items-center gap-3 text-sm text-zinc-400">
+                  <Search className="h-4 w-4" strokeWidth={2.1} />
+                  <input
+                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                    onChange={(event) => setConversationLabelSearch(event.target.value)}
+                    placeholder="Pesquisar etiquetas"
+                    value={conversationLabelSearch}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="max-h-[24rem] space-y-2 overflow-y-auto pr-1">
+              {filteredConversationLabels.length > 0 ? filteredConversationLabels.map((label) => {
+                const active = (activeConversationCRMProfile?.tags ?? []).includes(label.id);
+
+                return (
+                  <button
+                    key={label.id}
+                    className={`flex w-full items-center justify-between gap-3 rounded-[22px] border px-4 py-3 text-left transition ${
+                      active
+                        ? 'border-white/12 bg-white/[0.06]'
+                        : 'border-white/8 bg-white/[0.03] hover:bg-white/[0.05]'
+                    }`}
+                    onClick={() => {
+                      void toggleConversationContactLabel(label.id);
+                    }}
+                    type="button"
+                  >
+                    <div className="min-w-0 flex items-center gap-3">
+                      <span
+                        className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold"
+                        style={buildContactLabelStyle(label.color)}
+                      >
+                        <span>{label.emoji || '🏷️'}</span>
+                        <span className="truncate">{label.name}</span>
+                      </span>
+                    </div>
+                    <span className={`grid h-5 w-5 place-items-center rounded-md border ${active ? 'border-[var(--primary)] bg-[var(--primary)] text-black' : 'border-white/12 bg-black/10 text-transparent'}`}>
+                      <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.2} />
+                    </span>
+                  </button>
+                );
+              }) : (
+                <EmptyStateCard
+                  actionLabel={canManageContactLabels ? 'Abrir biblioteca de etiquetas' : undefined}
+                  description={contactLabels.length === 0
+                    ? 'Nenhuma etiqueta foi criada ainda. Cadastre etiquetas na configuracao para aplicar aqui.'
+                    : 'Nenhuma etiqueta combina com a busca atual.'}
+                  onAction={canManageContactLabels
+                    ? () => {
+                      setShowConversationLabelsModal(false);
+                      setSettingsSection('labels');
+                      navigateToView('settings');
+                    }
+                    : undefined}
+                  title="Nenhuma etiqueta disponivel"
+                />
+              )}
+            </div>
+
+            <div className="flex justify-between gap-3">
+              <button
+                className="rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
+                onClick={() => setShowConversationLabelsModal(false)}
+                type="button"
+              >
+                Fechar
+              </button>
+              {canManageContactLabels ? (
+                <button
+                  className="rounded-full bg-[linear-gradient(135deg,#f8d56b,#ffb94a)] px-4 py-2 text-sm font-semibold text-black"
+                  onClick={() => {
+                    setShowConversationLabelsModal(false);
+                    setSettingsSection('labels');
+                    navigateToView('settings');
+                  }}
+                  type="button"
+                >
+                  Gerenciar etiquetas
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </KanbanModal>
       ) : null}
       {sessionToDelete ? (
         <KanbanModal
