@@ -85,7 +85,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     const conversations = await this.store.getAllConversations();
 
     const overview = {
-      product: 'Pulse Hub',
+      product: 'ether command',
       phase: 'whatsapp-core',
       metrics: {
         connectedNumbers: sessions.length,

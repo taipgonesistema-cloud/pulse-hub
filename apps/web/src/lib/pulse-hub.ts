@@ -273,7 +273,7 @@ export type SaveQuickReplyPayload = {
 };
 
 export const fallbackOverview: DashboardOverview = {
-  product: 'Pulse Hub',
+  product: 'ether command',
   phase: 'whatsapp-core',
   metrics: {
     connectedNumbers: 0,

@@ -5994,7 +5994,7 @@ export function DashboardClient({ initialOverview }: Props) {
           <header className="app-shell-header sticky top-0 z-20 flex items-center justify-between border-b border-white/8 px-4 py-2.5 backdrop-blur-2xl md:px-5">
             <div className="flex items-center gap-5">
               <span className="font-headline text-xl font-bold tracking-tight text-transparent bg-gradient-to-br from-blue-400 to-blue-600 bg-clip-text">
-                Pulse Hub
+                ether command
               </span>
               <div className="hidden items-center gap-3 rounded-full border border-white/5 bg-white/5 px-4 py-1.5 transition-all duration-300 focus-within:border-[var(--primary)]/50 lg:flex">
                 <Search className="h-4 w-4 text-zinc-400" strokeWidth={2.1} />
@@ -6465,7 +6465,7 @@ function WorkspaceBootstrapScreen({
             <div className="max-w-2xl">
               <div className="flex items-center gap-3 text-[11px] font-bold uppercase tracking-[0.28em] text-[var(--primary)]">
                 <span className="h-2.5 w-2.5 rounded-full bg-[var(--primary)] shadow-[0_0_14px_rgba(127,175,255,0.85)]" />
-                Pulse Hub
+                ether command
               </div>
               <h1 className="font-headline mt-5 text-3xl font-semibold text-white md:text-5xl">{title}</h1>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400 md:text-base">{subtitle}</p>

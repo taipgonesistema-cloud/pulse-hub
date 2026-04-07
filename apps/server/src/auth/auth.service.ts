@@ -81,7 +81,7 @@ export class AuthService implements OnModuleInit {
     const seedPassword = (
       process.env.AUTH_SEED_PASSWORD ?? 'PulseHub123!'
     ).trim();
-    const seedName = (process.env.AUTH_SEED_NAME ?? 'Pulse Hub Admin').trim();
+    const seedName = (process.env.AUTH_SEED_NAME ?? 'ether command Admin').trim();
     const seedRole = (process.env.AUTH_SEED_ROLE ?? 'admin').trim() as UserRole;
 
     const existingUser = await this.findByEmail(seedEmail);

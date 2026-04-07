@@ -5,8 +5,8 @@ import { LoginForm } from '@/components/login-form';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 export const metadata: Metadata = {
-  title: 'Pulse Hub | Sign in',
-  description: 'Acesso da operacao Pulse Hub para atendentes e supervisores.',
+  title: 'ether command | Sign in',
+  description: 'Acesso da operacao ether command para atendentes e supervisores.',
 };
 
 export default function LoginPage() {
@@ -29,7 +29,7 @@ export default function LoginPage() {
 
           <div className="flex items-center gap-3">
             <div className="rounded-full border border-[rgba(255,255,255,0.08)] bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/55">
-              Pulse Hub access
+              ether command access
             </div>
             <ThemeToggle />
           </div>

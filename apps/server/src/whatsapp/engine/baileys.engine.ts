@@ -60,7 +60,7 @@ export class BaileysEngine implements WhatsappEngine {
 
     const socket = makeWASocket({
       auth: state,
-      browser: Browsers.ubuntu('Pulse Hub'),
+      browser: Browsers.ubuntu('ether command'),
       syncFullHistory: true,
       markOnlineOnConnect: false,
       emitOwnEvents: true,
