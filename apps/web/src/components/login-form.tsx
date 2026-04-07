@@ -75,7 +75,7 @@ export function LoginForm() {
   }
 
   return (
-    <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[rgba(10,10,10,0.74)] p-5 shadow-[0_30px_100px_rgba(0,0,0,0.45)] backdrop-blur-2xl sm:p-7">
+    <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[var(--surface-variant)] p-5 shadow-[0_30px_100px_rgba(0,0,0,0.24)] backdrop-blur-2xl sm:p-7">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(93,253,138,0.12),transparent_32%),radial-gradient(circle_at_bottom_right,rgba(127,175,255,0.16),transparent_30%)]" />
 
       <div className="relative flex flex-col gap-6">

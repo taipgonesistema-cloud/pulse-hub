@@ -89,6 +89,7 @@ import {
   QuickReplyPreviewModal,
   QuickRepliesSettingsPanel,
 } from '@/components/quick-replies';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 const statusLabel: Record<SessionRecord['status'], string> = {
   demo: 'Teste',
@@ -6007,14 +6008,15 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
 
             <div className="flex items-center gap-3">
-                <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-full border border-white/20 bg-[var(--surface-high)] text-[11px] font-bold text-white">
-                  {authUser?.name
-                    ?.split(' ')
+              <ThemeToggle compact />
+              <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-full border border-white/20 bg-[var(--surface-high)] text-[11px] font-bold text-white">
+                {authUser?.name
+                  ?.split(' ')
                     .map((part) => part[0])
                     .join('')
                     .slice(0, 2)
                     .toUpperCase() ?? 'PH'}
-                </div>
+              </div>
             </div>
           </header>
 

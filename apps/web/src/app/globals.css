@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  --theme-color-scheme: dark;
   --background: #0e0e0e;
   --foreground: #ffffff;
   --muted: #adaaaa;
@@ -12,10 +13,62 @@
   --line: rgba(255, 255, 255, 0.06);
   --primary: #7fafff;
   --primary-strong: #64a1ff;
+  --primary-container: #d7e8ff;
+  --on-primary-container: #0b1b34;
   --secondary: #5dfd8a;
   --tertiary: #ff6e82;
+  --error: #ff6b75;
+  --error-dim: #ff9ba1;
+  --body-background:
+    radial-gradient(circle at top left, rgba(127, 175, 255, 0.08), transparent 24%),
+    radial-gradient(circle at top right, rgba(255, 110, 130, 0.04), transparent 18%),
+    linear-gradient(180deg, #070707 0%, #0b0b0b 35%, #0e0e0e 100%);
+  --login-background:
+    radial-gradient(circle at top left, rgba(255, 178, 76, 0.18), transparent 24%),
+    radial-gradient(circle at top right, rgba(93, 253, 138, 0.12), transparent 24%),
+    linear-gradient(180deg, #050505 0%, #0a0a0a 40%, #111111 100%);
+  --scroll-thumb: #262626;
   --font-sans-stack: "Segoe UI", "Avenir Next", "Helvetica Neue", sans-serif;
   --font-display-stack: "Bahnschrift", "Arial Narrow", "Trebuchet MS", sans-serif;
+}
+
+:root[data-theme='light'] {
+  --theme-color-scheme: light;
+  --background: #f3efe7;
+  --foreground: #18212d;
+  --muted: #667182;
+  --surface: #f6f2ea;
+  --surface-low: #fcfaf6;
+  --surface-high: #ebe3d7;
+  --surface-highest: #ded4c6;
+  --surface-variant: rgba(255, 255, 255, 0.72);
+  --line: rgba(24, 33, 45, 0.08);
+  --primary: #2f6fdf;
+  --primary-strong: #1f5ec6;
+  --primary-container: #dbe7ff;
+  --on-primary-container: #14305b;
+  --secondary: #149557;
+  --tertiary: #da6c47;
+  --error: #cf4a4a;
+  --error-dim: #b45a5a;
+  --body-background:
+    radial-gradient(circle at top left, rgba(47, 111, 223, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(218, 108, 71, 0.08), transparent 20%),
+    linear-gradient(180deg, #fbf8f2 0%, #f5efe6 42%, #efe6da 100%);
+  --login-background:
+    radial-gradient(circle at top left, rgba(47, 111, 223, 0.14), transparent 24%),
+    radial-gradient(circle at top right, rgba(20, 149, 87, 0.1), transparent 24%),
+    linear-gradient(180deg, #fdfbf7 0%, #f6f1e8 40%, #ede3d5 100%);
+  --scroll-thumb: #c7b9a4;
+  --color-white: #17212c;
+  --color-black: #ffffff;
+  --color-zinc-300: #324152;
+  --color-zinc-400: #536273;
+  --color-zinc-500: #6a7686;
+  --color-zinc-600: #7b8694;
+  --color-zinc-700: #d7ccbe;
+  --color-zinc-800: #ebe3d6;
+  --color-zinc-950: #f8f3eb;
 }
 
 @theme inline {
@@ -32,16 +85,15 @@
 html {
   scroll-behavior: smooth;
   font-size: 15px;
+  color-scheme: var(--theme-color-scheme, dark);
 }
 
 body {
   min-height: 100%;
-  background:
-    radial-gradient(circle at top left, rgba(127, 175, 255, 0.08), transparent 24%),
-    radial-gradient(circle at top right, rgba(255, 110, 130, 0.04), transparent 18%),
-    linear-gradient(180deg, #070707 0%, #0b0b0b 35%, #0e0e0e 100%);
+  background: var(--body-background);
   color: var(--foreground);
   font-family: var(--font-sans-stack);
+  transition: background 200ms ease, color 200ms ease;
 }
 
 button,
@@ -66,7 +118,7 @@ a {
 .glass-panel {
   background: var(--surface-variant);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(73, 72, 71, 0.15);
+  border: 1px solid var(--line);
 }
 
 ::-webkit-scrollbar {
@@ -79,6 +131,6 @@ a {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #262626;
+  background: var(--scroll-thumb);
   border-radius: 999px;
 }
