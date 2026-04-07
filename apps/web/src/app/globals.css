@@ -23,11 +23,27 @@
     radial-gradient(circle at top left, rgba(127, 175, 255, 0.08), transparent 24%),
     radial-gradient(circle at top right, rgba(255, 110, 130, 0.04), transparent 18%),
     linear-gradient(180deg, #070707 0%, #0b0b0b 35%, #0e0e0e 100%);
+  --hero-background:
+    radial-gradient(circle at top, rgba(127, 175, 255, 0.14), transparent 38%),
+    linear-gradient(180deg, #050505 0%, #111111 100%);
   --login-background:
     radial-gradient(circle at top left, rgba(255, 178, 76, 0.18), transparent 24%),
     radial-gradient(circle at top right, rgba(93, 253, 138, 0.12), transparent 24%),
     linear-gradient(180deg, #050505 0%, #0a0a0a 40%, #111111 100%);
   --scroll-thumb: #262626;
+  --sidebar-background: rgba(10, 12, 16, 0.82);
+  --header-background: rgba(10, 12, 16, 0.62);
+  --panel-strong-background: linear-gradient(180deg, rgba(18, 18, 20, 0.98), rgba(12, 12, 14, 0.98));
+  --panel-strong-shadow: 0 18px 40px -28px rgba(0, 0, 0, 0.9);
+  --panel-overlay-background: rgba(0, 0, 0, 0.12);
+  --panel-contrast-background: rgba(0, 0, 0, 0.12);
+  --modal-backdrop: rgba(0, 0, 0, 0.7);
+  --modal-background: linear-gradient(180deg, rgba(18, 18, 20, 0.98), rgba(12, 12, 14, 0.98));
+  --modal-shadow: 0 32px 80px -30px rgba(0, 0, 0, 0.85);
+  --bootstrap-panel-background: linear-gradient(180deg, rgba(25, 28, 34, 0.92), rgba(15, 16, 20, 0.96));
+  --bootstrap-orb-background: rgba(8, 10, 14, 0.94);
+  --bootstrap-pill-background: rgba(10, 12, 16, 0.92);
+  --bootstrap-footer-background: rgba(0, 0, 0, 0.2);
   --font-sans-stack: "Segoe UI", "Avenir Next", "Helvetica Neue", sans-serif;
   --font-display-stack: "Bahnschrift", "Arial Narrow", "Trebuchet MS", sans-serif;
 }
@@ -55,11 +71,27 @@
     radial-gradient(circle at top left, rgba(47, 111, 223, 0.12), transparent 24%),
     radial-gradient(circle at top right, rgba(218, 108, 71, 0.08), transparent 20%),
     linear-gradient(180deg, #fbf8f2 0%, #f5efe6 42%, #efe6da 100%);
+  --hero-background:
+    radial-gradient(circle at top, rgba(47, 111, 223, 0.12), transparent 38%),
+    linear-gradient(180deg, #fcfaf6 0%, #f3ede3 100%);
   --login-background:
     radial-gradient(circle at top left, rgba(47, 111, 223, 0.14), transparent 24%),
     radial-gradient(circle at top right, rgba(20, 149, 87, 0.1), transparent 24%),
     linear-gradient(180deg, #fdfbf7 0%, #f6f1e8 40%, #ede3d5 100%);
   --scroll-thumb: #c7b9a4;
+  --sidebar-background: rgba(248, 243, 235, 0.92);
+  --header-background: rgba(252, 248, 241, 0.86);
+  --panel-strong-background: linear-gradient(180deg, rgba(255, 251, 244, 0.96), rgba(241, 233, 222, 0.98));
+  --panel-strong-shadow: 0 18px 40px -30px rgba(95, 78, 55, 0.22);
+  --panel-overlay-background: rgba(255, 255, 255, 0.55);
+  --panel-contrast-background: rgba(255, 255, 255, 0.58);
+  --modal-backdrop: rgba(84, 67, 45, 0.22);
+  --modal-background: linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(241, 232, 219, 0.98));
+  --modal-shadow: 0 28px 72px -34px rgba(95, 78, 55, 0.28);
+  --bootstrap-panel-background: linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(239, 231, 219, 0.98));
+  --bootstrap-orb-background: rgba(255, 255, 255, 0.92);
+  --bootstrap-pill-background: rgba(255, 255, 255, 0.86);
+  --bootstrap-footer-background: rgba(255, 255, 255, 0.62);
   --color-white: #17212c;
   --color-black: #ffffff;
   --color-zinc-300: #324152;
@@ -119,6 +151,57 @@ a {
   background: var(--surface-variant);
   backdrop-filter: blur(16px);
   border: 1px solid var(--line);
+}
+
+.app-shell-sidebar {
+  background: var(--sidebar-background);
+}
+
+.app-shell-header {
+  background: var(--header-background);
+}
+
+.app-panel-strong {
+  background: var(--panel-strong-background);
+  box-shadow: var(--panel-strong-shadow);
+}
+
+.app-panel-contrast {
+  background: var(--panel-contrast-background);
+}
+
+.app-panel-overlay {
+  background: var(--panel-overlay-background);
+}
+
+.app-modal-backdrop {
+  background: var(--modal-backdrop);
+}
+
+.app-modal-surface {
+  background: var(--modal-background);
+  box-shadow: var(--modal-shadow);
+}
+
+.app-hero-surface {
+  background: var(--hero-background);
+}
+
+.app-bootstrap-surface {
+  background: var(--bootstrap-panel-background);
+  box-shadow: var(--modal-shadow);
+}
+
+.app-bootstrap-orb {
+  background: var(--bootstrap-orb-background);
+}
+
+.app-bootstrap-pill {
+  background: var(--bootstrap-pill-background);
+}
+
+.app-bootstrap-footer {
+  background: var(--bootstrap-footer-background);
 }
 
 ::-webkit-scrollbar {

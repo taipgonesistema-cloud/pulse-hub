@@ -3655,7 +3655,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const renderContactsView = () => (
     <section className="min-h-0 flex-1 overflow-hidden px-4 py-5 md:px-6">
       <div className="grid h-full min-h-0 gap-5 xl:grid-cols-[14.5rem_minmax(0,1fr)_21rem]">
-        <aside className="min-h-0 rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(14,14,16,0.98))] p-4 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)]">
+        <aside className="app-panel-strong min-h-0 rounded-[30px] border border-white/6 p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
@@ -3730,7 +3730,7 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
         </aside>
 
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(12,12,14,0.98))] shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)]">
+        <div className="app-panel-strong flex min-h-0 flex-col overflow-hidden rounded-[30px] border border-white/6">
           <div className="border-b border-white/6 px-4 py-4 md:px-5">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
@@ -3962,7 +3962,7 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
         </div>
 
-        <aside className="min-h-0 overflow-y-auto rounded-[30px] border border-white/6 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(12,12,14,0.98))] p-4 shadow-[0_18px_40px_-28px_rgba(0,0,0,0.9)]">
+        <aside className="app-panel-strong min-h-0 overflow-y-auto rounded-[30px] border border-white/6 p-4">
           {selectedContact ? (
             <ContactKanbanDetailPanel
               key={`${buildContactKanbanKey(selectedContact)}:${contactCrmProfileMap[buildContactKanbanKey(selectedContact)]?.updatedAt ?? 'base'}`}
@@ -4429,7 +4429,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 </div>
 
                 <div className="mt-6 space-y-4">
-                  <div className="rounded-[24px] border border-dashed border-white/10 bg-black/10 p-4">
+                  <div className="app-panel-contrast rounded-[24px] border border-dashed border-white/10 p-4">
                     <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">
                       Imagem local
                     </p>
@@ -4464,7 +4464,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   )}
 
                   {instagramPreviewUrl || instagramImageUrl ? (
-                    <div className="overflow-hidden rounded-[28px] border border-white/8 bg-black/15 p-3">
+                    <div className="app-panel-contrast overflow-hidden rounded-[28px] border border-white/8 p-3">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         alt="Preview da publicacao"
@@ -4840,7 +4840,7 @@ export function DashboardClient({ initialOverview }: Props) {
                             Ultimo login: {user.lastLoginAt ? formatTimestamp(user.lastLoginAt) : 'ainda sem login'}
                           </p>
 
-                          <div className="mt-4 rounded-[20px] border border-white/8 bg-black/10 px-3 py-3">
+                          <div className="app-panel-contrast mt-4 rounded-[20px] border border-white/8 px-3 py-3">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div>
                                 <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">
@@ -5141,7 +5141,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
                       QR authentication
                     </p>
-                    <div className="mt-5 flex min-h-[320px] items-center justify-center rounded-[28px] border border-dashed border-white/10 bg-black/20 p-6">
+                    <div className="app-panel-contrast mt-5 flex min-h-[320px] items-center justify-center rounded-[28px] border border-dashed border-white/10 p-6">
                       {selectedSession.qrCodeDataUrl ? (
                         <div className="rounded-[28px] bg-white p-4">
                           <Image
@@ -5456,7 +5456,7 @@ export function DashboardClient({ initialOverview }: Props) {
       <section className="flex min-h-0 flex-col overflow-hidden bg-[var(--surface)]">
         {selectedSession ? (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-black/10 px-4 py-3 backdrop-blur-md">
+            <div className="app-panel-overlay flex flex-wrap items-center justify-between gap-4 border-b border-white/5 px-4 py-3 backdrop-blur-md">
               <div className="flex items-center gap-3">
                 {selectedConversation ? (
                   <AvatarBadge
@@ -5699,7 +5699,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 </span>
               </div>
 
-              <div className="mt-4 rounded-[20px] border border-white/8 bg-black/10 px-4 py-3">
+              <div className="app-panel-contrast mt-4 rounded-[20px] border border-white/8 px-4 py-3">
                 <div className="flex items-center gap-3 text-sm text-zinc-400">
                   <Search className="h-4 w-4" strokeWidth={2.1} />
                   <input
@@ -5924,7 +5924,7 @@ export function DashboardClient({ initialOverview }: Props) {
         </KanbanModal>
       ) : null}
       <div className="flex h-full overflow-hidden">
-        <aside className="hidden h-full w-[4.5rem] flex-col overflow-hidden border-r border-white/5 bg-zinc-950/80 px-2 py-4 backdrop-blur-xl md:flex">
+        <aside className="app-shell-sidebar hidden h-full w-[4.5rem] flex-col overflow-hidden border-r border-white/5 px-2 py-4 backdrop-blur-xl md:flex">
           <div className="mb-6 flex justify-center">
             <div className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--primary-container)] text-[var(--on-primary-container)]">
                 <Sparkles className="h-4 w-4" strokeWidth={2.4} />
@@ -5987,7 +5987,7 @@ export function DashboardClient({ initialOverview }: Props) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/8 bg-zinc-950/60 px-4 py-2.5 backdrop-blur-2xl shadow-[0_8px_24px_0_rgba(0,0,0,0.55)] md:px-5">
+          <header className="app-shell-header sticky top-0 z-20 flex items-center justify-between border-b border-white/8 px-4 py-2.5 backdrop-blur-2xl md:px-5">
             <div className="flex items-center gap-5">
               <span className="font-headline text-xl font-bold tracking-tight text-transparent bg-gradient-to-br from-blue-400 to-blue-600 bg-clip-text">
                 Pulse Hub
@@ -6374,7 +6374,7 @@ function WorkspaceLoadingScreen({ targetView }: { targetView: WorkspaceView }) {
 
   return (
     <section className="grid min-h-0 flex-1 place-items-center overflow-hidden px-6 py-8">
-      <div className="relative w-full max-w-4xl overflow-hidden rounded-[2rem] border border-white/6 bg-[linear-gradient(180deg,rgba(19,19,19,0.96),rgba(15,15,15,0.98))] p-8 md:p-12">
+      <div className="app-panel-strong relative w-full max-w-4xl overflow-hidden rounded-[2rem] border border-white/6 p-8 md:p-12">
         <div className="absolute -right-24 -top-20 h-56 w-56 rounded-full bg-[var(--primary)]/10 blur-[80px]" />
         <div className="absolute -bottom-20 -left-12 h-48 w-48 rounded-full bg-[var(--secondary)]/10 blur-[70px]" />
 
@@ -6444,9 +6444,9 @@ function WorkspaceBootstrapScreen({
   items: Array<{ label: string; ready: boolean }>;
 }) {
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top,rgba(127,175,255,0.14),transparent_38%),linear-gradient(180deg,#050505_0%,#111111_100%)] px-6 text-white">
+    <main className="app-hero-surface relative flex min-h-screen items-center justify-center overflow-hidden px-6 text-white">
       <div className="absolute inset-0 bg-[linear-gradient(120deg,transparent_0%,rgba(255,255,255,0.03)_26%,transparent_52%)] opacity-60" />
-      <div className="relative w-full max-w-4xl overflow-hidden rounded-[2.2rem] border border-white/10 bg-[linear-gradient(180deg,rgba(25,28,34,0.92),rgba(15,16,20,0.96))] p-8 shadow-[0_30px_90px_-46px_rgba(0,0,0,0.95)] backdrop-blur-2xl md:p-10">
+      <div className="app-bootstrap-surface relative w-full max-w-4xl overflow-hidden rounded-[2.2rem] border border-white/10 p-8 backdrop-blur-2xl md:p-10">
         <div className="absolute -right-16 top-0 h-44 w-44 rounded-full bg-[var(--primary)]/10 blur-[80px]" />
         <div className="absolute -left-16 bottom-0 h-44 w-44 rounded-full bg-[var(--secondary)]/10 blur-[80px]" />
         <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.04),transparent_34%,transparent_66%,rgba(255,255,255,0.02))] opacity-70" />
@@ -6466,9 +6466,9 @@ function WorkspaceBootstrapScreen({
               <div className="relative grid h-28 w-28 place-items-center rounded-full border border-white/10 bg-white/[0.03] shadow-[inset_0_0_40px_rgba(255,255,255,0.03)] md:h-32 md:w-32">
                 <div className="absolute h-24 w-24 rounded-full border border-[var(--primary)]/12 bg-[radial-gradient(circle,rgba(127,175,255,0.14),transparent_68%)] blur-sm md:h-28 md:w-28" />
                 <div className="absolute h-20 w-20 animate-spin rounded-full border-[3px] border-white/8 border-t-[var(--primary)] border-r-[var(--primary)] md:h-24 md:w-24" />
-                <div className="absolute h-12 w-12 rounded-full border border-white/10 bg-[rgba(8,10,14,0.94)] shadow-[0_0_26px_rgba(0,0,0,0.45)] md:h-14 md:w-14" />
+                <div className="app-bootstrap-orb absolute h-12 w-12 rounded-full border border-white/10 md:h-14 md:w-14" />
                 <div className="absolute h-2.5 w-2.5 rounded-full bg-[var(--primary)] shadow-[0_0_16px_rgba(127,175,255,0.8)]" />
-                <span className="absolute -bottom-3 rounded-full border border-white/10 bg-[rgba(10,12,16,0.92)] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
+                <span className="app-bootstrap-pill absolute -bottom-3 rounded-full border border-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
                   Syncing
                 </span>
               </div>
@@ -6506,7 +6506,7 @@ function WorkspaceBootstrapScreen({
             ))}
           </div>
 
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-[1.35rem] border border-white/8 bg-black/20 px-4 py-4">
+          <div className="app-bootstrap-footer mt-8 flex flex-wrap items-center justify-between gap-3 rounded-[1.35rem] border border-white/8 px-4 py-4">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Workspace Bootstrap</p>
               <p className="mt-1 text-sm text-zinc-400">Mantendo a entrada do operador fluida enquanto o workspace hidrata conversas e CRM.</p>
@@ -6618,8 +6618,8 @@ function KanbanModal({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-black/70 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-[30px] border border-white/8 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(12,12,14,0.98))] p-6 shadow-[0_32px_80px_-30px_rgba(0,0,0,0.85)]">
+    <div className="app-modal-backdrop fixed inset-0 z-40 grid place-items-center px-4 backdrop-blur-sm">
+      <div className="app-modal-surface w-full max-w-lg rounded-[30px] border border-white/8 p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">CRM</p>

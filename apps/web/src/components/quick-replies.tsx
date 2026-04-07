@@ -75,7 +75,7 @@ export function QuickRepliesSettingsPanel({
           </span>
         </div>
 
-        <div className="mt-5 overflow-x-auto rounded-[24px] border border-white/8 bg-black/10">
+        <div className="app-panel-contrast mt-5 overflow-x-auto rounded-[24px] border border-white/8">
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-white/8 bg-white/[0.03] text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">
               <tr>
@@ -268,7 +268,7 @@ export function QuickReplyPreviewModal({
         </div>
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Conteudo</p>
-          <p className="mt-2 whitespace-pre-wrap rounded-[22px] border border-white/8 bg-black/20 px-4 py-4 text-sm leading-7 text-white">{item.content}</p>
+          <p className="app-panel-contrast mt-2 whitespace-pre-wrap rounded-[22px] border border-white/8 px-4 py-4 text-sm leading-7 text-white">{item.content}</p>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
           <MetaCard label="Criada" value={`${formatTimestamp(item.createdAt)} por ${item.createdBy || 'sistema'}`} />
@@ -399,8 +399,8 @@ function QuickReplyModalShell({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 px-4 py-8 backdrop-blur-md">
-      <div className="w-full max-w-3xl rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(22,24,30,0.96),rgba(14,16,20,0.98))] p-6 shadow-[0_40px_90px_-48px_rgba(0,0,0,0.98)] md:p-7">
+    <div className="app-modal-backdrop fixed inset-0 z-[90] flex items-center justify-center px-4 py-8 backdrop-blur-md">
+      <div className="app-modal-surface w-full max-w-3xl rounded-[32px] border border-white/10 p-6 md:p-7">
         <div className="flex items-center justify-between gap-3">
           <h3 className="font-headline text-2xl font-semibold text-white">{title}</h3>
           <button className="rounded-full bg-white/5 px-3 py-2 text-sm text-zinc-300" onClick={onClose} type="button">
