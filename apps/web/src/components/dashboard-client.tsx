@@ -3548,16 +3548,20 @@ export function DashboardClient({ initialOverview }: Props) {
                 </h3>
                 <div className="mt-2 flex items-baseline gap-4">
                   <p className="font-headline text-4xl font-extrabold text-white md:text-5xl">
-                    {formatDurationLabel(safeResponseVelocity.averageSeconds)}
+                    {safeResponseVelocity.sampleCount > 0 ? formatDurationLabel(safeResponseVelocity.averageSeconds) : 'Sem dados'}
                   </p>
                   <p
                     className={`text-xl font-bold md:text-2xl ${
-                      safeResponseVelocity.deltaSeconds >= 0
+                      safeResponseVelocity.sampleCount === 0 || safeResponseVelocity.deltaSeconds >= 0
                         ? 'text-[var(--secondary)]'
                         : 'text-[var(--error)]'
                     }`}
                   >
-                    {formatVelocityDelta(safeResponseVelocity.deltaSeconds)}
+                    {formatVelocityDelta(
+                      safeResponseVelocity.deltaSeconds,
+                      safeResponseVelocity.sampleCount,
+                      safeResponseVelocity.previousSampleCount,
+                    )}
                   </p>
                 </div>
               </div>
@@ -6143,16 +6147,21 @@ function DashboardResponseChart({
   responseVelocity?: DashboardOverview['analytics']['responseVelocity'] | null;
 }) {
   const safeResponseVelocity = normalizeResponseVelocityAnalytics(responseVelocity);
-  const chartPoints = safeResponseVelocity.points.length > 0
-    ? safeResponseVelocity.points
-    : [
-        { label: '08:00 AM', averageSeconds: safeResponseVelocity.averageSeconds },
-        { label: '10:00 AM', averageSeconds: safeResponseVelocity.averageSeconds },
-        { label: '12:00 PM', averageSeconds: safeResponseVelocity.averageSeconds },
-        { label: '02:00 PM', averageSeconds: safeResponseVelocity.averageSeconds },
-        { label: '04:00 PM', averageSeconds: safeResponseVelocity.averageSeconds },
-        { label: '06:00 PM', averageSeconds: safeResponseVelocity.averageSeconds },
-      ];
+  const chartPoints = safeResponseVelocity.points;
+
+  if (chartPoints.length < 2) {
+    return (
+      <div className="grid h-48 place-items-center rounded-[28px] border border-dashed border-white/8 bg-white/[0.03] px-6 text-center">
+        <div>
+          <p className="text-sm font-semibold text-white">Dados insuficientes para desenhar a tendencia</p>
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            O grafico aparece quando existirem respostas reais suficientes para comparar a variacao ao longo do periodo.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const maxSeconds = Math.max(...chartPoints.map((point) => point.averageSeconds), safeResponseVelocity.targetSeconds, 1);
   const minSeconds = Math.min(...chartPoints.map((point) => point.averageSeconds), safeResponseVelocity.targetSeconds, 1);
   const step = chartPoints.length > 1 ? 400 / (chartPoints.length - 1) : 400;
@@ -8759,7 +8768,15 @@ function formatDurationLabel(totalSeconds: number) {
   return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
 }
 
-function formatVelocityDelta(deltaSeconds: number) {
+function formatVelocityDelta(deltaSeconds: number, sampleCount = 1, previousSampleCount = 1) {
+  if (sampleCount === 0) {
+    return 'Aguardando respostas reais';
+  }
+
+  if (previousSampleCount === 0) {
+    return 'Sem base anterior';
+  }
+
   if (deltaSeconds > 0) {
     return `↓ ${deltaSeconds}s improved`;
   }
@@ -8898,8 +8915,10 @@ function normalizeResponseVelocityAnalytics(
   responseVelocity?: DashboardOverview['analytics']['responseVelocity'] | null,
 ) {
   return {
-    averageSeconds: responseVelocity?.averageSeconds ?? 102,
+    averageSeconds: responseVelocity?.averageSeconds ?? 0,
     deltaSeconds: responseVelocity?.deltaSeconds ?? 0,
+    sampleCount: responseVelocity?.sampleCount ?? 0,
+    previousSampleCount: responseVelocity?.previousSampleCount ?? 0,
     targetSeconds: responseVelocity?.targetSeconds ?? 120,
     peakLabel: responseVelocity?.peakLabel ?? 'Sem dados',
     points: Array.isArray(responseVelocity?.points) ? responseVelocity.points : [],
@@ -8938,6 +8957,8 @@ function areOverviewsEquivalent(left: DashboardOverview, right: DashboardOvervie
     leftDashboardSnapshot.teamCount !== rightDashboardSnapshot.teamCount ||
     leftResponseVelocity.averageSeconds !== rightResponseVelocity.averageSeconds ||
     leftResponseVelocity.deltaSeconds !== rightResponseVelocity.deltaSeconds ||
+    leftResponseVelocity.sampleCount !== rightResponseVelocity.sampleCount ||
+    leftResponseVelocity.previousSampleCount !== rightResponseVelocity.previousSampleCount ||
     leftResponseVelocity.targetSeconds !== rightResponseVelocity.targetSeconds ||
 	    leftResponseVelocity.peakLabel !== rightResponseVelocity.peakLabel ||
     left.analytics.healthScore !== right.analytics.healthScore ||

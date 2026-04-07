@@ -400,11 +400,13 @@ type DashboardLeaderboardRow struct {
 }
 
 type DashboardResponseVelocityAnalytics struct {
-	AverageSeconds int                              `json:"averageSeconds"`
-	DeltaSeconds   int                              `json:"deltaSeconds"`
-	TargetSeconds  int                              `json:"targetSeconds"`
-	PeakLabel      string                           `json:"peakLabel"`
-	Points         []DashboardResponseVelocityPoint `json:"points"`
+	AverageSeconds      int                              `json:"averageSeconds"`
+	DeltaSeconds        int                              `json:"deltaSeconds"`
+	SampleCount         int                              `json:"sampleCount"`
+	PreviousSampleCount int                              `json:"previousSampleCount"`
+	TargetSeconds       int                              `json:"targetSeconds"`
+	PeakLabel           string                           `json:"peakLabel"`
+	Points              []DashboardResponseVelocityPoint `json:"points"`
 }
 
 type DashboardResponseVelocityPoint struct {

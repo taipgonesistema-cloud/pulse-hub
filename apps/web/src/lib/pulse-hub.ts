@@ -119,6 +119,8 @@ export type DashboardOverview = {
     responseVelocity: {
       averageSeconds: number;
       deltaSeconds: number;
+      sampleCount: number;
+      previousSampleCount: number;
       targetSeconds: number;
       peakLabel: string;
       points: Array<{
@@ -290,18 +292,13 @@ export const fallbackOverview: DashboardOverview = {
   },
   analytics: {
     responseVelocity: {
-      averageSeconds: 102,
+      averageSeconds: 0,
       deltaSeconds: 0,
+      sampleCount: 0,
+      previousSampleCount: 0,
       targetSeconds: 120,
       peakLabel: 'Sem dados',
-      points: [
-        { label: '08:00 AM', averageSeconds: 102 },
-        { label: '10:00 AM', averageSeconds: 102 },
-        { label: '12:00 PM', averageSeconds: 102 },
-        { label: '02:00 PM', averageSeconds: 102 },
-        { label: '04:00 PM', averageSeconds: 102 },
-        { label: '06:00 PM', averageSeconds: 102 },
-      ],
+      points: [],
     },
     healthScore: 0,
     resolvedRate: 0,

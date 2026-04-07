@@ -2332,18 +2332,13 @@ func mondayFirstIndex(day time.Weekday) int {
 
 func (a *API) buildResponseVelocityAnalytics(ctx context.Context) (models.DashboardResponseVelocityAnalytics, error) {
 	analytics := models.DashboardResponseVelocityAnalytics{
-		AverageSeconds: 102,
-		DeltaSeconds:   0,
-		TargetSeconds:  120,
-		PeakLabel:      "Sem dados",
-		Points: []models.DashboardResponseVelocityPoint{
-			{Label: "08:00 AM", AverageSeconds: 102},
-			{Label: "10:00 AM", AverageSeconds: 102},
-			{Label: "12:00 PM", AverageSeconds: 102},
-			{Label: "02:00 PM", AverageSeconds: 102},
-			{Label: "04:00 PM", AverageSeconds: 102},
-			{Label: "06:00 PM", AverageSeconds: 102},
-		},
+		AverageSeconds:      0,
+		DeltaSeconds:        0,
+		SampleCount:         0,
+		PreviousSampleCount: 0,
+		TargetSeconds:       120,
+		PeakLabel:           "Sem dados",
+		Points:              []models.DashboardResponseVelocityPoint{},
 	}
 
 	sessions, err := a.manager.ListSessions(ctx)
@@ -2356,8 +2351,11 @@ func (a *API) buildResponseVelocityAnalytics(ctx context.Context) (models.Dashbo
 	previousCutoff := now.Add(-14 * 24 * time.Hour)
 	currentSamples := make([]int, 0)
 	previousSamples := make([]int, 0)
-	bucketLabels := []string{"08:00 AM", "10:00 AM", "12:00 PM", "02:00 PM", "04:00 PM", "06:00 PM"}
-	bucketValues := make(map[string][]int, len(bucketLabels))
+	type trendBucket struct {
+		start   time.Time
+		samples []int
+	}
+	bucketValues := make(map[time.Time][]int)
 	fastestAt := time.Time{}
 	fastestSeconds := math.MaxInt
 
@@ -2388,8 +2386,8 @@ func (a *API) buildResponseVelocityAnalytics(ctx context.Context) (models.Dashbo
 
 				if !sample.When.Before(currentCutoff) {
 					currentSamples = append(currentSamples, sample.Seconds)
-					bucketLabel := responseBucketLabel(sample.When)
-					bucketValues[bucketLabel] = append(bucketValues[bucketLabel], sample.Seconds)
+					bucketStart := responseTrendBucketStart(sample.When)
+					bucketValues[bucketStart] = append(bucketValues[bucketStart], sample.Seconds)
 					if sample.Seconds < fastestSeconds {
 						fastestSeconds = sample.Seconds
 						fastestAt = sample.When
@@ -2403,24 +2401,36 @@ func (a *API) buildResponseVelocityAnalytics(ctx context.Context) (models.Dashbo
 	}
 
 	if len(currentSamples) > 0 {
+		analytics.SampleCount = len(currentSamples)
 		analytics.AverageSeconds = averageInt(currentSamples)
 	}
 	if len(previousSamples) > 0 {
+		analytics.PreviousSampleCount = len(previousSamples)
 		analytics.DeltaSeconds = averageInt(previousSamples) - analytics.AverageSeconds
 	}
 	if !fastestAt.IsZero() {
 		analytics.PeakLabel = fastestAt.Local().Format("3:04 PM")
 	}
 
-	points := make([]models.DashboardResponseVelocityPoint, 0, len(bucketLabels))
-	for _, label := range bucketLabels {
-		averageSeconds := analytics.AverageSeconds
-		if samples := bucketValues[label]; len(samples) > 0 {
-			averageSeconds = averageInt(samples)
+	trendBuckets := make([]trendBucket, 0, len(bucketValues))
+	for start, samples := range bucketValues {
+		if len(samples) == 0 {
+			continue
 		}
+		trendBuckets = append(trendBuckets, trendBucket{start: start, samples: samples})
+	}
+	sort.Slice(trendBuckets, func(i, j int) bool {
+		return trendBuckets[i].start.Before(trendBuckets[j].start)
+	})
+	if len(trendBuckets) > 6 {
+		trendBuckets = trendBuckets[len(trendBuckets)-6:]
+	}
+
+	points := make([]models.DashboardResponseVelocityPoint, 0, len(trendBuckets))
+	for _, bucket := range trendBuckets {
 		points = append(points, models.DashboardResponseVelocityPoint{
-			Label:          label,
-			AverageSeconds: averageSeconds,
+			Label:          formatResponseTrendLabel(bucket.start, now),
+			AverageSeconds: averageInt(bucket.samples),
 		})
 	}
 	analytics.Points = points
@@ -2539,22 +2549,19 @@ func isBusinessHoursResponseWindow(incomingAt, outgoingAt time.Time) bool {
 	return true
 }
 
-func responseBucketLabel(value time.Time) string {
-	hour := value.Local().Hour()
-	switch {
-	case hour < 10:
-		return "08:00 AM"
-	case hour < 12:
-		return "10:00 AM"
-	case hour < 14:
-		return "12:00 PM"
-	case hour < 16:
-		return "02:00 PM"
-	case hour < 18:
-		return "04:00 PM"
-	default:
-		return "06:00 PM"
+func responseTrendBucketStart(value time.Time) time.Time {
+	local := value.Local()
+	bucketHour := local.Hour() - (local.Hour() % 2)
+	return time.Date(local.Year(), local.Month(), local.Day(), bucketHour, 0, 0, 0, local.Location())
+}
+
+func formatResponseTrendLabel(value, reference time.Time) string {
+	localValue := value.Local()
+	localReference := reference.Local()
+	if localValue.Year() == localReference.Year() && localValue.YearDay() == localReference.YearDay() {
+		return localValue.Format("03:04 PM")
 	}
+	return localValue.Format("Mon 03PM")
 }
 
 func averageInt(values []int) int {
