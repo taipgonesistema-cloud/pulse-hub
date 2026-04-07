@@ -50,6 +50,7 @@ import type {
   AuthSessionRecord,
   AuthUser,
   ChannelRecord,
+  ContactLabelRecord,
   ConversationRecord,
   DashboardOverview,
   InstagramPublishResult,
@@ -229,6 +230,7 @@ type RealtimeSocketEvent = {
     | 'kanban.stage.updated'
     | 'kanban.board.updated'
     | 'kanban.contact.updated'
+    | 'contact_label.updated'
     | 'quick_reply.updated';
   direction?: 'incoming' | 'outgoing';
   status?: SessionRecord['status'];
@@ -334,6 +336,14 @@ export function DashboardClient({ initialOverview }: Props) {
   const [contactsSearch, setContactsSearch] = useState('');
   const [activeContactsBoard, setActiveContactsBoard] = useState<ContactsBoardId>('contacts');
   const [customContactsBoards, setCustomContactsBoards] = useState<ContactKanbanBoardRecord[]>([]);
+  const [contactLabels, setContactLabels] = useState<ContactLabelRecord[]>([]);
+  const [isLoadingContactLabels, setIsLoadingContactLabels] = useState(false);
+  const [contactLabelForm, setContactLabelForm] = useState({
+    id: '',
+    name: '',
+    emoji: '',
+    color: '#7FAFFF',
+  });
   const [showCreateBoardModal, setShowCreateBoardModal] = useState(false);
   const [newBoardForm, setNewBoardForm] = useState({ label: '', description: '' });
   const [contactKanbanStageMap, setContactKanbanStageMap] = useState<
@@ -345,7 +355,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [isLoadingContactKanban, setIsLoadingContactKanban] = useState(true);
   const [isLoadingContactBoards, setIsLoadingContactBoards] = useState(true);
   const [isLoadingContactCRM, setIsLoadingContactCRM] = useState(true);
-  const [settingsSection, setSettingsSection] = useState<'sessions' | 'users' | 'quickReplies' | 'audit' | 'instagram'>('sessions');
+  const [settingsSection, setSettingsSection] = useState<'sessions' | 'labels' | 'users' | 'quickReplies' | 'audit' | 'instagram'>('sessions');
   const [workspaceUsers, setWorkspaceUsers] = useState<AuthUser[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [expandedUserSessionsId, setExpandedUserSessionsId] = useState<string | null>(null);
@@ -453,6 +463,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const canAccessSettings = authUser?.role === 'admin' || authUser?.role === 'supervisor';
   const canManageBoards = canManageWorkspaceSessions;
   const canCreateManualContacts = canManageWorkspaceSessions;
+  const canManageContactLabels = canManageWorkspaceSessions;
   const canManageQuickReplies = authUser?.role === 'admin' || authUser?.role === 'supervisor';
   const canLoadWorkspaceUsers = authUser?.role === 'admin' || authUser?.role === 'supervisor';
   const canViewAuditLogs = authUser?.role === 'admin' || authUser?.role === 'supervisor';
@@ -551,6 +562,16 @@ export function DashboardClient({ initialOverview }: Props) {
     })),
     [overview.conversations, overview.sessions],
   );
+
+  const contactLabelUsageMap = useMemo(() => {
+    const nextMap: Record<string, number> = {};
+    for (const profile of Object.values(contactCrmProfileMap)) {
+      for (const labelId of profile.tags ?? []) {
+        nextMap[labelId] = (nextMap[labelId] ?? 0) + 1;
+      }
+    }
+    return nextMap;
+  }, [contactCrmProfileMap]);
 
   const trackedConversationSessionIds = useMemo(() => {
     if (conversationSessionScope === 'all') {
@@ -1105,6 +1126,11 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
+    if (settingsSection === 'labels' && !canManageContactLabels) {
+      setSettingsSection('sessions');
+      return;
+    }
+
     if (settingsSection === 'quickReplies' && !canManageQuickReplies) {
       setSettingsSection('sessions');
       return;
@@ -1118,7 +1144,7 @@ export function DashboardClient({ initialOverview }: Props) {
     if (settingsSection === 'instagram' && !canManageInstagram) {
       setSettingsSection('sessions');
     }
-  }, [canManageInstagram, canManageQuickReplies, canViewAuditLogs, isAdminUser, settingsSection]);
+  }, [canManageContactLabels, canManageInstagram, canManageQuickReplies, canViewAuditLogs, isAdminUser, settingsSection]);
 
   useEffect(() => {
     if (!canManageBoards && showCreateBoardModal) {
@@ -1241,6 +1267,24 @@ export function DashboardClient({ initialOverview }: Props) {
 
     const records = (await response.json()) as ContactKanbanBoardRecord[];
     setCustomContactsBoards(records);
+  }, [authenticatedFetch]);
+
+  const loadContactLabels = useCallback(async () => {
+    setIsLoadingContactLabels(true);
+    try {
+      const response = await authenticatedFetch(`${apiUrl}/whatsapp/contacts/labels`, {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error('Nao foi possivel carregar as etiquetas de contatos.');
+      }
+
+      const records = (await response.json()) as ContactLabelRecord[];
+      setContactLabels(records);
+    } finally {
+      setIsLoadingContactLabels(false);
+    }
   }, [authenticatedFetch]);
 
   const loadContactCRMProfiles = useCallback(async () => {
@@ -1366,6 +1410,14 @@ export function DashboardClient({ initialOverview }: Props) {
         setHasLoadedInitialContactBoards(true);
       });
   }, [isAuthReady, loadContactBoards]);
+
+  useEffect(() => {
+    if (!isAuthReady) {
+      return;
+    }
+
+    void loadContactLabels().catch(() => undefined);
+  }, [isAuthReady, loadContactLabels]);
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -1657,6 +1709,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const loadOverviewRef = useRef(loadOverview);
   const loadMessagesRef = useRef(loadMessages);
   const loadContactBoardsRef = useRef(loadContactBoards);
+  const loadContactLabelsRef = useRef(loadContactLabels);
   const loadContactCRMProfilesRef = useRef(loadContactCRMProfiles);
   const loadContactKanbanStagesRef = useRef(loadContactKanbanStages);
   const loadQuickRepliesListRef = useRef(loadQuickRepliesList);
@@ -1691,6 +1744,10 @@ export function DashboardClient({ initialOverview }: Props) {
   useEffect(() => {
     loadContactBoardsRef.current = loadContactBoards;
   }, [loadContactBoards]);
+
+  useEffect(() => {
+    loadContactLabelsRef.current = loadContactLabels;
+  }, [loadContactLabels]);
 
   useEffect(() => {
     loadContactCRMProfilesRef.current = loadContactCRMProfiles;
@@ -2155,6 +2212,11 @@ export function DashboardClient({ initialOverview }: Props) {
           } else {
             void loadContactCRMProfilesRef.current().catch(() => undefined);
           }
+        }
+
+        if (payload.kind === 'contact_label.updated') {
+          void loadContactLabelsRef.current().catch(() => undefined);
+          void loadContactCRMProfilesRef.current().catch(() => undefined);
         }
 
         if (payload.kind === 'quick_reply.updated') {
@@ -2776,6 +2838,106 @@ export function DashboardClient({ initialOverview }: Props) {
     },
     [authUser?.email, authUser?.name, authenticatedFetch, contactCrmProfileMap, executeAction],
   );
+
+  const resetContactLabelForm = useCallback(() => {
+    setContactLabelForm({ id: '', name: '', emoji: '', color: '#7FAFFF' });
+  }, []);
+
+  const saveContactLabel = useCallback(async () => {
+    if (!canManageContactLabels) {
+      return;
+    }
+
+    const payload = {
+      name: contactLabelForm.name.trim(),
+      emoji: contactLabelForm.emoji.trim(),
+      color: contactLabelForm.color,
+      updatedBy: authUser?.name || authUser?.email || 'Operador',
+    };
+
+    if (!payload.name) {
+      pushToast({
+        tone: 'error',
+        title: 'Nome obrigatorio',
+        description: 'Defina um nome para a etiqueta antes de salvar.',
+      });
+      return;
+    }
+
+    const endpoint = contactLabelForm.id
+      ? `${apiUrl}/whatsapp/contacts/labels/${contactLabelForm.id}`
+      : `${apiUrl}/whatsapp/contacts/labels`;
+    const method = contactLabelForm.id ? 'PUT' : 'POST';
+
+    const saved = await executeAction(async () => {
+      const response = await authenticatedFetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error('Nao foi possivel salvar a etiqueta.');
+      }
+    }, { successMessage: contactLabelForm.id ? 'Etiqueta atualizada' : 'Etiqueta criada' });
+
+    if (saved) {
+      await loadContactLabels().catch(() => undefined);
+      resetContactLabelForm();
+    }
+  }, [
+    authUser?.email,
+    authUser?.name,
+    authenticatedFetch,
+    canManageContactLabels,
+    contactLabelForm.color,
+    contactLabelForm.emoji,
+    contactLabelForm.id,
+    contactLabelForm.name,
+    executeAction,
+    loadContactLabels,
+    pushToast,
+    resetContactLabelForm,
+  ]);
+
+  const deleteContactLabel = useCallback(async (label: ContactLabelRecord) => {
+    if (!canManageContactLabels) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Remover a etiqueta ${label.emoji ? `${label.emoji} ` : ''}${label.name}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    const deleted = await executeAction(async () => {
+      const response = await authenticatedFetch(`${apiUrl}/whatsapp/contacts/labels/${label.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Nao foi possivel remover a etiqueta.');
+      }
+    }, { successMessage: 'Etiqueta removida' });
+
+    if (deleted) {
+      if (contactLabelForm.id === label.id) {
+        resetContactLabelForm();
+      }
+      await Promise.all([
+        loadContactLabels().catch(() => undefined),
+        loadContactCRMProfiles().catch(() => undefined),
+      ]);
+    }
+  }, [
+    authenticatedFetch,
+    canManageContactLabels,
+    contactLabelForm.id,
+    executeAction,
+    loadContactCRMProfiles,
+    loadContactLabels,
+    resetContactLabelForm,
+  ]);
 
   const submitNewUser = useCallback(async () => {
     if (!isAdminUser) {
@@ -3712,6 +3874,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       {column.contacts.map((contact) => (
                         <ContactKanbanCard
                           key={buildContactKanbanKey(contact)}
+                          availableLabels={contactLabels}
                           contact={contact}
                           crmProfile={contactCrmProfileMap[buildContactKanbanKey(contact)]}
                           onCopyId={() => void navigator.clipboard?.writeText(contact.participantId)}
@@ -3762,10 +3925,16 @@ export function DashboardClient({ initialOverview }: Props) {
           {selectedContact ? (
             <ContactKanbanDetailPanel
               key={`${buildContactKanbanKey(selectedContact)}:${contactCrmProfileMap[buildContactKanbanKey(selectedContact)]?.updatedAt ?? 'base'}`}
+              availableLabels={contactLabels}
+              canManageLabels={canManageContactLabels}
               contact={selectedContact}
               crmProfile={contactCrmProfileMap[buildContactKanbanKey(selectedContact)]}
               onCopyId={() => void navigator.clipboard?.writeText(selectedContact.participantId)}
               onMoveStage={moveContactToStage}
+              onOpenLabelsSettings={() => {
+                setSettingsSection('labels');
+                navigateToView('settings');
+              }}
               onSaveProfile={saveContactCRMProfile}
               onOpenConversation={() => {
                 setSelectedSessionId(selectedContact.sessionId);
@@ -4024,6 +4193,8 @@ export function DashboardClient({ initialOverview }: Props) {
             <h2 className="font-headline mt-2 text-2xl font-semibold text-white">
               {settingsSection === 'users'
                 ? 'Gerenciar usuarios do workspace'
+                : settingsSection === 'labels'
+                  ? 'Etiquetas visuais dos contatos'
                 : settingsSection === 'quickReplies'
                   ? 'Respostas rapidas'
                   : settingsSection === 'instagram'
@@ -4035,6 +4206,8 @@ export function DashboardClient({ initialOverview }: Props) {
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
               {settingsSection === 'users'
                 ? 'Controle acessos por role sem derrubar a sessao compartilhada do WhatsApp.'
+                : settingsSection === 'labels'
+                  ? 'Crie etiquetas com nome, emoji e cor para aplicar visualmente aos contatos do CRM.'
                 : settingsSection === 'quickReplies'
                   ? 'Cadastre atalhos reutilizaveis para acelerar o atendimento e acione autocomplete no chat ao digitar /.'
                   : settingsSection === 'instagram'
@@ -4060,6 +4233,15 @@ export function DashboardClient({ initialOverview }: Props) {
                   type="button"
                 >
                   Users
+                </button>
+              ) : null}
+              {canManageContactLabels ? (
+                <button
+                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'labels' ? 'bg-amber-300 text-black' : 'text-[var(--muted)] hover:text-white'}`}
+                  onClick={() => setSettingsSection('labels')}
+                  type="button"
+                >
+                  Labels
                 </button>
               ) : null}
               {canManageQuickReplies ? (
@@ -4095,6 +4277,8 @@ export function DashboardClient({ initialOverview }: Props) {
               onClick={() => runAction(
                 settingsSection === 'users'
                   ? loadWorkspaceUsers
+                  : settingsSection === 'labels'
+                    ? loadContactLabels
                   : settingsSection === 'quickReplies'
                     ? () => loadQuickRepliesList(quickReplySearchTerm)
                     : settingsSection === 'instagram'
@@ -4282,6 +4466,149 @@ export function DashboardClient({ initialOverview }: Props) {
           ) : (
             <EmptyStateCard
               description="Apenas administradores e supervisores podem publicar no Instagram pelo dashboard."
+              title="Acesso restrito"
+            />
+          )
+        ) : settingsSection === 'labels' ? (
+          canManageContactLabels ? (
+            <div className="grid gap-5 xl:grid-cols-[0.82fr_1.18fr]">
+              <div className="space-y-6">
+                <div className="glass-panel rounded-[30px] p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                        Designer de etiquetas
+                      </p>
+                      <p className="mt-2 text-sm text-[var(--muted)]">
+                        Defina um nome curto, um emoji de contexto e uma cor forte para identificar contatos rapidamente.
+                      </p>
+                    </div>
+                    <div
+                      className="rounded-[22px] border px-4 py-3 text-sm font-semibold text-white"
+                      style={buildContactLabelStyle(contactLabelForm.color)}
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <span>{contactLabelForm.emoji || '🏷️'}</span>
+                        <span>{contactLabelForm.name.trim() || 'Nova etiqueta'}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 space-y-4">
+                    <Field
+                      onChange={(value) => setContactLabelForm((current) => ({ ...current, name: value }))}
+                      placeholder="Nome da etiqueta"
+                      value={contactLabelForm.name}
+                    />
+                    <div className="grid gap-4 md:grid-cols-[0.72fr_0.28fr]">
+                      <Field
+                        onChange={(value) => setContactLabelForm((current) => ({ ...current, emoji: value }))}
+                        placeholder="Emoji"
+                        value={contactLabelForm.emoji}
+                      />
+                      <label className="flex items-center gap-3 rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                        <input
+                          className="h-10 w-12 cursor-pointer rounded-xl border-0 bg-transparent"
+                          onChange={(event) => setContactLabelForm((current) => ({ ...current, color: event.target.value.toUpperCase() }))}
+                          type="color"
+                          value={contactLabelForm.color}
+                        />
+                        <span className="font-mono text-xs text-[var(--muted)]">{contactLabelForm.color}</span>
+                      </label>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        className="rounded-full bg-[linear-gradient(135deg,#f8d56b,#ffb94a)] px-5 py-3 text-sm font-semibold text-black"
+                        onClick={() => void saveContactLabel()}
+                        type="button"
+                      >
+                        {contactLabelForm.id ? 'Salvar etiqueta' : 'Criar etiqueta'}
+                      </button>
+                      <button
+                        className="rounded-full bg-white/5 px-5 py-3 text-sm text-[var(--muted)] hover:text-white"
+                        onClick={resetContactLabelForm}
+                        type="button"
+                      >
+                        Limpar formulario
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-panel rounded-[30px] p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                      Biblioteca de etiquetas
+                    </p>
+                    <p className="mt-2 text-sm text-[var(--muted)]">
+                      Essas etiquetas podem ser aplicadas diretamente aos contatos no painel de CRM.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
+                    {contactLabels.length} etiquetas
+                  </span>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {isLoadingContactLabels ? <StackSkeleton rows={4} /> : null}
+                  {!isLoadingContactLabels && contactLabels.length === 0 ? (
+                    <EmptyStateCard
+                      description="Crie a primeira etiqueta para destacar perfis VIP, campanhas, tipos de cliente ou status operacionais do CRM."
+                      title="Nenhuma etiqueta criada ainda"
+                    />
+                  ) : null}
+                  {!isLoadingContactLabels ? contactLabels.map((label) => (
+                    <div key={label.id} className="rounded-[24px] border border-white/8 bg-white/4 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <span
+                            className="inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold"
+                            style={buildContactLabelStyle(label.color)}
+                          >
+                            <span>{label.emoji || '🏷️'}</span>
+                            <span className="truncate">{label.name}</span>
+                          </span>
+                          <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-400">
+                            <span className="rounded-full bg-white/5 px-2.5 py-1">cor {label.color}</span>
+                            <span className="rounded-full bg-white/5 px-2.5 py-1">uso {contactLabelUsageMap[label.id] ?? 0}</span>
+                            {label.updatedBy ? <span className="rounded-full bg-white/5 px-2.5 py-1">por {label.updatedBy}</span> : null}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            className="rounded-full bg-white/6 px-3 py-1.5 text-[11px] font-semibold text-zinc-300 transition hover:bg-white/10 hover:text-white"
+                            onClick={() => setContactLabelForm({
+                              id: label.id,
+                              name: label.name,
+                              emoji: label.emoji ?? '',
+                              color: label.color,
+                            })}
+                            type="button"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            className="rounded-full bg-rose-500/10 px-3 py-1.5 text-[11px] font-semibold text-rose-100 transition hover:bg-rose-500/15"
+                            onClick={() => {
+                              void deleteContactLabel(label);
+                            }}
+                            type="button"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )) : null}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <EmptyStateCard
+              description="Apenas administradores e supervisores podem criar e editar etiquetas de contatos."
               title="Acesso restrito"
             />
           )
@@ -6228,6 +6555,7 @@ function AnalyticsLoadingState() {
 }
 
 function ContactKanbanCard({
+  availableLabels,
   contact,
   crmProfile,
   selected,
@@ -6245,10 +6573,12 @@ function ContactKanbanCard({
   onCopyId: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
+  availableLabels: ContactLabelRecord[];
 }) {
   const channel = getContactChannelMeta(contact);
   const relativePulse = formatRelativePulse(contact.lastMessageAt);
   const priorityTone = getContactPriorityTone(crmProfile?.priority);
+  const resolvedLabels = resolveContactLabels(crmProfile?.tags, availableLabels);
 
   return (
     <article
@@ -6307,9 +6637,14 @@ function ContactKanbanCard({
                 {crmProfile.assignee}
               </span>
             ) : null}
-            {(crmProfile?.tags ?? []).slice(0, 2).map((tag) => (
-              <span key={tag} className="rounded-full bg-white/6 px-2.5 py-1 text-[10px] font-semibold text-zinc-400">
-                #{tag}
+            {resolvedLabels.slice(0, 2).map((label) => (
+              <span
+                key={label.id}
+                className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold"
+                style={buildContactLabelStyle(label.color)}
+              >
+                {label.emoji ? <span>{label.emoji}</span> : null}
+                <span>{label.name}</span>
               </span>
             ))}
           </div>
@@ -6343,14 +6678,19 @@ function ContactKanbanCard({
 }
 
 function ContactKanbanDetailPanel({
+  availableLabels,
+  canManageLabels,
   contact,
   crmProfile,
   stage,
   onMoveStage,
   onSaveProfile,
   onOpenConversation,
+  onOpenLabelsSettings,
   onCopyId,
 }: {
+  availableLabels: ContactLabelRecord[];
+  canManageLabels: boolean;
   contact: ConversationRecord;
   crmProfile?: ContactCRMProfileRecord;
   stage: ContactKanbanStageId;
@@ -6360,6 +6700,7 @@ function ContactKanbanDetailPanel({
     patch: Partial<Pick<ContactCRMProfileRecord, 'assignee' | 'priority' | 'notes' | 'tags'>>,
   ) => void | Promise<void>;
   onOpenConversation: () => void;
+  onOpenLabelsSettings: () => void;
   onCopyId: () => void;
 }) {
   const channel = getContactChannelMeta(contact);
@@ -6371,7 +6712,8 @@ function ContactKanbanDetailPanel({
     crmProfile?.priority ?? '',
   );
   const [draftNotes, setDraftNotes] = useState(crmProfile?.notes ?? '');
-  const [draftTags, setDraftTags] = useState((crmProfile?.tags ?? []).join(', '));
+  const [draftTags, setDraftTags] = useState(crmProfile?.tags ?? []);
+  const selectedLabels = resolveContactLabels(draftTags, availableLabels);
 
   return (
     <div className="space-y-5">
@@ -6462,7 +6804,7 @@ function ContactKanbanDetailPanel({
                 assignee: draftAssignee.trim(),
                 priority: draftPriority ?? '',
                 notes: draftNotes.trim(),
-                tags: parseContactTagsInput(draftTags),
+                tags: draftTags,
               });
             }}
             type="button"
@@ -6504,14 +6846,65 @@ function ContactKanbanDetailPanel({
 
           <div>
             <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
-              Tags
+              Etiquetas
             </label>
-            <input
-              className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
-              onChange={(event) => setDraftTags(event.target.value)}
-              placeholder="vip, retorno, atacado"
-              value={draftTags}
-            />
+            <div className="space-y-3 rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
+              <div className="flex flex-wrap gap-2">
+                {selectedLabels.length > 0 ? selectedLabels.map((label) => (
+                  <span
+                    key={label.id}
+                    className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold"
+                    style={buildContactLabelStyle(label.color)}
+                  >
+                    <span>{label.emoji || '🏷️'}</span>
+                    <span>{label.name}</span>
+                  </span>
+                )) : (
+                  <span className="text-sm text-zinc-500">Nenhuma etiqueta aplicada a este contato.</span>
+                )}
+              </div>
+
+              {availableLabels.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {availableLabels.map((label) => {
+                    const active = draftTags.includes(label.id);
+
+                    return (
+                      <button
+                        key={label.id}
+                        className="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition"
+                        onClick={() => {
+                          setDraftTags((current) => (
+                            current.includes(label.id)
+                              ? current.filter((item) => item !== label.id)
+                              : [...current, label.id]
+                          ));
+                        }}
+                        style={active ? buildContactLabelStyle(label.color) : buildMutedContactLabelStyle()}
+                        type="button"
+                      >
+                        <span>{label.emoji || '🏷️'}</span>
+                        <span>{label.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-white/8 bg-black/10 px-4 py-3 text-sm text-zinc-500">
+                  Nenhuma etiqueta disponivel ainda.
+                </div>
+              )}
+
+              {canManageLabels ? (
+                <button
+                  className="rounded-full bg-white/5 px-3 py-1.5 text-xs font-semibold text-[var(--muted)] transition hover:bg-white/10 hover:text-white"
+                  onClick={onOpenLabelsSettings}
+                  type="button"
+                >
+                  Gerenciar etiquetas
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <div>
@@ -8147,11 +8540,40 @@ function getContactPriorityTone(priority?: ContactCRMProfileRecord['priority']) 
   }
 }
 
-function parseContactTagsInput(value: string) {
-  return value
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter(Boolean);
+function resolveContactLabels(tagIds: string[] | undefined, labels: ContactLabelRecord[]) {
+  const labelMap = new Map(labels.map((label) => [label.id, label]));
+
+  return (tagIds ?? []).map((tagId) => {
+    const matched = labelMap.get(tagId);
+    if (matched) {
+      return matched;
+    }
+
+    return {
+      id: tagId,
+      name: tagId,
+      emoji: '',
+      color: '#6B7280',
+      createdAt: '',
+      updatedAt: '',
+    } satisfies ContactLabelRecord;
+  });
+}
+
+function buildContactLabelStyle(color: string) {
+  return {
+    borderColor: `${color}55`,
+    backgroundColor: `${color}20`,
+    color,
+  };
+}
+
+function buildMutedContactLabelStyle() {
+  return {
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    color: 'rgb(161 161 170)',
+  };
 }
 
 function formatDurationLabel(totalSeconds: number) {

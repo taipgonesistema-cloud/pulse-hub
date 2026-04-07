@@ -471,6 +471,17 @@ type ContactCRMProfileRecord struct {
 	UpdatedAt      string   `json:"updatedAt"`
 }
 
+type ContactLabelRecord struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Emoji     string `json:"emoji,omitempty"`
+	Color     string `json:"color"`
+	CreatedBy string `json:"createdBy,omitempty"`
+	UpdatedBy string `json:"updatedBy,omitempty"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
 type UpdateContactKanbanStageRequest struct {
 	SessionID      string `json:"sessionId"`
 	ConversationID string `json:"conversationId"`
@@ -505,6 +516,13 @@ type UpdateContactCRMProfileRequest struct {
 	Notes          string   `json:"notes,omitempty"`
 	Tags           []string `json:"tags,omitempty"`
 	UpdatedBy      string   `json:"updatedBy,omitempty"`
+}
+
+type UpsertContactLabelRequest struct {
+	Name      string `json:"name"`
+	Emoji     string `json:"emoji,omitempty"`
+	Color     string `json:"color"`
+	UpdatedBy string `json:"updatedBy,omitempty"`
 }
 
 func NowString() string {

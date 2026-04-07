@@ -78,6 +78,17 @@ export type SessionRecord = {
   lastError: string | null;
 };
 
+export type ContactLabelRecord = {
+  id: string;
+  name: string;
+  emoji?: string;
+  color: string;
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type DashboardOverview = {
   product: string;
   phase: string;

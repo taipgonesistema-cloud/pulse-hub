@@ -158,6 +158,17 @@ func (s *Store) migrate(ctx context.Context) error {
 		PRIMARY KEY (session_id, conversation_id)
 	);
 
+	CREATE TABLE IF NOT EXISTS contact_label (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		emoji TEXT NOT NULL DEFAULT '',
+		color TEXT NOT NULL,
+		created_by TEXT NOT NULL DEFAULT '',
+		updated_by TEXT NOT NULL DEFAULT '',
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	);
+
 	CREATE TABLE IF NOT EXISTS app_user (
 		id TEXT PRIMARY KEY,
 		email TEXT NOT NULL UNIQUE,
@@ -233,6 +244,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	CREATE INDEX IF NOT EXISTS idx_contact_kanban_stage_updated_at ON contact_kanban_stage(updated_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_contact_kanban_board_updated_at ON contact_kanban_board(updated_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_contact_crm_profile_updated_at ON contact_crm_profile(updated_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_contact_label_updated_at ON contact_label(updated_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_app_user_role ON app_user(role);
 	CREATE INDEX IF NOT EXISTS idx_app_user_session_user_id ON app_user_session(user_id);
 	CREATE INDEX IF NOT EXISTS idx_app_user_session_expires_at ON app_user_session(expires_at);
@@ -1890,6 +1902,166 @@ func (s *Store) DeleteContactKanbanBoard(ctx context.Context, boardID string) er
 	_, err := s.db.ExecContext(ctx, `DELETE FROM contact_kanban_board WHERE id = $1`, boardID)
 	if err != nil {
 		return fmt.Errorf("delete contact kanban board: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) ListContactLabels(ctx context.Context) ([]models.ContactLabelRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, name, emoji, color, created_by, updated_by, created_at, updated_at
+		FROM contact_label
+		ORDER BY updated_at DESC, name ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list contact labels: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]models.ContactLabelRecord, 0)
+	for rows.Next() {
+		var item models.ContactLabelRecord
+		if err := rows.Scan(
+			&item.ID,
+			&item.Name,
+			&item.Emoji,
+			&item.Color,
+			&item.CreatedBy,
+			&item.UpdatedBy,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan contact label: %w", err)
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate contact labels: %w", err)
+	}
+
+	return items, nil
+}
+
+func (s *Store) SaveContactLabel(ctx context.Context, item models.ContactLabelRecord) (models.ContactLabelRecord, error) {
+	if strings.TrimSpace(item.ID) == "" {
+		item.ID = uuid.NewString()
+	}
+	if strings.TrimSpace(item.CreatedAt) == "" {
+		item.CreatedAt = models.NowString()
+	}
+	if strings.TrimSpace(item.UpdatedAt) == "" {
+		item.UpdatedAt = models.NowString()
+	}
+
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO contact_label (
+			id, name, emoji, color, created_by, updated_by, created_at, updated_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (id) DO UPDATE SET
+			name = excluded.name,
+			emoji = excluded.emoji,
+			color = excluded.color,
+			updated_by = excluded.updated_by,
+			updated_at = excluded.updated_at
+	`, item.ID, item.Name, item.Emoji, item.Color, item.CreatedBy, item.UpdatedBy, item.CreatedAt, item.UpdatedAt)
+	if err != nil {
+		return models.ContactLabelRecord{}, fmt.Errorf("save contact label: %w", err)
+	}
+
+	return item, nil
+}
+
+func (s *Store) DeleteContactLabel(ctx context.Context, labelID string) (err error) {
+	labelID = strings.TrimSpace(labelID)
+	if labelID == "" {
+		return nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin delete contact label: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	rows, err := tx.QueryContext(ctx, `
+		SELECT session_id, conversation_id, tags_json
+		FROM contact_crm_profile
+		WHERE tags_json LIKE $1
+	`, "%"+labelID+"%")
+	if err != nil {
+		return fmt.Errorf("query crm labels for delete: %w", err)
+	}
+
+	type profileTags struct {
+		sessionID      string
+		conversationID string
+		tags           []string
+	}
+
+	profiles := make([]profileTags, 0)
+	for rows.Next() {
+		var (
+			sessionID      string
+			conversationID string
+			tagsJSON       string
+		)
+		if err := rows.Scan(&sessionID, &conversationID, &tagsJSON); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan crm labels for delete: %w", err)
+		}
+
+		var tags []string
+		if err := json.Unmarshal([]byte(tagsJSON), &tags); err != nil {
+			continue
+		}
+
+		nextTags := make([]string, 0, len(tags))
+		changed := false
+		for _, tag := range tags {
+			if strings.TrimSpace(tag) == labelID {
+				changed = true
+				continue
+			}
+			nextTags = append(nextTags, tag)
+		}
+		if changed {
+			profiles = append(profiles, profileTags{sessionID: sessionID, conversationID: conversationID, tags: nextTags})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("iterate crm labels for delete: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close crm labels for delete: %w", err)
+	}
+
+	for _, profile := range profiles {
+		tagsJSON, marshalErr := json.Marshal(profile.tags)
+		if marshalErr != nil {
+			return fmt.Errorf("marshal crm tags during label delete: %w", marshalErr)
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE contact_crm_profile
+			SET tags_json = $3, updated_at = $4
+			WHERE session_id = $1 AND conversation_id = $2
+		`, profile.sessionID, profile.conversationID, string(tagsJSON), models.NowString()); err != nil {
+			return fmt.Errorf("update crm tags during label delete: %w", err)
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM contact_label WHERE id = $1`, labelID); err != nil {
+		return fmt.Errorf("delete contact label: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete contact label: %w", err)
 	}
 
 	return nil

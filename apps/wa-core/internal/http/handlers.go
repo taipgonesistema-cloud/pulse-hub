@@ -113,6 +113,10 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 			r.Post("/quick-replies", api.handleCreateQuickReply)
 			r.Put("/quick-replies/{id}", api.handleUpdateQuickReply)
 			r.Delete("/quick-replies/{id}", api.handleDeleteQuickReply)
+			r.Get("/contacts/labels", api.handleListContactLabels)
+			r.Post("/contacts/labels", api.handleCreateContactLabel)
+			r.Put("/contacts/labels/{id}", api.handleUpdateContactLabel)
+			r.Delete("/contacts/labels/{id}", api.handleDeleteContactLabel)
 			r.Get("/contacts/crm", api.handleListContactCRMProfiles)
 			r.Put("/contacts/crm", api.handleUpdateContactCRMProfile)
 			r.Get("/contacts/kanban", api.handleListContactKanbanStages)
@@ -992,6 +996,135 @@ func (a *API) handleQuickReplyAutocomplete(w http.ResponseWriter, r *http.Reques
 	}
 
 	respondJSON(w, http.StatusOK, items)
+}
+
+func (a *API) handleListContactLabels(w http.ResponseWriter, r *http.Request) {
+	if currentAuth(r) == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
+		return
+	}
+
+	items, err := a.store.ListContactLabels(r.Context())
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, items)
+}
+
+func (a *API) handleCreateContactLabel(w http.ResponseWriter, r *http.Request) {
+	auth, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor)
+	if !ok {
+		return
+	}
+
+	var request models.UpsertContactLabelRequest
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	label, err := buildContactLabelRecord(request, "", auth.user.Name)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": err.Error()})
+		return
+	}
+
+	saved, err := a.store.SaveContactLabel(r.Context(), label)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	a.hub.Broadcast(models.RealtimeEvent{Kind: "contact_label.updated", Text: saved.ID, OccurredAt: saved.UpdatedAt})
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "contact_label.create",
+		ResourceType: "contact_label",
+		ResourceID:   saved.ID,
+		Summary:      "Criou uma etiqueta para contatos.",
+		Details: map[string]any{
+			"name":            saved.Name,
+			"emoji":           saved.Emoji,
+			"color":           saved.Color,
+			"performedByRole": auth.user.Role,
+		},
+	})
+
+	respondJSON(w, http.StatusCreated, saved)
+}
+
+func (a *API) handleUpdateContactLabel(w http.ResponseWriter, r *http.Request) {
+	auth, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor)
+	if !ok {
+		return
+	}
+
+	var request models.UpsertContactLabelRequest
+	if err := decodeJSON(r, &request); err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	labelID := strings.TrimSpace(chi.URLParam(r, "id"))
+	label, err := buildContactLabelRecord(request, labelID, auth.user.Name)
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": err.Error()})
+		return
+	}
+
+	saved, err := a.store.SaveContactLabel(r.Context(), label)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	a.hub.Broadcast(models.RealtimeEvent{Kind: "contact_label.updated", Text: saved.ID, OccurredAt: saved.UpdatedAt})
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "contact_label.update",
+		ResourceType: "contact_label",
+		ResourceID:   saved.ID,
+		Summary:      "Atualizou uma etiqueta de contatos.",
+		Details: map[string]any{
+			"name":            saved.Name,
+			"emoji":           saved.Emoji,
+			"color":           saved.Color,
+			"performedByRole": auth.user.Role,
+		},
+	})
+
+	respondJSON(w, http.StatusOK, saved)
+}
+
+func (a *API) handleDeleteContactLabel(w http.ResponseWriter, r *http.Request) {
+	auth, ok := a.requireRoles(w, r, models.AuthRoleAdmin, models.AuthRoleSupervisor)
+	if !ok {
+		return
+	}
+
+	labelID := strings.TrimSpace(chi.URLParam(r, "id"))
+	if labelID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "id da etiqueta obrigatorio."})
+		return
+	}
+
+	if err := a.store.DeleteContactLabel(r.Context(), labelID); err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	a.hub.Broadcast(models.RealtimeEvent{Kind: "contact_label.updated", Text: labelID, OccurredAt: models.NowString()})
+	a.recordAuditLog(r, models.AuditLogRecord{
+		Action:       "contact_label.delete",
+		ResourceType: "contact_label",
+		ResourceID:   labelID,
+		Summary:      "Removeu uma etiqueta de contatos.",
+		Details: map[string]any{
+			"performedByRole": auth.user.Role,
+		},
+	})
+
+	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (a *API) handleCreateQuickReply(w http.ResponseWriter, r *http.Request) {
@@ -3161,6 +3294,50 @@ func normalizeTags(tags []string) []string {
 		items = append(items, normalized)
 	}
 	return items
+}
+
+func buildContactLabelRecord(request models.UpsertContactLabelRequest, labelID, actorName string) (models.ContactLabelRecord, error) {
+	name := strings.TrimSpace(request.Name)
+	if name == "" {
+		return models.ContactLabelRecord{}, errors.New("nome da etiqueta obrigatorio")
+	}
+
+	color, ok := normalizeContactLabelColor(request.Color)
+	if !ok {
+		return models.ContactLabelRecord{}, errors.New("cor da etiqueta invalida")
+	}
+
+	updatedBy := strings.TrimSpace(request.UpdatedBy)
+	if updatedBy == "" {
+		updatedBy = strings.TrimSpace(actorName)
+	}
+
+	now := models.NowString()
+	return models.ContactLabelRecord{
+		ID:        strings.TrimSpace(labelID),
+		Name:      name,
+		Emoji:     strings.TrimSpace(request.Emoji),
+		Color:     color,
+		CreatedBy: updatedBy,
+		UpdatedBy: updatedBy,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}, nil
+}
+
+func normalizeContactLabelColor(value string) (string, bool) {
+	trimmed := strings.TrimSpace(value)
+	if len(trimmed) != 7 || trimmed[0] != '#' {
+		return "", false
+	}
+
+	for _, char := range trimmed[1:] {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') && (char < 'A' || char > 'F') {
+			return "", false
+		}
+	}
+
+	return strings.ToUpper(trimmed), true
 }
 
 func normalizeManualContactPhone(value string) (string, string, error) {
