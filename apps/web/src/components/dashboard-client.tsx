@@ -6,6 +6,7 @@ import {
   BarChart3,
   BadgeCheck,
   Bell,
+  BellOff,
   Camera,
   CalendarDays,
   CircleHelp,
@@ -32,6 +33,8 @@ import {
   Trash2,
   Wifi,
   X,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import {
   Fragment,
@@ -299,6 +302,8 @@ type PendingSessionAction = {
   sessionId?: string;
 };
 
+type NotificationPermissionState = 'default' | 'granted' | 'denied' | 'unsupported';
+
 export function DashboardClient({ initialOverview }: Props) {
   const router = useRouter();
   const [overview, setOverview] = useState(() => sanitizeOverview(initialOverview));
@@ -412,6 +417,9 @@ export function DashboardClient({ initialOverview }: Props) {
   const [sessionForm, setSessionForm] = useState({ name: '' });
   const [sessionToDelete, setSessionToDelete] = useState<SessionRecord | null>(null);
   const [pendingSessionAction, setPendingSessionAction] = useState<PendingSessionAction | null>(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => loadStoredBoolean('ether-command.notifications-enabled', true));
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => loadStoredBoolean('ether-command.sound-enabled', true));
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermissionState>(() => getNotificationPermissionState());
   const [newUserForm, setNewUserForm] = useState({
     name: '',
     email: '',
@@ -428,6 +436,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const overviewRef = useRef(initialOverview);
   const globalSearchInputRef = useRef<HTMLInputElement | null>(null);
   const overviewLoadInFlightRef = useRef<Promise<void> | null>(null);
   const overviewRefreshQueuedRef = useRef(false);
@@ -455,6 +464,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const composerQuickReplyRequestIdRef = useRef(0);
   const messageElementMapRef = useRef(new Map<string, HTMLDivElement>());
   const highlightedMessageTimerRef = useRef<number | null>(null);
+  const notificationAudioContextRef = useRef<AudioContext | null>(null);
   const currentView = viewTransition ?? activeView;
   const hasWorkspaceData = overview.sessions.length > 0 || overview.conversations.length > 0;
   const shouldShowInitialSkeleton = isPending && !hasWorkspaceData && !errorMessage;
@@ -940,6 +950,10 @@ export function DashboardClient({ initialOverview }: Props) {
     };
   }, [isAnalyticsView, overview.analytics, overview.conversations]);
 
+  useEffect(() => {
+    overviewRef.current = overview;
+  }, [overview]);
+
   const safeResponseVelocity = useMemo(
     () => normalizeResponseVelocityAnalytics(analyticsModel?.responseVelocity),
     [analyticsModel?.responseVelocity],
@@ -1019,6 +1033,124 @@ export function DashboardClient({ initialOverview }: Props) {
     },
     [dismissToast, toasts],
   );
+
+  const playNotificationSound = useCallback(() => {
+    if (!soundEnabled) {
+      return;
+    }
+
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) {
+      return;
+    }
+
+    try {
+      const context = notificationAudioContextRef.current ?? new AudioContextClass();
+      notificationAudioContextRef.current = context;
+
+      if (context.state === 'suspended') {
+        void context.resume().catch(() => undefined);
+      }
+
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(660, context.currentTime + 0.18);
+      gainNode.gain.setValueAtTime(0.001, context.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.22);
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+      oscillator.start(context.currentTime);
+      oscillator.stop(context.currentTime + 0.24);
+    } catch {
+      return;
+    }
+  }, [soundEnabled]);
+
+  const maybeShowBrowserNotification = useCallback((payload: RealtimeSocketEvent) => {
+    if (!notificationsEnabled || notificationPermission !== 'granted' || payload.direction !== 'incoming') {
+      return;
+    }
+
+    const matchedConversation = overviewRef.current.conversations.find(
+      (conversation) => conversation.sessionId === payload.sessionId && conversation.id === payload.chatJid,
+    );
+
+    const sessionName = overviewRef.current.sessions.find((session) => session.id === payload.sessionId)?.name;
+    const title = matchedConversation?.contact || sessionName || 'Nova mensagem';
+    const body = payload.text?.trim() || `Nova mensagem recebida${sessionName ? ` em ${sessionName}` : ''}.`;
+
+    try {
+      const notification = new Notification(title, {
+        body,
+        tag: payload.messageId || `${payload.sessionId}:${payload.chatJid}`,
+        silent: true,
+      });
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+    } catch {
+      return;
+    }
+  }, [notificationPermission, notificationsEnabled]);
+
+  const toggleBrowserNotifications = useCallback(async () => {
+    if (!notificationsEnabled) {
+      if (typeof window === 'undefined' || !('Notification' in window)) {
+        pushToast({
+          tone: 'error',
+          title: 'Notificacoes indisponiveis',
+          description: 'Este navegador nao suporta notificacoes do sistema.',
+        });
+        setNotificationPermission('unsupported');
+        return;
+      }
+
+      if (Notification.permission === 'denied') {
+        setNotificationPermission('denied');
+        pushToast({
+          tone: 'info',
+          title: 'Permissao bloqueada',
+          description: 'Libere as notificacoes do site no navegador para ativar esse alerta.',
+        });
+        return;
+      }
+
+      if (Notification.permission !== 'granted') {
+        const permission = await Notification.requestPermission();
+        setNotificationPermission(permission);
+        if (permission !== 'granted') {
+          pushToast({
+            tone: 'info',
+            title: 'Permissao nao concedida',
+            description: 'As notificacoes do navegador continuam desligadas.',
+          });
+          return;
+        }
+      }
+
+      setNotificationsEnabled(true);
+      pushToast({ tone: 'success', title: 'Notificacoes ativadas' });
+      return;
+    }
+
+    setNotificationsEnabled(false);
+    pushToast({ tone: 'success', title: 'Notificacoes desativadas' });
+  }, [notificationsEnabled, pushToast]);
+
+  const toggleSoundNotifications = useCallback(() => {
+    setSoundEnabled((current) => {
+      const next = !current;
+      if (next) {
+        playNotificationSound();
+      }
+      pushToast({ tone: 'success', title: next ? 'Som ativado' : 'Som desativado' });
+      return next;
+    });
+  }, [playNotificationSound, pushToast]);
 
   const resetContactsView = useCallback(() => {
     setContactsSearch('');
@@ -1143,6 +1275,24 @@ export function DashboardClient({ initialOverview }: Props) {
       toastTimers.clear();
     };
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem('ether-command.notifications-enabled', JSON.stringify(notificationsEnabled));
+  }, [notificationsEnabled]);
+
+  useEffect(() => {
+    window.localStorage.setItem('ether-command.sound-enabled', JSON.stringify(soundEnabled));
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    setNotificationPermission(getNotificationPermissionState());
+  }, []);
+
+  useEffect(() => {
+    if (notificationPermission === 'unsupported' && notificationsEnabled) {
+      setNotificationsEnabled(false);
+    }
+  }, [notificationPermission, notificationsEnabled]);
 
   useEffect(() => {
     if (settingsSection === 'users' && !isAdminUser) {
@@ -2277,6 +2427,19 @@ export function DashboardClient({ initialOverview }: Props) {
             }).catch(() => undefined);
           }, delay);
         }
+
+        if (payload.kind === 'message.new' && payload.direction === 'incoming') {
+          const isActiveConversation =
+            isConversationsView &&
+            activeSessionId === payload.sessionId &&
+            activeConversationId === payload.chatJid &&
+            isConversationActivelyViewedRef.current(payload.sessionId, payload.chatJid ?? '');
+
+          if (!isActiveConversation) {
+            maybeShowBrowserNotification(payload);
+            playNotificationSound();
+          }
+        }
       };
 
       socket.onerror = () => {
@@ -2306,7 +2469,7 @@ export function DashboardClient({ initialOverview }: Props) {
       setIsRealtimeConnected(false);
       socket?.close();
     };
-  }, [isAuthReady]);
+  }, [isAuthReady, maybeShowBrowserNotification, playNotificationSound]);
 
   useEffect(() => {
     if (!isConversationsView) {
@@ -6012,6 +6175,30 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
 
             <div className="flex items-center gap-3">
+              <button
+                aria-label={notificationsEnabled ? 'Desativar notificacoes' : 'Ativar notificacoes'}
+                className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${notificationsEnabled ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-[var(--primary)]' : 'border-white/10 bg-white/5 text-[var(--muted)] hover:text-white'}`}
+                onClick={() => {
+                  void toggleBrowserNotifications();
+                }}
+                title={notificationPermission === 'denied'
+                  ? 'Permissao de notificacao bloqueada no navegador'
+                  : notificationsEnabled
+                    ? 'Notificacoes do navegador ativas'
+                    : 'Ativar notificacoes do navegador'}
+                type="button"
+              >
+                {notificationsEnabled ? <Bell className="h-4 w-4" strokeWidth={2.1} /> : <BellOff className="h-4 w-4" strokeWidth={2.1} />}
+              </button>
+              <button
+                aria-label={soundEnabled ? 'Desativar som de notificacao' : 'Ativar som de notificacao'}
+                className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${soundEnabled ? 'border-[var(--secondary)]/30 bg-[var(--secondary)]/12 text-[var(--secondary)]' : 'border-white/10 bg-white/5 text-[var(--muted)] hover:text-white'}`}
+                onClick={toggleSoundNotifications}
+                title={soundEnabled ? 'Som de notificacao ativo' : 'Som de notificacao desativado'}
+                type="button"
+              >
+                {soundEnabled ? <Volume2 className="h-4 w-4" strokeWidth={2.1} /> : <VolumeX className="h-4 w-4" strokeWidth={2.1} />}
+              </button>
               <ThemeToggle compact />
               <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-full border border-white/20 bg-[var(--surface-high)] text-[11px] font-bold text-white">
                 {authUser?.name
@@ -9305,6 +9492,31 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function loadStoredBoolean(key: string, fallback: boolean) {
+  if (typeof window === 'undefined') {
+    return fallback;
+  }
+
+  const rawValue = window.localStorage.getItem(key);
+  if (rawValue === null) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(rawValue) as boolean;
+  } catch {
+    return fallback;
+  }
+}
+
+function getNotificationPermissionState(): NotificationPermissionState {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    return 'unsupported';
+  }
+
+  return Notification.permission;
 }
 
 function buildToastKey(toast: Pick<ToastItem, 'tone' | 'title' | 'description'>) {
