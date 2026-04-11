@@ -33,6 +33,8 @@ type config struct {
 	AuthCookieDomain         string
 	AuthCookieSecure         bool
 	AuthCookieSameSite       http.SameSite
+	InstagramAppID           string
+	InstagramAppSecret       string
 	InstagramAccessToken     string
 	InstagramUserID          string
 	InstagramImageHostAPIKey string
@@ -82,6 +84,8 @@ func main() {
 	}
 
 	instagramClient := appinstagram.NewClient(appinstagram.Config{
+		AppID:           cfg.InstagramAppID,
+		AppSecret:       cfg.InstagramAppSecret,
 		AccessToken:     cfg.InstagramAccessToken,
 		UserID:          cfg.InstagramUserID,
 		ImageHostAPIKey: cfg.InstagramImageHostAPIKey,
@@ -154,8 +158,10 @@ func loadConfig() config {
 		AuthCookieDomain:         strings.TrimSpace(os.Getenv("AUTH_COOKIE_DOMAIN")),
 		AuthCookieSecure:         parseEnvBool("AUTH_COOKIE_SECURE", false),
 		AuthCookieSameSite:       parseSameSite(os.Getenv("AUTH_COOKIE_SAME_SITE")),
-		InstagramAccessToken:     envOrDefault("INSTAGRAM_GRAPH_ACCESS_TOKEN", ""),
-		InstagramUserID:          envOrDefault("INSTAGRAM_GRAPH_USER_ID", ""),
+		InstagramAppID:           envOrDefault("INSTAGRAM_APP_ID", ""),
+		InstagramAppSecret:       envOrDefault("INSTAGRAM_APP_SECRET", ""),
+		InstagramAccessToken:     envOrDefault("INSTAGRAM_ACCESS_TOKEN", envOrDefault("INSTAGRAM_GRAPH_ACCESS_TOKEN", "")),
+		InstagramUserID:          envOrDefault("INSTAGRAM_USER_ID", envOrDefault("INSTAGRAM_GRAPH_USER_ID", "")),
 		InstagramImageHostAPIKey: envOrDefault("INSTAGRAM_IMAGE_HOST_API_KEY", envOrDefault("FREEIMAGE_HOST_API_KEY", "")),
 		AllowedOrigins:           loadAllowedOrigins(),
 		ShutdownTimeout:          12 * time.Second,

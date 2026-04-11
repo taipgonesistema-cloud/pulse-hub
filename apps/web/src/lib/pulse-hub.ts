@@ -200,9 +200,16 @@ export type AuditLogRecord = {
 };
 
 export type InstagramPublishStatus = {
+  tokenConfigured: boolean;
+  tokenValid: boolean;
+  appIdConfigured: boolean;
+  appSecretProofEnabled: boolean;
   configured: boolean;
   imageHostingConfigured: boolean;
   userId?: string;
+  username?: string;
+  accountType?: string;
+  lastError?: string;
 };
 
 export type InstagramPublishResult = {

@@ -226,9 +226,16 @@ type CurrentUserResponse struct {
 }
 
 type InstagramPublishStatusResponse struct {
+	TokenConfigured        bool   `json:"tokenConfigured"`
+	TokenValid             bool   `json:"tokenValid"`
+	AppIDConfigured        bool   `json:"appIdConfigured"`
+	AppSecretProofEnabled  bool   `json:"appSecretProofEnabled"`
 	Configured             bool   `json:"configured"`
 	ImageHostingConfigured bool   `json:"imageHostingConfigured"`
 	UserID                 string `json:"userId,omitempty"`
+	Username               string `json:"username,omitempty"`
+	AccountType            string `json:"accountType,omitempty"`
+	LastError              string `json:"lastError,omitempty"`
 }
 
 type InstagramPublishResult struct {

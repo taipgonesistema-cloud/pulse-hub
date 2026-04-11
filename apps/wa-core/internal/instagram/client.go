@@ -2,7 +2,10 @@ package instagram
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,9 +21,12 @@ import (
 const (
 	defaultGraphBaseURL     = "https://graph.instagram.com"
 	defaultImageHostBaseURL = "https://freeimage.host/api/1/upload"
+	defaultImageHostAPIKey  = "6d207e02198a847aa98d0a2a901485a5"
 )
 
 type Config struct {
+	AppID            string
+	AppSecret        string
 	AccessToken      string
 	UserID           string
 	ImageHostAPIKey  string
@@ -30,6 +36,8 @@ type Config struct {
 
 type Client struct {
 	httpClient       *http.Client
+	appID            string
+	appSecret        string
 	accessToken      string
 	userID           string
 	imageHostAPIKey  string
@@ -62,6 +70,12 @@ type mediaStatusResponse struct {
 	StatusMessage string `json:"status_message"`
 }
 
+type profileResponse struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	AccountType string `json:"account_type"`
+}
+
 func NewClient(config Config) *Client {
 	graphBaseURL := strings.TrimRight(strings.TrimSpace(config.GraphBaseURL), "/")
 	if graphBaseURL == "" {
@@ -71,28 +85,60 @@ func NewClient(config Config) *Client {
 	if imageHostBaseURL == "" {
 		imageHostBaseURL = defaultImageHostBaseURL
 	}
+	imageHostAPIKey := strings.TrimSpace(config.ImageHostAPIKey)
+	if imageHostAPIKey == "" {
+		imageHostAPIKey = defaultImageHostAPIKey
+	}
 
 	return &Client{
 		httpClient:       &http.Client{Timeout: 45 * time.Second},
+		appID:            strings.TrimSpace(config.AppID),
+		appSecret:        strings.TrimSpace(config.AppSecret),
 		accessToken:      strings.TrimSpace(config.AccessToken),
 		userID:           strings.TrimSpace(config.UserID),
-		imageHostAPIKey:  strings.TrimSpace(config.ImageHostAPIKey),
+		imageHostAPIKey:  imageHostAPIKey,
 		graphBaseURL:     graphBaseURL,
 		imageHostBaseURL: imageHostBaseURL,
 	}
 }
 
-func (c *Client) Status() models.InstagramPublishStatusResponse {
-	return models.InstagramPublishStatusResponse{
-		Configured:             c.accessToken != "" && c.userID != "",
+func (c *Client) Status(ctx context.Context) models.InstagramPublishStatusResponse {
+	status := models.InstagramPublishStatusResponse{
+		TokenConfigured:        c.accessToken != "",
+		AppIDConfigured:        c.appID != "",
+		AppSecretProofEnabled:  c.appSecret != "",
 		ImageHostingConfigured: c.imageHostAPIKey != "",
 		UserID:                 c.userID,
 	}
+
+	if c.accessToken == "" {
+		status.LastError = "configure INSTAGRAM_ACCESS_TOKEN no backend"
+		return status
+	}
+
+	profile, err := c.getProfile(ctx)
+	if err != nil {
+		status.LastError = err.Error()
+		return status
+	}
+
+	status.TokenValid = true
+	status.Username = profile.Username
+	status.AccountType = profile.AccountType
+	if status.UserID == "" {
+		status.UserID = profile.ID
+	}
+	status.Configured = strings.TrimSpace(status.UserID) != ""
+	return status
 }
 
 func (c *Client) Publish(ctx context.Context, request PublishRequest) (*models.InstagramPublishResult, error) {
-	if c.accessToken == "" || c.userID == "" {
+	if c.accessToken == "" {
 		return nil, errors.New("integracao do Instagram nao configurada no backend")
+	}
+	userID, err := c.resolveTargetUserID(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	imageURL := strings.TrimSpace(request.ImageURL)
@@ -110,7 +156,7 @@ func (c *Client) Publish(ctx context.Context, request PublishRequest) (*models.I
 		imageURL = uploadedURL
 	}
 
-	creationID, err := c.createMediaContainer(ctx, imageURL, strings.TrimSpace(request.Caption), request.Story)
+	creationID, err := c.createMediaContainer(ctx, userID, imageURL, strings.TrimSpace(request.Caption), request.Story)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +164,7 @@ func (c *Client) Publish(ctx context.Context, request PublishRequest) (*models.I
 		return nil, err
 	}
 
-	publishedID, err := c.publishMediaContainer(ctx, creationID)
+	publishedID, err := c.publishMediaContainer(ctx, userID, creationID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,17 +227,70 @@ func (c *Client) uploadImage(ctx context.Context, data []byte) (string, error) {
 	return strings.TrimSpace(payload.Image.URL), nil
 }
 
-func (c *Client) createMediaContainer(ctx context.Context, imageURL, caption string, story bool) (string, error) {
+func (c *Client) resolveTargetUserID(ctx context.Context) (string, error) {
+	if c.userID != "" {
+		return c.userID, nil
+	}
+
+	profile, err := c.getProfile(ctx)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(profile.ID) == "" {
+		return "", errors.New("instagram nao retornou o user id da conta")
+	}
+
+	return strings.TrimSpace(profile.ID), nil
+}
+
+func (c *Client) getProfile(ctx context.Context) (profileResponse, error) {
+	params := url.Values{}
+	params.Set("fields", "id,username,account_type")
+	c.addGraphAuth(params)
+
+	endpoint := fmt.Sprintf("%s/me?%s", c.graphBaseURL, params.Encode())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return profileResponse{}, fmt.Errorf("create instagram profile request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return profileResponse{}, fmt.Errorf("send instagram profile request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return profileResponse{}, fmt.Errorf("read instagram profile response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var payload graphErrorResponse
+		if err := json.Unmarshal(body, &payload); err == nil && strings.TrimSpace(payload.Error.Message) != "" {
+			return profileResponse{}, errors.New(formatGraphError(payload))
+		}
+		return profileResponse{}, fmt.Errorf("instagram retornou status %d ao consultar perfil", resp.StatusCode)
+	}
+
+	var profile profileResponse
+	if err := json.Unmarshal(body, &profile); err != nil {
+		return profileResponse{}, fmt.Errorf("decode instagram profile response: %w", err)
+	}
+
+	return profile, nil
+}
+
+func (c *Client) createMediaContainer(ctx context.Context, userID, imageURL, caption string, story bool) (string, error) {
 	form := url.Values{}
 	form.Set("image_url", imageURL)
-	form.Set("access_token", c.accessToken)
+	c.addGraphAuth(form)
 	if story {
 		form.Set("media_type", "STORIES")
 	} else if caption != "" {
 		form.Set("caption", caption)
 	}
 
-	endpoint := fmt.Sprintf("%s/%s/media", c.graphBaseURL, url.PathEscape(c.userID))
+	endpoint := fmt.Sprintf("%s/%s/media", c.graphBaseURL, url.PathEscape(userID))
 	responseBody, err := c.postForm(ctx, endpoint, form)
 	if err != nil {
 		return "", err
@@ -245,7 +344,10 @@ func (c *Client) waitForMediaReady(ctx context.Context, creationID string) error
 }
 
 func (c *Client) getMediaStatus(ctx context.Context, creationID string) (mediaStatusResponse, error) {
-	endpoint := fmt.Sprintf("%s/%s?fields=status_code,status,status_message&access_token=%s", c.graphBaseURL, url.PathEscape(creationID), url.QueryEscape(c.accessToken))
+	params := url.Values{}
+	params.Set("fields", "status_code,status,status_message")
+	c.addGraphAuth(params)
+	endpoint := fmt.Sprintf("%s/%s?%s", c.graphBaseURL, url.PathEscape(creationID), params.Encode())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return mediaStatusResponse{}, fmt.Errorf("create instagram status request: %w", err)
@@ -277,12 +379,12 @@ func (c *Client) getMediaStatus(ctx context.Context, creationID string) (mediaSt
 	return payload, nil
 }
 
-func (c *Client) publishMediaContainer(ctx context.Context, creationID string) (string, error) {
+func (c *Client) publishMediaContainer(ctx context.Context, userID, creationID string) (string, error) {
 	form := url.Values{}
 	form.Set("creation_id", creationID)
-	form.Set("access_token", c.accessToken)
+	c.addGraphAuth(form)
 
-	endpoint := fmt.Sprintf("%s/%s/media_publish", c.graphBaseURL, url.PathEscape(c.userID))
+	endpoint := fmt.Sprintf("%s/%s/media_publish", c.graphBaseURL, url.PathEscape(userID))
 	responseBody, err := c.postForm(ctx, endpoint, form)
 	if err != nil {
 		return "", err
@@ -328,6 +430,23 @@ func (c *Client) postForm(ctx context.Context, endpoint string, form url.Values)
 	}
 
 	return nil, fmt.Errorf("instagram retornou status %d", resp.StatusCode)
+}
+
+func (c *Client) addGraphAuth(values url.Values) {
+	values.Set("access_token", c.accessToken)
+	if proof := c.appSecretProof(); proof != "" {
+		values.Set("appsecret_proof", proof)
+	}
+}
+
+func (c *Client) appSecretProof() string {
+	if c.accessToken == "" || c.appSecret == "" {
+		return ""
+	}
+
+	mac := hmac.New(sha256.New, []byte(c.appSecret))
+	_, _ = mac.Write([]byte(c.accessToken))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 func formatGraphError(payload graphErrorResponse) string {

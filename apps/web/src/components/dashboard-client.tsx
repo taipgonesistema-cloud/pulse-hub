@@ -417,7 +417,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [sessionForm, setSessionForm] = useState({ name: '' });
   const [sessionToDelete, setSessionToDelete] = useState<SessionRecord | null>(null);
   const [pendingSessionAction, setPendingSessionAction] = useState<PendingSessionAction | null>(null);
-  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => loadStoredBoolean('ether-command.notifications-enabled', true));
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => loadStoredNotificationsEnabled());
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => loadStoredBoolean('ether-command.sound-enabled', true));
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermissionState>(() => getNotificationPermissionState());
   const [newUserForm, setNewUserForm] = useState({
@@ -1133,6 +1133,16 @@ export function DashboardClient({ initialOverview }: Props) {
       }
 
       setNotificationsEnabled(true);
+      try {
+        const previewNotification = new Notification('ether command', {
+          body: 'Notificacoes ativadas. Voce passara a receber alertas de novas mensagens.',
+          silent: true,
+          tag: 'ether-command-notifications-enabled',
+        });
+        window.setTimeout(() => previewNotification.close(), 2500);
+      } catch {
+        // Ignore preview failures after permission grant.
+      }
       pushToast({ tone: 'success', title: 'Notificacoes ativadas' });
       return;
     }
@@ -1289,7 +1299,7 @@ export function DashboardClient({ initialOverview }: Props) {
   }, []);
 
   useEffect(() => {
-    if (notificationPermission === 'unsupported' && notificationsEnabled) {
+    if (notificationPermission !== 'granted' && notificationsEnabled) {
       setNotificationsEnabled(false);
     }
   }, [notificationPermission, notificationsEnabled]);
@@ -4510,24 +4520,31 @@ export function DashboardClient({ initialOverview }: Props) {
                   <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
                     Integracao
                   </p>
-                  <div className="mt-5 grid gap-4 md:grid-cols-3 xl:grid-cols-1">
+                  <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-2">
                     <MetricCard
                       compact
-                      detail={instagramStatus?.configured ? 'Credenciais do Graph API carregadas' : 'Configure token e user id no backend'}
+                      detail={instagramStatus?.tokenValid ? 'Token validado no Graph API' : instagramStatus?.lastError || 'Configure INSTAGRAM_ACCESS_TOKEN no backend'}
                       label="API"
                       tone="primary"
-                      value={instagramStatus?.configured ? 'ok' : 'off'}
+                      value={instagramStatus?.tokenValid ? 'ok' : 'off'}
                     />
                     <MetricCard
                       compact
-                      detail={instagramStatus?.imageHostingConfigured ? 'Upload local habilitado' : 'Sem chave de hospedagem de imagem'}
+                      detail={instagramStatus?.appSecretProofEnabled ? 'appsecret_proof ativo nos requests' : 'Configure INSTAGRAM_APP_SECRET para reforcar a seguranca'}
+                      label="Proof"
+                      tone="tertiary"
+                      value={instagramStatus?.appSecretProofEnabled ? 'ok' : 'env'}
+                    />
+                    <MetricCard
+                      compact
+                      detail={instagramStatus?.imageHostingConfigured ? 'Upload local habilitado para gerar URL publica' : 'Sem chave de hospedagem de imagem'}
                       label="Image host"
                       tone="tertiary"
                       value={instagramStatus?.imageHostingConfigured ? 'ok' : 'url'}
                     />
                     <MetricCard
                       compact
-                      detail={instagramStatus?.userId ? 'Conta de destino configurada' : 'Aguardando configuracao'}
+                      detail={instagramStatus?.username ? `${instagramStatus.username} · ${instagramStatus.accountType || 'conta profissional'}` : instagramStatus?.userId ? 'Conta de destino resolvida' : 'Aguardando resolucao automatica da conta'}
                       label="Conta"
                       tone="secondary"
                       value={instagramStatus?.userId ? maskAccountId(instagramStatus.userId) : '--'}
@@ -4643,7 +4660,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
                   {!isLoadingInstagramStatus && instagramStatus && !instagramStatus.configured ? (
                     <div className="rounded-[24px] border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                      Configure `INSTAGRAM_GRAPH_ACCESS_TOKEN` e `INSTAGRAM_GRAPH_USER_ID` no backend para habilitar a publicacao.
+                      Configure `INSTAGRAM_ACCESS_TOKEN` no backend. `INSTAGRAM_USER_ID` agora pode ficar vazio se o token conseguir resolver a conta automaticamente. Para mais seguranca, adicione tambem `INSTAGRAM_APP_SECRET`.
                     </div>
                   ) : null}
 
@@ -9509,6 +9526,18 @@ function loadStoredBoolean(key: string, fallback: boolean) {
   } catch {
     return fallback;
   }
+}
+
+function loadStoredNotificationsEnabled() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  if (!('Notification' in window) || Notification.permission !== 'granted') {
+    return false;
+  }
+
+  return loadStoredBoolean('ether-command.notifications-enabled', false);
 }
 
 function getNotificationPermissionState(): NotificationPermissionState {

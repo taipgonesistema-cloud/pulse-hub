@@ -442,7 +442,7 @@ func (a *API) handleInstagramStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondJSON(w, http.StatusOK, a.instagram.Status())
+	respondJSON(w, http.StatusOK, a.instagram.Status(r.Context()))
 }
 
 func (a *API) handleInstagramFeedPublish(w http.ResponseWriter, r *http.Request) {
