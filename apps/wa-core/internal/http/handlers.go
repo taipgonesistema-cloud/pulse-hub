@@ -3464,7 +3464,7 @@ func parseMediaUpload(r *http.Request, fallbackJID string) (models.SendMediaRequ
 }
 
 func parseInstagramPublishRequest(r *http.Request) (appinstagram.PublishRequest, error) {
-	if err := r.ParseMultipartForm(12 << 20); err != nil {
+	if err := r.ParseMultipartForm(128 << 20); err != nil {
 		return appinstagram.PublishRequest{}, fmt.Errorf("parse multipart form: %w", err)
 	}
 
@@ -3476,7 +3476,7 @@ func parseInstagramPublishRequest(r *http.Request) (appinstagram.PublishRequest,
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		if request.ImageURL == "" {
-			return appinstagram.PublishRequest{}, errors.New("envie uma imagem ou informe uma URL publica")
+			return appinstagram.PublishRequest{}, errors.New("envie uma midia ou informe uma URL publica")
 		}
 		return request, nil
 	}

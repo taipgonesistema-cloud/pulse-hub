@@ -1,8 +1,10 @@
 package instagram
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -10,8 +12,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -21,6 +26,7 @@ import (
 const (
 	defaultGraphBaseURL     = "https://graph.instagram.com"
 	defaultImageHostBaseURL = "https://freeimage.host/api/1/upload"
+	defaultCloudinaryURL    = "https://api.cloudinary.com"
 	defaultImageHostAPIKey  = "6d207e02198a847aa98d0a2a901485a5"
 )
 
@@ -29,6 +35,10 @@ type Config struct {
 	AppSecret        string
 	AccessToken      string
 	UserID           string
+	CloudName        string
+	CloudAPIKey      string
+	CloudAPISecret   string
+	CloudFolder      string
 	ImageHostAPIKey  string
 	GraphBaseURL     string
 	ImageHostBaseURL string
@@ -40,6 +50,10 @@ type Client struct {
 	appSecret        string
 	accessToken      string
 	userID           string
+	cloudName        string
+	cloudAPIKey      string
+	cloudAPISecret   string
+	cloudFolder      string
 	imageHostAPIKey  string
 	graphBaseURL     string
 	imageHostBaseURL string
@@ -76,6 +90,13 @@ type profileResponse struct {
 	AccountType string `json:"account_type"`
 }
 
+type instagramMediaKind string
+
+const (
+	instagramMediaKindImage instagramMediaKind = "image"
+	instagramMediaKindVideo instagramMediaKind = "video"
+)
+
 func NewClient(config Config) *Client {
 	graphBaseURL := strings.TrimRight(strings.TrimSpace(config.GraphBaseURL), "/")
 	if graphBaseURL == "" {
@@ -96,6 +117,10 @@ func NewClient(config Config) *Client {
 		appSecret:        strings.TrimSpace(config.AppSecret),
 		accessToken:      strings.TrimSpace(config.AccessToken),
 		userID:           strings.TrimSpace(config.UserID),
+		cloudName:        strings.TrimSpace(config.CloudName),
+		cloudAPIKey:      strings.TrimSpace(config.CloudAPIKey),
+		cloudAPISecret:   strings.TrimSpace(config.CloudAPISecret),
+		cloudFolder:      strings.Trim(strings.TrimSpace(config.CloudFolder), "/"),
 		imageHostAPIKey:  imageHostAPIKey,
 		graphBaseURL:     graphBaseURL,
 		imageHostBaseURL: imageHostBaseURL,
@@ -107,7 +132,7 @@ func (c *Client) Status(ctx context.Context) models.InstagramPublishStatusRespon
 		TokenConfigured:        c.accessToken != "",
 		AppIDConfigured:        c.appID != "",
 		AppSecretProofEnabled:  c.appSecret != "",
-		ImageHostingConfigured: c.imageHostAPIKey != "",
+		ImageHostingConfigured: c.cloudinaryConfigured() || c.imageHostAPIKey != "",
 		UserID:                 c.userID,
 	}
 
@@ -141,22 +166,25 @@ func (c *Client) Publish(ctx context.Context, request PublishRequest) (*models.I
 		return nil, err
 	}
 
-	imageURL := strings.TrimSpace(request.ImageURL)
-	if imageURL == "" {
+	mediaURL := strings.TrimSpace(request.ImageURL)
+	mediaKind := detectInstagramMediaKind(strings.TrimSpace(request.MimeType), mediaURL)
+	if mediaURL == "" {
 		if len(request.Data) == 0 {
-			return nil, errors.New("envie uma imagem ou informe uma URL publica")
+			return nil, errors.New("envie uma midia ou informe uma URL publica")
 		}
-		if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(request.MimeType)), "image/") {
-			return nil, errors.New("apenas imagens sao suportadas para publicacao no Instagram")
+		if mediaKind == "" {
+			return nil, errors.New("apenas imagens e videos sao suportados para publicacao no Instagram")
 		}
-		uploadedURL, err := c.uploadImage(ctx, request.Data)
+		uploadedURL, err := c.uploadMedia(ctx, request.Data, request.FileName, request.MimeType, mediaKind)
 		if err != nil {
 			return nil, err
 		}
-		imageURL = uploadedURL
+		mediaURL = uploadedURL
+	} else if mediaKind == "" {
+		return nil, errors.New("nao foi possivel identificar se a URL publica e imagem ou video")
 	}
 
-	creationID, err := c.createMediaContainer(ctx, userID, imageURL, strings.TrimSpace(request.Caption), request.Story)
+	creationID, err := c.createMediaContainer(ctx, userID, mediaURL, mediaKind, strings.TrimSpace(request.Caption), request.Story)
 	if err != nil {
 		return nil, err
 	}
@@ -178,11 +206,21 @@ func (c *Client) Publish(ctx context.Context, request PublishRequest) (*models.I
 		Mode:        mode,
 		CreationID:  creationID,
 		PublishedID: publishedID,
-		ImageURL:    imageURL,
+		ImageURL:    mediaURL,
 	}, nil
 }
 
-func (c *Client) uploadImage(ctx context.Context, data []byte) (string, error) {
+func (c *Client) uploadMedia(ctx context.Context, data []byte, fileName, mimeType string, mediaKind instagramMediaKind) (string, error) {
+	if c.cloudinaryConfigured() {
+		return c.uploadMediaToCloudinary(ctx, data, fileName, mimeType, mediaKind)
+	}
+	if mediaKind == instagramMediaKindVideo {
+		return "", errors.New("configure Cloudinary para upload de videos do Instagram")
+	}
+	return c.uploadImageToFreeImage(ctx, data)
+}
+
+func (c *Client) uploadImageToFreeImage(ctx context.Context, data []byte) (string, error) {
 	if c.imageHostAPIKey == "" {
 		return "", errors.New("configure INSTAGRAM_IMAGE_HOST_API_KEY para upload de imagem local")
 	}
@@ -225,6 +263,87 @@ func (c *Client) uploadImage(ctx context.Context, data []byte) (string, error) {
 	}
 
 	return strings.TrimSpace(payload.Image.URL), nil
+}
+
+func (c *Client) uploadMediaToCloudinary(ctx context.Context, data []byte, fileName, mimeType string, mediaKind instagramMediaKind) (string, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	resourceType := "image"
+	if mediaKind == instagramMediaKindVideo {
+		resourceType = "video"
+	}
+
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	paramsToSign := map[string]string{
+		"timestamp": timestamp,
+	}
+	if c.cloudFolder != "" {
+		paramsToSign["folder"] = c.cloudFolder
+	}
+	signature := cloudinarySignature(paramsToSign, c.cloudAPISecret)
+
+	for key, value := range map[string]string{
+		"api_key":   c.cloudAPIKey,
+		"timestamp": timestamp,
+		"signature": signature,
+		"folder":    c.cloudFolder,
+	} {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		if err := writer.WriteField(key, value); err != nil {
+			return "", fmt.Errorf("write cloudinary field %s: %w", key, err)
+		}
+	}
+
+	part, err := writer.CreateFormFile("file", resolvedInstagramFileName(fileName, mediaKind, mimeType))
+	if err != nil {
+		return "", fmt.Errorf("create cloudinary file part: %w", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		return "", fmt.Errorf("write cloudinary file data: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return "", fmt.Errorf("close cloudinary multipart body: %w", err)
+	}
+
+	endpoint := fmt.Sprintf("%s/v1_1/%s/%s/upload", defaultCloudinaryURL, url.PathEscape(c.cloudName), resourceType)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, body)
+	if err != nil {
+		return "", fmt.Errorf("create cloudinary request: %w", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("send cloudinary request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read cloudinary response: %w", err)
+	}
+
+	var payload struct {
+		SecureURL string `json:"secure_url"`
+		Error     struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
+		return "", fmt.Errorf("decode cloudinary response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 || strings.TrimSpace(payload.SecureURL) == "" {
+		message := strings.TrimSpace(payload.Error.Message)
+		if message == "" {
+			message = fmt.Sprintf("cloudinary retornou status %d", resp.StatusCode)
+		}
+		return "", errors.New(message)
+	}
+
+	return strings.TrimSpace(payload.SecureURL), nil
 }
 
 func (c *Client) resolveTargetUserID(ctx context.Context) (string, error) {
@@ -280,14 +399,30 @@ func (c *Client) getProfile(ctx context.Context) (profileResponse, error) {
 	return profile, nil
 }
 
-func (c *Client) createMediaContainer(ctx context.Context, userID, imageURL, caption string, story bool) (string, error) {
+func (c *Client) createMediaContainer(ctx context.Context, userID, mediaURL string, mediaKind instagramMediaKind, caption string, story bool) (string, error) {
 	form := url.Values{}
-	form.Set("image_url", imageURL)
 	c.addGraphAuth(form)
+	if mediaKind == instagramMediaKindVideo {
+		form.Set("video_url", mediaURL)
+		if story {
+			form.Set("media_type", "STORIES")
+		} else {
+			form.Set("media_type", "REELS")
+		}
+	} else {
+		form.Set("image_url", mediaURL)
+		if story {
+			form.Set("media_type", "STORIES")
+		}
+	}
+	if !story && mediaKind == instagramMediaKindImage && caption != "" {
+		form.Set("caption", caption)
+	}
+	if !story && mediaKind == instagramMediaKindVideo && caption != "" {
+		form.Set("caption", caption)
+	}
 	if story {
 		form.Set("media_type", "STORIES")
-	} else if caption != "" {
-		form.Set("caption", caption)
 	}
 
 	endpoint := fmt.Sprintf("%s/%s/media", c.graphBaseURL, url.PathEscape(userID))
@@ -439,6 +574,10 @@ func (c *Client) addGraphAuth(values url.Values) {
 	}
 }
 
+func (c *Client) cloudinaryConfigured() bool {
+	return c.cloudName != "" && c.cloudAPIKey != "" && c.cloudAPISecret != ""
+}
+
 func (c *Client) appSecretProof() string {
 	if c.accessToken == "" || c.appSecret == "" {
 		return ""
@@ -447,6 +586,82 @@ func (c *Client) appSecretProof() string {
 	mac := hmac.New(sha256.New, []byte(c.appSecret))
 	_, _ = mac.Write([]byte(c.accessToken))
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func cloudinarySignature(params map[string]string, secret string) string {
+	keys := make([]string, 0, len(params))
+	for key, value := range params {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%s", key, params[key]))
+	}
+	raw := strings.Join(parts, "&") + secret
+	sum := sha1.Sum([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+func resolvedInstagramFileName(fileName string, mediaKind instagramMediaKind, mimeType string) string {
+	trimmed := strings.TrimSpace(fileName)
+	if trimmed != "" {
+		return trimmed
+	}
+
+	ext := extensionFromMimeType(mimeType)
+	if ext == "" {
+		if mediaKind == instagramMediaKindVideo {
+			ext = ".mp4"
+		} else {
+			ext = ".jpg"
+		}
+	}
+
+	return "instagram-upload" + ext
+}
+
+func detectInstagramMediaKind(mimeType, publicURL string) instagramMediaKind {
+	lowerMimeType := strings.ToLower(strings.TrimSpace(mimeType))
+	switch {
+	case strings.HasPrefix(lowerMimeType, "image/"):
+		return instagramMediaKindImage
+	case strings.HasPrefix(lowerMimeType, "video/"):
+		return instagramMediaKindVideo
+	}
+
+	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(publicURL)))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif":
+		return instagramMediaKindImage
+	case ".mp4", ".mov", ".m4v", ".webm":
+		return instagramMediaKindVideo
+	default:
+		return ""
+	}
+}
+
+func extensionFromMimeType(mimeType string) string {
+	lowerMimeType := strings.ToLower(strings.TrimSpace(mimeType))
+	switch lowerMimeType {
+	case "image/jpeg", "image/jpg":
+		return ".jpg"
+	case "image/png":
+		return ".png"
+	case "image/webp":
+		return ".webp"
+	case "video/mp4":
+		return ".mp4"
+	case "video/quicktime":
+		return ".mov"
+	case "video/webm":
+		return ".webm"
+	default:
+		return ""
+	}
 }
 
 func formatGraphError(payload graphErrorResponse) string {

@@ -37,6 +37,10 @@ type config struct {
 	InstagramAppSecret       string
 	InstagramAccessToken     string
 	InstagramUserID          string
+	CloudinaryCloudName      string
+	CloudinaryAPIKey         string
+	CloudinaryAPISecret      string
+	CloudinaryFolder         string
 	InstagramImageHostAPIKey string
 	AllowedOrigins           []string
 	ShutdownTimeout          time.Duration
@@ -88,6 +92,10 @@ func main() {
 		AppSecret:       cfg.InstagramAppSecret,
 		AccessToken:     cfg.InstagramAccessToken,
 		UserID:          cfg.InstagramUserID,
+		CloudName:       cfg.CloudinaryCloudName,
+		CloudAPIKey:     cfg.CloudinaryAPIKey,
+		CloudAPISecret:  cfg.CloudinaryAPISecret,
+		CloudFolder:     cfg.CloudinaryFolder,
 		ImageHostAPIKey: cfg.InstagramImageHostAPIKey,
 	})
 
@@ -162,6 +170,10 @@ func loadConfig() config {
 		InstagramAppSecret:       envOrDefault("INSTAGRAM_APP_SECRET", ""),
 		InstagramAccessToken:     envOrDefault("INSTAGRAM_ACCESS_TOKEN", envOrDefault("INSTAGRAM_GRAPH_ACCESS_TOKEN", "")),
 		InstagramUserID:          envOrDefault("INSTAGRAM_USER_ID", envOrDefault("INSTAGRAM_GRAPH_USER_ID", "")),
+		CloudinaryCloudName:      envOrDefault("CLOUDINARY_CLOUD_NAME", ""),
+		CloudinaryAPIKey:         envOrDefault("CLOUDINARY_API_KEY", ""),
+		CloudinaryAPISecret:      envOrDefault("CLOUDINARY_API_SECRET", ""),
+		CloudinaryFolder:         envOrDefault("CLOUDINARY_FOLDER", "ether-command"),
 		InstagramImageHostAPIKey: envOrDefault("INSTAGRAM_IMAGE_HOST_API_KEY", envOrDefault("FREEIMAGE_HOST_API_KEY", "")),
 		AllowedOrigins:           loadAllowedOrigins(),
 		ShutdownTimeout:          12 * time.Second,

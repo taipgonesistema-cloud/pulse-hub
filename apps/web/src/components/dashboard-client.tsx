@@ -961,6 +961,12 @@ export function DashboardClient({ initialOverview }: Props) {
     [analyticsModel?.responseVelocity],
   );
 
+  const instagramPreviewSource = instagramPreviewUrl || instagramImageUrl;
+  const instagramPreviewMediaKind = useMemo(
+    () => detectInstagramPreviewMediaKind(instagramFile, instagramPreviewSource),
+    [instagramFile, instagramPreviewSource],
+  );
+
   const queueLabel = useMemo(() => {
     if (!isConversationsView) {
       return 'Nenhuma sessao selecionada';
@@ -3353,8 +3359,8 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!instagramFile && !instagramImageUrl.trim()) {
       pushToast({
         tone: 'error',
-        title: 'Imagem obrigatoria',
-        description: 'Envie um arquivo ou informe uma URL publica da imagem.',
+        title: 'Midia obrigatoria',
+        description: 'Envie um arquivo ou informe uma URL publica da midia.',
       });
       return;
     }
@@ -4574,8 +4580,8 @@ export function DashboardClient({ initialOverview }: Props) {
                     />
                     <MetricCard
                       compact
-                      detail={instagramStatus?.imageHostingConfigured ? 'Upload local habilitado para gerar URL publica' : 'Sem chave de hospedagem de imagem'}
-                      label="Image host"
+                      detail={instagramStatus?.imageHostingConfigured ? 'Hospedagem de midia configurada para arquivos locais' : 'Sem hospedagem configurada para upload local'}
+                      label="Media host"
                       tone="tertiary"
                       value={instagramStatus?.imageHostingConfigured ? 'ok' : 'url'}
                     />
@@ -4609,7 +4615,7 @@ export function DashboardClient({ initialOverview }: Props) {
                           <span className="rounded-full bg-white/5 px-2.5 py-1">container {lastInstagramPublish.creationId}</span>
                         </div>
                         <a className="mt-4 inline-flex text-sm text-[var(--primary)] underline-offset-4 hover:underline" href={lastInstagramPublish.imageUrl} rel="noreferrer" target="_blank">
-                          Abrir imagem publicada
+                          Abrir midia publicada
                         </a>
                       </div>
                     ) : (
@@ -4629,7 +4635,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       Publicar conteudo
                     </p>
                     <p className="mt-2 text-sm text-[var(--muted)]">
-                      Use uma URL publica ou envie uma imagem local. Feed exige legenda; story publica apenas a arte.
+                      Use uma URL publica ou envie imagem/video local. Feed com video sera publicado como reel; story aceita imagem ou video.
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 rounded-[1.35rem] border border-white/10 bg-white/5 p-2">
@@ -4653,10 +4659,10 @@ export function DashboardClient({ initialOverview }: Props) {
                 <div className="mt-6 space-y-4">
                   <div className="app-panel-contrast rounded-[24px] border border-dashed border-white/10 p-4">
                     <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">
-                      Imagem local
+                      Midia local
                     </p>
                     <input
-                      accept="image/*"
+                      accept="image/*,video/*"
                       className="mt-3 block w-full text-sm text-zinc-300 file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-4 file:py-2 file:text-sm file:text-white hover:file:bg-white/15"
                       disabled={isPublishingInstagram}
                       onChange={(event) => setInstagramFile(event.target.files?.[0] ?? null)}
@@ -4669,7 +4675,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
                   <Field
                     onChange={setInstagramImageUrl}
-                    placeholder="Ou cole uma URL publica da imagem"
+                    placeholder="Ou cole uma URL publica da midia"
                     value={instagramImageUrl}
                   />
 
@@ -4687,14 +4693,23 @@ export function DashboardClient({ initialOverview }: Props) {
                     </div>
                   )}
 
-                  {instagramPreviewUrl || instagramImageUrl ? (
+                  {instagramPreviewSource ? (
                     <div className="app-panel-contrast overflow-hidden rounded-[28px] border border-white/8 p-3">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        alt="Preview da publicacao"
-                        className="max-h-[360px] w-full rounded-[22px] object-contain"
-                        src={instagramPreviewUrl || instagramImageUrl}
-                      />
+                      {instagramPreviewMediaKind === 'video' ? (
+                        <video
+                          className="max-h-[360px] w-full rounded-[22px] object-contain"
+                          controls
+                          preload="metadata"
+                          src={instagramPreviewSource}
+                        />
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          alt="Preview da publicacao"
+                          className="max-h-[360px] w-full rounded-[22px] object-contain"
+                          src={instagramPreviewSource}
+                        />
+                      )}
                     </div>
                   ) : null}
 
@@ -9564,6 +9579,23 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function detectInstagramPreviewMediaKind(file: File | null, value: string) {
+  const mimeType = file?.type?.trim().toLowerCase() ?? '';
+  if (mimeType.startsWith('video/')) {
+    return 'video';
+  }
+  if (mimeType.startsWith('image/')) {
+    return 'image';
+  }
+
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed.endsWith('.mp4') || trimmed.endsWith('.mov') || trimmed.endsWith('.m4v') || trimmed.endsWith('.webm')) {
+    return 'video';
+  }
+
+  return 'image';
 }
 
 function loadStoredBoolean(key: string, fallback: boolean) {
