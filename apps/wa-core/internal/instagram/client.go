@@ -345,7 +345,7 @@ func (c *Client) waitForMediaReady(ctx context.Context, creationID string) error
 
 func (c *Client) getMediaStatus(ctx context.Context, creationID string) (mediaStatusResponse, error) {
 	params := url.Values{}
-	params.Set("fields", "status_code,status,status_message")
+	params.Set("fields", "status_code,status")
 	c.addGraphAuth(params)
 	endpoint := fmt.Sprintf("%s/%s?%s", c.graphBaseURL, url.PathEscape(creationID), params.Encode())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
