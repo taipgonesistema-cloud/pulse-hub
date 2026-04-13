@@ -396,6 +396,8 @@ export function DashboardClient({ initialOverview }: Props) {
   const [isLoadingAuditLogs, setIsLoadingAuditLogs] = useState(false);
   const [instagramStatus, setInstagramStatus] = useState<InstagramPublishStatus | null>(null);
   const [isLoadingInstagramStatus, setIsLoadingInstagramStatus] = useState(false);
+  const [isRefreshingInstagramStatus, setIsRefreshingInstagramStatus] = useState(false);
+  const [isPublishingInstagram, setIsPublishingInstagram] = useState(false);
   const [instagramPublishMode, setInstagramPublishMode] = useState<'feed' | 'story'>('feed');
   const [instagramCaption, setInstagramCaption] = useState('');
   const [instagramImageUrl, setInstagramImageUrl] = useState('');
@@ -3344,6 +3346,10 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
+    if (isPublishingInstagram) {
+      return;
+    }
+
     if (!instagramFile && !instagramImageUrl.trim()) {
       pushToast({
         tone: 'error',
@@ -3362,6 +3368,7 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
+    setIsPublishingInstagram(true);
     const published = await executeAction(async () => {
       const result = await publishInstagramContent({
         mode: instagramPublishMode,
@@ -3377,6 +3384,8 @@ export function DashboardClient({ initialOverview }: Props) {
       await loadInstagramIntegrationStatus().catch(() => undefined);
     }, {
       successMessage: instagramPublishMode === 'feed' ? 'Post publicado no Instagram' : 'Story publicado no Instagram',
+    }).finally(() => {
+      setIsPublishingInstagram(false);
     });
 
     if (published) {
@@ -3387,7 +3396,22 @@ export function DashboardClient({ initialOverview }: Props) {
         return '';
       });
     }
-  }, [canManageInstagram, executeAction, instagramCaption, instagramFile, instagramImageUrl, instagramPublishMode, loadInstagramIntegrationStatus, pushToast]);
+  }, [canManageInstagram, executeAction, instagramCaption, instagramFile, instagramImageUrl, instagramPublishMode, isPublishingInstagram, loadInstagramIntegrationStatus, pushToast]);
+
+  const refreshInstagramStatusAction = useCallback(async () => {
+    if (isRefreshingInstagramStatus) {
+      return;
+    }
+
+    setIsRefreshingInstagramStatus(true);
+    await executeAction(async () => {
+      await loadInstagramIntegrationStatus();
+    }, {
+      successMessage: 'Status do Instagram atualizado',
+    }).finally(() => {
+      setIsRefreshingInstagramStatus(false);
+    });
+  }, [executeAction, isRefreshingInstagramStatus, loadInstagramIntegrationStatus]);
 
   const createSession = () => {
     if (!canManageWorkspaceSessions || pendingSessionAction) {
@@ -4491,23 +4515,36 @@ export function DashboardClient({ initialOverview }: Props) {
               ) : null}
             </div>
             <button
-              className="rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white"
-              onClick={() => runAction(
-                settingsSection === 'users'
-                  ? loadWorkspaceUsers
-                  : settingsSection === 'labels'
-                    ? loadContactLabels
-                  : settingsSection === 'quickReplies'
-                    ? () => loadQuickRepliesList(quickReplySearchTerm)
-                    : settingsSection === 'instagram'
-                      ? loadInstagramIntegrationStatus
-                    : settingsSection === 'audit'
-                      ? loadAuditLogEntries
-                      : loadOverview,
-              )}
+              className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white disabled:cursor-wait disabled:opacity-70"
+              disabled={settingsSection === 'instagram' && isRefreshingInstagramStatus}
+              onClick={() => {
+                if (settingsSection === 'instagram') {
+                  void refreshInstagramStatusAction();
+                  return;
+                }
+
+                runAction(
+                  settingsSection === 'users'
+                    ? loadWorkspaceUsers
+                    : settingsSection === 'labels'
+                      ? loadContactLabels
+                    : settingsSection === 'quickReplies'
+                      ? () => loadQuickRepliesList(quickReplySearchTerm)
+                      : settingsSection === 'audit'
+                        ? loadAuditLogEntries
+                        : loadOverview,
+                );
+              }}
               type="button"
             >
-              Refresh {settingsSection}
+              {settingsSection === 'instagram' && isRefreshingInstagramStatus ? (
+                <>
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" strokeWidth={2.1} />
+                  Atualizando Instagram...
+                </>
+              ) : (
+                `Refresh ${settingsSection}`
+              )}
             </button>
           </div>
         </div>
@@ -4601,7 +4638,8 @@ export function DashboardClient({ initialOverview }: Props) {
                       return (
                         <button
                           key={mode}
-                          className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${active ? 'bg-[linear-gradient(135deg,#ff9ad7,#ff7cbc)] text-black shadow-[0_0_18px_rgba(255,124,188,0.24)]' : 'bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white'}`}
+                          className={`rounded-2xl px-4 py-3 text-sm font-medium transition disabled:cursor-wait disabled:opacity-60 ${active ? 'bg-[linear-gradient(135deg,#ff9ad7,#ff7cbc)] text-black shadow-[0_0_18px_rgba(255,124,188,0.24)]' : 'bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white'}`}
+                          disabled={isPublishingInstagram}
                           onClick={() => setInstagramPublishMode(mode)}
                           type="button"
                         >
@@ -4620,6 +4658,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     <input
                       accept="image/*"
                       className="mt-3 block w-full text-sm text-zinc-300 file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-4 file:py-2 file:text-sm file:text-white hover:file:bg-white/15"
+                      disabled={isPublishingInstagram}
                       onChange={(event) => setInstagramFile(event.target.files?.[0] ?? null)}
                       type="file"
                     />
@@ -4637,6 +4676,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   {instagramPublishMode === 'feed' ? (
                     <textarea
                       className="min-h-[132px] w-full rounded-[24px] border-0 border-b-2 border-transparent bg-[var(--surface-high)] px-4 py-3 text-sm text-white outline-none transition focus:border-[var(--primary)]"
+                      disabled={isPublishingInstagram}
                       onChange={(event) => setInstagramCaption(event.target.value)}
                       placeholder="Legenda do post no feed"
                       value={instagramCaption}
@@ -4664,17 +4704,32 @@ export function DashboardClient({ initialOverview }: Props) {
                     </div>
                   ) : null}
 
+                  {isPublishingInstagram ? (
+                    <div className="inline-flex items-center gap-2 rounded-full border border-pink-400/20 bg-pink-400/10 px-3 py-2 text-xs text-pink-100">
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" strokeWidth={2.1} />
+                      {instagramPublishMode === 'feed'
+                        ? 'Publicando no feed e aguardando confirmacao do Instagram...'
+                        : 'Publicando story e aguardando confirmacao do Instagram...'}
+                    </div>
+                  ) : null}
+
                   <div className="flex flex-wrap gap-3">
                     <button
-                      className="rounded-full bg-[linear-gradient(135deg,#ff9ad7,#ff7cbc)] px-5 py-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={isPending || isLoadingInstagramStatus || !instagramStatus?.configured}
+                      className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#ff9ad7,#ff7cbc)] px-5 py-3 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={isPending || isLoadingInstagramStatus || isPublishingInstagram || !instagramStatus?.configured}
                       onClick={() => void submitInstagramPublish()}
                       type="button"
                     >
-                      {instagramPublishMode === 'feed' ? 'Publicar no feed' : 'Publicar story'}
+                      {isPublishingInstagram ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" strokeWidth={2.1} />
+                      ) : null}
+                      {isPublishingInstagram
+                        ? (instagramPublishMode === 'feed' ? 'Publicando feed...' : 'Publicando story...')
+                        : (instagramPublishMode === 'feed' ? 'Publicar no feed' : 'Publicar story')}
                     </button>
                     <button
-                      className="rounded-full bg-white/5 px-5 py-3 text-sm text-[var(--muted)] hover:text-white"
+                      className="rounded-full bg-white/5 px-5 py-3 text-sm text-[var(--muted)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={isPublishingInstagram}
                       onClick={() => {
                         setInstagramCaption('');
                         setInstagramImageUrl('');
