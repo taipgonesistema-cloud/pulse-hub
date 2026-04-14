@@ -467,6 +467,8 @@ export function DashboardClient({ initialOverview }: Props) {
   const messageElementMapRef = useRef(new Map<string, HTMLDivElement>());
   const highlightedMessageTimerRef = useRef<number | null>(null);
   const notificationAudioContextRef = useRef<AudioContext | null>(null);
+  const previousAuthUserIdRef = useRef<string | null>(null);
+  const emptyTimelineRecoveryRef = useRef(new Set<string>());
   const currentView = viewTransition ?? activeView;
   const hasWorkspaceData = overview.sessions.length > 0 || overview.conversations.length > 0;
   const shouldShowInitialSkeleton = isPending && !hasWorkspaceData && !errorMessage;
@@ -1246,6 +1248,33 @@ export function DashboardClient({ initialOverview }: Props) {
       cancelled = true;
     };
   }, [router]);
+
+  useEffect(() => {
+    if (!isAuthReady || !authUser?.id) {
+      return;
+    }
+
+    const previousAuthUserId = previousAuthUserIdRef.current;
+    if (previousAuthUserId === authUser.id) {
+      return;
+    }
+
+    previousAuthUserIdRef.current = authUser.id;
+    messageCacheRef.current.clear();
+    messageLoadInFlightRef.current.clear();
+    messageReloadQueuedRef.current.clear();
+    messagePrefetchRef.current.clear();
+    emptyTimelineRecoveryRef.current.clear();
+    lastConversationAnchorRef.current = null;
+    preserveScrollOnOlderMessagesRef.current = false;
+    olderMessagesScrollSnapshotRef.current = null;
+    setMessages([]);
+    setPendingConversationId(null);
+    setSelectedSessionId('');
+    setSelectedConversationId('');
+    setSelectedContactId('');
+    setOpenedUnreadMarker(null);
+  }, [authUser?.id, isAuthReady]);
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -2222,6 +2251,55 @@ export function DashboardClient({ initialOverview }: Props) {
     isAuthReady,
     loadMessages,
     markConversationAsRead,
+  ]);
+
+  useEffect(() => {
+    if (
+      !isAuthReady ||
+      !hasLoadedInitialOverview ||
+      !activeSessionId ||
+      !activeConversationId ||
+      !selectedConversation ||
+      isLoadingMessages ||
+      messages.length > 0
+    ) {
+      return;
+    }
+
+    const hasSyncedConversationSignal =
+      selectedConversation.preview.trim() !== '' ||
+      selectedConversation.lastMessageAt.trim() !== '' ||
+      selectedConversation.unread > 0;
+
+    if (!hasSyncedConversationSignal) {
+      return;
+    }
+
+    const recoveryKey = [
+      authUser?.id ?? 'guest',
+      activeSessionId,
+      activeConversationId,
+      selectedConversation.lastMessageAt,
+      selectedConversation.preview,
+      String(selectedConversation.unread),
+    ].join('::');
+
+    if (emptyTimelineRecoveryRef.current.has(recoveryKey)) {
+      return;
+    }
+
+    emptyTimelineRecoveryRef.current.add(recoveryKey);
+    void loadMessages(activeSessionId, activeConversationId, { showLoading: false }).catch(() => undefined);
+  }, [
+    activeConversationId,
+    activeSessionId,
+    authUser?.id,
+    hasLoadedInitialOverview,
+    isAuthReady,
+    isLoadingMessages,
+    loadMessages,
+    messages.length,
+    selectedConversation,
   ]);
 
   useEffect(() => {
