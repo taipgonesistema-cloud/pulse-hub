@@ -328,7 +328,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [newTimelineMessageCount, setNewTimelineMessageCount] = useState(0);
   const [replyTargetMessage, setReplyTargetMessage] = useState<MessageRecord | null>(null);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-  const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
+  const [pendingConversationKey, setPendingConversationKey] = useState<string | null>(null);
   const [conversationFilter, setConversationFilter] = useState<ConversationFilter>('all');
   const [showConversationFilters, setShowConversationFilters] = useState(false);
   const [conversationSessionScope, setConversationSessionScope] = useState<'selected' | 'all'>('selected');
@@ -469,6 +469,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const notificationAudioContextRef = useRef<AudioContext | null>(null);
   const previousAuthUserIdRef = useRef<string | null>(null);
   const emptyTimelineRecoveryRef = useRef(new Set<string>());
+  const activeTimelineKeyRef = useRef('');
   const currentView = viewTransition ?? activeView;
   const hasWorkspaceData = overview.sessions.length > 0 || overview.conversations.length > 0;
   const shouldShowInitialSkeleton = isPending && !hasWorkspaceData && !errorMessage;
@@ -495,7 +496,7 @@ export function DashboardClient({ initialOverview }: Props) {
       !hasLoadedInitialQuickReplies);
   const deferredContactsSearch = useDeferredValue(contactsSearch);
   const deferredQuickReplySearch = useDeferredValue(quickReplySearchTerm);
-  const isConversationSwitching = pendingConversationId !== null;
+  const isConversationSwitching = pendingConversationKey !== null;
   const isDashboardView = activeView === 'dashboard';
   const isAnalyticsView = activeView === 'analytics';
   const isContactsView = activeView === 'contacts';
@@ -840,6 +841,12 @@ export function DashboardClient({ initialOverview }: Props) {
   const activeSessionId = selectedConversation?.sessionId ?? selectedSession?.id ?? null;
   const activeSessionStatus = overview.sessions.find((session) => session.id === activeSessionId)?.status ?? null;
   const activeConversationId = selectedConversation?.id ?? null;
+  useEffect(() => {
+    activeTimelineKeyRef.current =
+      activeSessionId && activeConversationId
+        ? buildConversationCacheKey(activeSessionId, activeConversationId)
+        : '';
+  }, [activeConversationId, activeSessionId]);
 
   const isConversationActivelyViewed = useCallback(
     (sessionId: string, conversationId: string) => {
@@ -1269,7 +1276,7 @@ export function DashboardClient({ initialOverview }: Props) {
     preserveScrollOnOlderMessagesRef.current = false;
     olderMessagesScrollSnapshotRef.current = null;
     setMessages([]);
-    setPendingConversationId(null);
+    setPendingConversationKey(null);
     setSelectedSessionId('');
     setSelectedConversationId('');
     setSelectedContactId('');
@@ -1803,9 +1810,11 @@ export function DashboardClient({ initialOverview }: Props) {
         try {
           const data = await fetchConversationMessages(sessionId, conversationId);
           messageCacheRef.current.set(cacheKey, data);
-          setMessages((current) =>
-            areMessageListsEquivalent(current, data) ? current : data,
-          );
+          if (activeTimelineKeyRef.current === cacheKey) {
+            setMessages((current) =>
+              areMessageListsEquivalent(current, data) ? current : data,
+            );
+          }
           setOverview((current) => {
             let hasChanges = false;
 
@@ -1836,8 +1845,8 @@ export function DashboardClient({ initialOverview }: Props) {
           });
         } finally {
           messageLoadInFlightRef.current.delete(cacheKey);
-          setPendingConversationId((current) =>
-            current === conversationId ? null : current,
+          setPendingConversationKey((current) =>
+            current === cacheKey ? null : current,
           );
           if (shouldShowLoading) {
             setIsLoadingMessages(false);
@@ -2013,13 +2022,15 @@ export function DashboardClient({ initialOverview }: Props) {
     const cacheKey = buildConversationCacheKey(conversation.sessionId, conversation.id);
     const cachedMessages = cacheKey ? messageCacheRef.current.get(cacheKey) : undefined;
 
-    setPendingConversationId(conversation.id);
+    setPendingConversationKey(cacheKey);
     setTypingConversationId(null);
     setIsLoadingMessages(true);
     if (cachedMessages) {
       setMessages((current) =>
         areMessageListsEquivalent(current, cachedMessages) ? current : cachedMessages,
       );
+    } else {
+      setMessages([]);
     }
     setSelectedSessionId(conversation.sessionId);
     setSelectedConversationId(conversation.id);
@@ -5692,7 +5703,10 @@ export function DashboardClient({ initialOverview }: Props) {
         <div className="h-[calc(100vh-11.5rem)] space-y-1.5 overflow-y-auto pr-1">
           {shouldShowInitialSkeleton ? <ListSkeleton rows={6} /> : null}
           {!shouldShowInitialSkeleton ? visibleSessionConversations.map((conversation) => {
-            const activeConversationKey = `${selectedConversation?.sessionId ?? selectedSessionId}:${pendingConversationId ?? selectedConversation?.id ?? ''}`;
+            const activeConversationKey = pendingConversationKey
+              ?? (selectedConversation?.sessionId && selectedConversation?.id
+                ? buildConversationCacheKey(selectedConversation.sessionId, selectedConversation.id)
+                : '');
             const currentConversationKey = `${conversation.sessionId}:${conversation.id}`;
             const active = activeConversationKey === currentConversationKey;
 
