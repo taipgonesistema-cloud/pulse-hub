@@ -44,6 +44,8 @@
   --bootstrap-orb-background: rgba(8, 10, 14, 0.94);
   --bootstrap-pill-background: rgba(10, 12, 16, 0.92);
   --bootstrap-footer-background: rgba(0, 0, 0, 0.2);
+  --bootstrap-grid-line: rgba(255, 255, 255, 0.05);
+  --bootstrap-scan-line: rgba(127, 175, 255, 0.18);
   --font-sans-stack: "Segoe UI", "Avenir Next", "Helvetica Neue", sans-serif;
   --font-display-stack: "Bahnschrift", "Arial Narrow", "Trebuchet MS", sans-serif;
 }
@@ -92,6 +94,8 @@
   --bootstrap-orb-background: rgba(255, 255, 255, 0.92);
   --bootstrap-pill-background: rgba(255, 255, 255, 0.86);
   --bootstrap-footer-background: rgba(255, 255, 255, 0.62);
+  --bootstrap-grid-line: rgba(24, 33, 45, 0.06);
+  --bootstrap-scan-line: rgba(47, 111, 223, 0.12);
   --color-white: #17212c;
   --color-black: #ffffff;
   --color-zinc-300: #324152;
@@ -202,6 +206,93 @@ a {
 
 .app-bootstrap-footer {
   background: var(--bootstrap-footer-background);
+}
+
+.app-bootstrap-grid {
+  background-image:
+    linear-gradient(var(--bootstrap-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bootstrap-grid-line) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.88), transparent 82%);
+}
+
+.app-bootstrap-scan {
+  background: linear-gradient(180deg, transparent 0%, var(--bootstrap-scan-line) 48%, transparent 100%);
+  animation: app-bootstrap-scan 4.8s linear infinite;
+}
+
+.app-bootstrap-float {
+  animation: app-bootstrap-float 6s ease-in-out infinite;
+}
+
+.app-bootstrap-pulse {
+  animation: app-bootstrap-pulse 2.3s ease-in-out infinite;
+}
+
+.app-bootstrap-ring-slow {
+  animation: app-bootstrap-spin 18s linear infinite;
+}
+
+.app-bootstrap-ring-reverse {
+  animation: app-bootstrap-spin-reverse 12s linear infinite;
+}
+
+.app-bootstrap-ring-fast {
+  animation: app-bootstrap-spin 4.8s linear infinite;
+}
+
+@keyframes app-bootstrap-scan {
+  from {
+    transform: translateY(-100%);
+  }
+
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes app-bootstrap-float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes app-bootstrap-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+@keyframes app-bootstrap-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes app-bootstrap-spin-reverse {
+  from {
+    transform: rotate(360deg);
+  }
+
+  to {
+    transform: rotate(0deg);
+  }
 }
 
 ::-webkit-scrollbar {
