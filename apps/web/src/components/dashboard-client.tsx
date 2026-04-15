@@ -324,6 +324,7 @@ export function DashboardClient({ initialOverview }: Props) {
     initialOverview.conversations[0]?.id ?? '',
   );
   const [messages, setMessages] = useState<MessageRecord[]>([]);
+  const [loadedMessagesConversationKey, setLoadedMessagesConversationKey] = useState('');
   const [visibleMessageCount, setVisibleMessageCount] = useState(INITIAL_VISIBLE_MESSAGE_COUNT);
   const [newTimelineMessageCount, setNewTimelineMessageCount] = useState(0);
   const [replyTargetMessage, setReplyTargetMessage] = useState<MessageRecord | null>(null);
@@ -841,12 +842,17 @@ export function DashboardClient({ initialOverview }: Props) {
   const activeSessionId = selectedConversation?.sessionId ?? selectedSession?.id ?? null;
   const activeSessionStatus = overview.sessions.find((session) => session.id === activeSessionId)?.status ?? null;
   const activeConversationId = selectedConversation?.id ?? null;
+  const activeConversationKey = activeSessionId && activeConversationId
+    ? buildConversationCacheKey(activeSessionId, activeConversationId)
+    : '';
   useEffect(() => {
-    activeTimelineKeyRef.current =
-      activeSessionId && activeConversationId
-        ? buildConversationCacheKey(activeSessionId, activeConversationId)
-        : '';
-  }, [activeConversationId, activeSessionId]);
+    activeTimelineKeyRef.current = activeConversationKey;
+  }, [activeConversationKey]);
+
+  const timelineMessages = useMemo(
+    () => (loadedMessagesConversationKey === activeConversationKey ? messages : []),
+    [activeConversationKey, loadedMessagesConversationKey, messages],
+  );
 
   const isConversationActivelyViewed = useCallback(
     (sessionId: string, conversationId: string) => {
@@ -872,22 +878,22 @@ export function DashboardClient({ initialOverview }: Props) {
       return -1;
     }
 
-    const unreadCount = Math.min(openedUnreadMarker.unreadCount, messages.length);
+    const unreadCount = Math.min(openedUnreadMarker.unreadCount, timelineMessages.length);
     if (unreadCount <= 0) {
       return -1;
     }
 
-    return Math.max(messages.length - unreadCount, 0);
-  }, [activeConversationId, messages.length, openedUnreadMarker]);
+    return Math.max(timelineMessages.length - unreadCount, 0);
+  }, [activeConversationId, openedUnreadMarker, timelineMessages.length]);
 
   const visibleMessageStartIndex = useMemo(
-    () => Math.max(messages.length - visibleMessageCount, 0),
-    [messages.length, visibleMessageCount],
+    () => Math.max(timelineMessages.length - visibleMessageCount, 0),
+    [timelineMessages.length, visibleMessageCount],
   );
 
   const visibleMessages = useMemo(
-    () => messages.slice(visibleMessageStartIndex),
-    [messages, visibleMessageStartIndex],
+    () => timelineMessages.slice(visibleMessageStartIndex),
+    [timelineMessages, visibleMessageStartIndex],
   );
 
   const visibleUnreadSeparatorIndex = useMemo(() => {
@@ -899,8 +905,8 @@ export function DashboardClient({ initialOverview }: Props) {
   }, [unreadSeparatorIndex, visibleMessageStartIndex]);
 
   const messagesById = useMemo(
-    () => new Map(messages.map((message) => [message.id, message])),
-    [messages],
+    () => new Map(timelineMessages.map((message) => [message.id, message])),
+    [timelineMessages],
   );
 
   const dashboardConversations = useMemo(
@@ -1275,6 +1281,7 @@ export function DashboardClient({ initialOverview }: Props) {
     lastConversationAnchorRef.current = null;
     preserveScrollOnOlderMessagesRef.current = false;
     olderMessagesScrollSnapshotRef.current = null;
+    setLoadedMessagesConversationKey('');
     setMessages([]);
     setPendingConversationKey(null);
     setSelectedSessionId('');
@@ -1811,6 +1818,7 @@ export function DashboardClient({ initialOverview }: Props) {
           const data = await fetchConversationMessages(sessionId, conversationId);
           messageCacheRef.current.set(cacheKey, data);
           if (activeTimelineKeyRef.current === cacheKey) {
+            setLoadedMessagesConversationKey(cacheKey);
             setMessages((current) =>
               areMessageListsEquivalent(current, data) ? current : data,
             );
@@ -2026,10 +2034,12 @@ export function DashboardClient({ initialOverview }: Props) {
     setTypingConversationId(null);
     setIsLoadingMessages(true);
     if (cachedMessages) {
+      setLoadedMessagesConversationKey(cacheKey);
       setMessages((current) =>
         areMessageListsEquivalent(current, cachedMessages) ? current : cachedMessages,
       );
     } else {
+      setLoadedMessagesConversationKey('');
       setMessages([]);
     }
     setSelectedSessionId(conversation.sessionId);
@@ -2244,6 +2254,7 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     if (!activeSessionId || !activeConversationId) {
+      setLoadedMessagesConversationKey('');
       setMessages([]);
       return;
     }
@@ -2253,6 +2264,7 @@ export function DashboardClient({ initialOverview }: Props) {
     );
 
     void loadMessages(activeSessionId, activeConversationId).catch(() => {
+      setLoadedMessagesConversationKey('');
       setMessages([]);
     });
   }, [
@@ -2272,7 +2284,7 @@ export function DashboardClient({ initialOverview }: Props) {
       !activeConversationId ||
       !selectedConversation ||
       isLoadingMessages ||
-      messages.length > 0
+      timelineMessages.length > 0
     ) {
       return;
     }
@@ -2309,7 +2321,7 @@ export function DashboardClient({ initialOverview }: Props) {
     isAuthReady,
     isLoadingMessages,
     loadMessages,
-    messages.length,
+    timelineMessages.length,
     selectedConversation,
   ]);
 
@@ -2676,9 +2688,9 @@ export function DashboardClient({ initialOverview }: Props) {
   }, []);
 
   const jumpToMessage = useCallback((messageId: string) => {
-    const targetIndex = messages.findIndex((message) => message.id === messageId);
+    const targetIndex = timelineMessages.findIndex((message) => message.id === messageId);
     if (targetIndex !== -1 && targetIndex < visibleMessageStartIndex) {
-      setVisibleMessageCount(messages.length - targetIndex + MESSAGE_PAGE_SIZE);
+      setVisibleMessageCount(timelineMessages.length - targetIndex + MESSAGE_PAGE_SIZE);
     }
 
     const target = messageElementMapRef.current.get(messageId);
@@ -2707,7 +2719,7 @@ export function DashboardClient({ initialOverview }: Props) {
     highlightedMessageTimerRef.current = window.setTimeout(() => {
       setHighlightedMessageId((current) => (current === messageId ? null : current));
     }, 2200);
-  }, [messages, visibleMessageStartIndex]);
+  }, [timelineMessages, visibleMessageStartIndex]);
 
   const loadOlderMessages = useCallback(() => {
     const container = messagesRef.current;
@@ -2828,6 +2840,7 @@ export function DashboardClient({ initialOverview }: Props) {
       );
 
       if (activeSessionId === sessionId && activeConversationId === conversationId) {
+        setLoadedMessagesConversationKey(cacheKey);
         setMessages((current) => mergeMessageIntoTimeline(current, message));
       }
 
@@ -3607,6 +3620,7 @@ export function DashboardClient({ initialOverview }: Props) {
         if (!nextSelectedSessionId) {
           setSelectedConversationId('');
           setSelectedContactId('');
+          setLoadedMessagesConversationKey('');
           setMessages([]);
           navigateToView('settings');
         }
@@ -5871,7 +5885,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 <ConversationLoadingState contact={selectedConversation?.contact} />
               ) : (
                 <div className="mx-auto flex max-w-none flex-col gap-4">
-                  {isLoadingMessages && messages.length === 0 ? (
+                  {isLoadingMessages && timelineMessages.length === 0 ? (
                     <ConversationTimelineSkeleton />
                   ) : null}
 
@@ -5944,7 +5958,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     </div>
                   ) : null}
 
-                  {messages.length === 0 && !isLoadingMessages ? (
+                  {timelineMessages.length === 0 && !isLoadingMessages ? (
                     <EmptyStateCard
                       description="Quando esta conversa tiver historico sincronizado, a timeline completa aparece aqui com mensagens e midias."
                       title="Timeline aguardando mensagens"
