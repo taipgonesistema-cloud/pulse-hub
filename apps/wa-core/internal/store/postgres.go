@@ -239,7 +239,9 @@ func (s *Store) migrate(ctx context.Context) error {
 	CREATE INDEX IF NOT EXISTS idx_contacts_display_name ON contacts(display_name);
 	CREATE INDEX IF NOT EXISTS idx_chats_last_message_at ON chats(last_message_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_chats_session_id ON chats(session_id, last_message_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_chats_session_unread ON chats(session_id, unread_count);
 	CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp ON messages(chat_jid, timestamp ASC);
+	CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp_desc ON messages(chat_jid, timestamp DESC, id DESC);
 	CREATE INDEX IF NOT EXISTS idx_messages_session_remote_id ON messages(session_id, remote_id);
 	CREATE INDEX IF NOT EXISTS idx_contact_kanban_stage_updated_at ON contact_kanban_stage(updated_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_contact_kanban_board_updated_at ON contact_kanban_board(updated_at DESC);
@@ -1385,6 +1387,32 @@ func (s *Store) ListChatsBySession(ctx context.Context, sessionID string) ([]mod
 	return chats, rows.Err()
 }
 
+func (s *Store) GetChatStatsBySession(ctx context.Context, sessionID string) (waiting int, unread int, err error) {
+	sessionID = normalizeSessionID(sessionID)
+	row := s.db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE unread_count > 0)::int,
+			COALESCE(SUM(unread_count), 0)::int
+		FROM (
+			SELECT
+				COALESCE(NULLIF(remote_jid, ''), jid) AS conversation_id,
+				MAX(unread_count) AS unread_count
+			FROM chats
+			WHERE session_id = $1
+				AND jid NOT LIKE '%@broadcast'
+				AND jid NOT LIKE '%@newsletter'
+				AND (remote_jid = '' OR (remote_jid NOT LIKE '%@broadcast' AND remote_jid NOT LIKE '%@newsletter'))
+			GROUP BY COALESCE(NULLIF(remote_jid, ''), jid)
+		) AS stats
+	`, sessionID)
+
+	if err := row.Scan(&waiting, &unread); err != nil {
+		return 0, 0, fmt.Errorf("get chat stats for session %s: %w", sessionID, err)
+	}
+
+	return waiting, unread, nil
+}
+
 func (s *Store) SaveMessage(ctx context.Context, message models.Message) (bool, error) {
 	return s.SaveMessageBySession(ctx, models.DefaultSessionID, message)
 	/*
@@ -1709,6 +1737,90 @@ func (s *Store) ListMessagesByChatForSession(ctx context.Context, sessionID, cha
 	}
 	defer rows.Close()
 
+	items := make([]models.Message, 0)
+	for rows.Next() {
+		var message models.Message
+		var storedSessionID, remoteID, remoteChatJID string
+		if err := rows.Scan(&message.ID, &storedSessionID, &remoteID, &message.ChatJID, &remoteChatJID, &message.SenderJID, &message.Author, &message.FromMe, &message.AckStatus, &message.Kind, &message.MimeType, &message.FileName, &message.Text, &message.RawJSON, &message.Timestamp); err != nil {
+			return nil, fmt.Errorf("scan message by session: %w", err)
+		}
+		message.SessionID = normalizeSessionID(storedSessionID)
+		if strings.TrimSpace(remoteID) != "" {
+			message.ID = strings.TrimSpace(remoteID)
+		}
+		if strings.TrimSpace(remoteChatJID) != "" {
+			message.ChatJID = strings.TrimSpace(remoteChatJID)
+		}
+		items = append(items, message)
+	}
+
+	return items, rows.Err()
+}
+
+func (s *Store) ListMessagesByChatForSessionPage(ctx context.Context, sessionID, chatJID string, limit int, before string) ([]models.Message, error) {
+	sessionID = normalizeSessionID(sessionID)
+	limit = normalizeMessageLimit(limit)
+	storageChatJID := storageChatKey(sessionID, chatJID)
+
+	whereClause := "WHERE chat_jid = $1"
+	args := []any{storageChatJID, limit}
+	limitParam := 2
+	if before = strings.TrimSpace(before); before != "" {
+		whereClause += " AND timestamp < $2"
+		args = []any{storageChatJID, before, limit}
+		limitParam = 3
+	}
+
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`
+		SELECT id, session_id, remote_id, chat_jid, remote_chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type, file_name, text, raw_json, timestamp
+		FROM (
+			SELECT id, session_id, remote_id, chat_jid, remote_chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type, file_name, text, raw_json, timestamp
+			FROM messages
+			%s
+			ORDER BY timestamp DESC, id DESC
+			LIMIT $%d
+		) AS recent_messages
+		ORDER BY timestamp ASC, id ASC
+	`, whereClause, limitParam), args...)
+	if err != nil {
+		return nil, fmt.Errorf("list message page for chat %s in session %s: %w", chatJID, sessionID, err)
+	}
+	defer rows.Close()
+
+	return scanSessionMessages(rows)
+}
+
+func (s *Store) ListMessagesByChatForSessionSince(ctx context.Context, sessionID, chatJID string, since string, limit int) ([]models.Message, error) {
+	sessionID = normalizeSessionID(sessionID)
+	limit = normalizeMessageLimit(limit)
+	storageChatJID := storageChatKey(sessionID, chatJID)
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, session_id, remote_id, chat_jid, remote_chat_jid, sender_jid, author, from_me, ack_status, kind, mime_type, file_name, text, raw_json, timestamp
+		FROM messages
+		WHERE chat_jid = $1 AND timestamp >= $2
+		ORDER BY timestamp ASC, id ASC
+		LIMIT $3
+	`, storageChatJID, strings.TrimSpace(since), limit)
+	if err != nil {
+		return nil, fmt.Errorf("list recent messages for chat %s in session %s: %w", chatJID, sessionID, err)
+	}
+	defer rows.Close()
+
+	return scanSessionMessages(rows)
+}
+
+func normalizeMessageLimit(limit int) int {
+	if limit <= 0 {
+		return 120
+	}
+	if limit > 500 {
+		return 500
+	}
+	return limit
+}
+
+func scanSessionMessages(rows *sql.Rows) ([]models.Message, error) {
 	items := make([]models.Message, 0)
 	for rows.Next() {
 		var message models.Message

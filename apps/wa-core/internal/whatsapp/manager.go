@@ -644,6 +644,54 @@ func (m *Manager) ListMessagesBySession(ctx context.Context, sessionID, chatJID 
 	return filterRenderableMessages(mergeMessages(primary, secondary)), nil
 }
 
+func (m *Manager) ListMessagesPageBySession(ctx context.Context, sessionID, chatJID string, limit int, before string) ([]models.Message, error) {
+	resolved, err := m.ResolveConversationJIDBySession(ctx, sessionID, chatJID)
+	if err != nil {
+		return nil, err
+	}
+	if resolved == chatJID {
+		messages, err := m.store.ListMessagesByChatForSessionPage(ctx, sessionID, chatJID, limit, before)
+		if err != nil {
+			return nil, err
+		}
+		return filterRenderableMessages(messages), nil
+	}
+
+	primary, err := m.store.ListMessagesByChatForSessionPage(ctx, sessionID, resolved, limit, before)
+	if err != nil {
+		return nil, err
+	}
+	secondary, err := m.store.ListMessagesByChatForSessionPage(ctx, sessionID, chatJID, limit, before)
+	if err != nil {
+		return nil, err
+	}
+	return limitLatestMessages(filterRenderableMessages(mergeMessages(primary, secondary)), limit), nil
+}
+
+func (m *Manager) ListRecentMessagesBySession(ctx context.Context, sessionID, chatJID string, since string, limit int) ([]models.Message, error) {
+	resolved, err := m.ResolveConversationJIDBySession(ctx, sessionID, chatJID)
+	if err != nil {
+		return nil, err
+	}
+	if resolved == chatJID {
+		messages, err := m.store.ListMessagesByChatForSessionSince(ctx, sessionID, chatJID, since, limit)
+		if err != nil {
+			return nil, err
+		}
+		return filterRenderableMessages(messages), nil
+	}
+
+	primary, err := m.store.ListMessagesByChatForSessionSince(ctx, sessionID, resolved, since, limit)
+	if err != nil {
+		return nil, err
+	}
+	secondary, err := m.store.ListMessagesByChatForSessionSince(ctx, sessionID, chatJID, since, limit)
+	if err != nil {
+		return nil, err
+	}
+	return limitLatestMessages(filterRenderableMessages(mergeMessages(primary, secondary)), limit), nil
+}
+
 func (m *Manager) ResolveConversationJID(ctx context.Context, chatJID string) (string, error) {
 	return m.ResolveConversationJIDBySession(ctx, models.DefaultSessionID, chatJID)
 }
@@ -803,6 +851,7 @@ func (m *Manager) SendTextBySession(ctx context.Context, sessionID string, req m
 			MessageID:  message.ID,
 			Direction:  "outgoing",
 			Text:       message.Text,
+			Payload:    messageRealtimePayload(message),
 			OccurredAt: message.Timestamp,
 		})
 	}
@@ -892,6 +941,7 @@ func (m *Manager) SendMediaBySession(ctx context.Context, sessionID string, req 
 			MessageID:  message.ID,
 			Direction:  "outgoing",
 			Text:       message.Text,
+			Payload:    messageRealtimePayload(message),
 			OccurredAt: message.Timestamp,
 		})
 	}
@@ -1008,6 +1058,7 @@ func (m *Manager) SendReactionBySession(ctx context.Context, sessionID string, r
 			MessageID:  message.ID,
 			Direction:  "outgoing",
 			Text:       message.Text,
+			Payload:    messageRealtimePayload(message),
 			OccurredAt: message.Timestamp,
 		})
 	}
@@ -1798,14 +1849,19 @@ func (m *Manager) ingestMessage(
 	if fromMe {
 		direction = "outgoing"
 	}
+	eventChatJID := chatJID
+	if canonicalJID, err := m.CanonicalConversationJIDBySession(ctx, sessionID, chatJID); err == nil && canonicalJID != "" {
+		eventChatJID = canonicalJID
+	}
 
 	m.broadcast(models.RealtimeEvent{
 		SessionID:  sessionID,
 		Kind:       "message.new",
-		ChatJID:    chatJID,
+		ChatJID:    eventChatJID,
 		MessageID:  messageID,
 		Direction:  direction,
 		Text:       body,
+		Payload:    messageRealtimePayload(message),
 		OccurredAt: message.Timestamp,
 	})
 
@@ -2565,6 +2621,21 @@ func mergeMessages(primary, secondary []models.Message) []models.Message {
 		return merged[i].Timestamp < merged[j].Timestamp
 	})
 	return merged
+}
+
+func limitLatestMessages(messages []models.Message, limit int) []models.Message {
+	if limit <= 0 || len(messages) <= limit {
+		return messages
+	}
+	return messages[len(messages)-limit:]
+}
+
+func messageRealtimePayload(message models.Message) string {
+	payload, err := json.Marshal(message)
+	if err != nil {
+		return ""
+	}
+	return string(payload)
 }
 
 func filterRenderableMessages(messages []models.Message) []models.Message {

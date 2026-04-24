@@ -707,7 +707,18 @@ func (a *API) handleConversationMessages(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	messages, err := a.manager.ListMessagesBySession(r.Context(), sessionID, jid)
+	limit := 0
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		limit, _ = strconv.Atoi(rawLimit)
+	}
+	before := strings.TrimSpace(r.URL.Query().Get("before"))
+
+	var messages []models.Message
+	if limit > 0 || before != "" {
+		messages, err = a.manager.ListMessagesPageBySession(r.Context(), sessionID, jid, limit, before)
+	} else {
+		messages, err = a.manager.ListMessagesBySession(r.Context(), sessionID, jid)
+	}
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
@@ -1645,7 +1656,11 @@ func (a *API) handleSessionStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOverview, error) {
-	sessions, err := a.buildSessionRecords(ctx)
+	onlineUsers, err := a.store.CountActiveAuthSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sessions, err := a.buildSessionRecordsWithActiveCount(ctx, onlineUsers)
 	if err != nil {
 		return nil, err
 	}
@@ -1683,10 +1698,6 @@ func (a *API) buildDashboardOverview(ctx context.Context) (*models.DashboardOver
 
 	connectedNumbers := 0
 	activeSessions := 0
-	onlineUsers, err := a.store.CountActiveAuthSessions(ctx)
-	if err != nil {
-		return nil, err
-	}
 	waitingConversations := 0
 	for _, session := range sessions {
 		connectedNumbers++
@@ -2374,7 +2385,7 @@ func (a *API) buildResponseVelocityAnalytics(ctx context.Context) (models.Dashbo
 				continue
 			}
 
-			messages, err := a.manager.ListMessagesBySession(ctx, session.ID, chat.JID)
+			messages, err := a.manager.ListRecentMessagesBySession(ctx, session.ID, chat.JID, previousCutoff.Format(time.RFC3339), 1000)
 			if err != nil {
 				return analytics, err
 			}
@@ -2576,6 +2587,14 @@ func averageInt(values []int) int {
 }
 
 func (a *API) buildSessionRecords(ctx context.Context) ([]models.SessionRecord, error) {
+	activeAuthSessions, err := a.store.CountActiveAuthSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return a.buildSessionRecordsWithActiveCount(ctx, activeAuthSessions)
+}
+
+func (a *API) buildSessionRecordsWithActiveCount(ctx context.Context, activeAuthSessions int) ([]models.SessionRecord, error) {
 	sessions, err := a.manager.ListSessions(ctx)
 	if err != nil {
 		return nil, err
@@ -2586,7 +2605,7 @@ func (a *API) buildSessionRecords(ctx context.Context) ([]models.SessionRecord, 
 
 	items := make([]models.SessionRecord, 0, len(sessions))
 	for index := range sessions {
-		compat, err := a.sessionToCompat(ctx, &sessions[index])
+		compat, err := a.sessionToCompatWithActiveCount(ctx, &sessions[index], activeAuthSessions)
 		if err != nil {
 			return nil, err
 		}
@@ -2597,36 +2616,22 @@ func (a *API) buildSessionRecords(ctx context.Context) ([]models.SessionRecord, 
 }
 
 func (a *API) sessionToCompat(ctx context.Context, session *models.Session) (models.SessionRecord, error) {
-	waiting := 0
-	unread := 0
-	chats, err := a.manager.ListChatsBySession(ctx, session.ID)
+	activeAuthSessions, err := a.store.CountActiveAuthSessions(ctx)
+	if err != nil {
+		return models.SessionRecord{}, err
+	}
+	return a.sessionToCompatWithActiveCount(ctx, session, activeAuthSessions)
+}
+
+func (a *API) sessionToCompatWithActiveCount(ctx context.Context, session *models.Session, activeAuthSessions int) (models.SessionRecord, error) {
+	waiting, unread, err := a.store.GetChatStatsBySession(ctx, session.ID)
 	if err != nil {
 		return models.SessionRecord{}, err
 	}
 
-	seen := make(map[string]struct{}, len(chats))
-	for _, chat := range chats {
-		canonicalJID, err := a.manager.CanonicalConversationJIDBySession(ctx, session.ID, chat.JID)
-		if err != nil {
-			canonicalJID = chat.JID
-		}
-		if _, ok := seen[canonicalJID]; ok {
-			continue
-		}
-		seen[canonicalJID] = struct{}{}
-		if chat.UnreadCount > 0 {
-			waiting++
-		}
-		unread += chat.UnreadCount
-	}
-
 	attendants := 0
 	if session.Status == models.SessionStatusActive {
-		count, err := a.store.CountActiveAuthSessions(ctx)
-		if err != nil {
-			return models.SessionRecord{}, err
-		}
-		attendants = count
+		attendants = activeAuthSessions
 	}
 
 	return models.SessionRecord{
@@ -2674,7 +2679,6 @@ func (a *API) buildConversationRecordsForSession(ctx context.Context, session *m
 	}
 
 	conversationsByID := make(map[string]models.ConversationRecord, len(chats))
-	latestMessageByConversation := make(map[string]models.Message, len(chats))
 	for _, chat := range chats {
 		canonicalJID, err := a.manager.CanonicalConversationJIDBySession(ctx, session.ID, chat.JID)
 		if err != nil {
@@ -2698,21 +2702,8 @@ func (a *API) buildConversationRecordsForSession(ctx context.Context, session *m
 			name = chat.JID
 		}
 
-		latestMessage, ok := latestMessageByConversation[canonicalJID]
-		if !ok {
-			messages, err := a.manager.ListMessagesBySession(ctx, session.ID, chat.JID)
-			if err == nil && len(messages) > 0 {
-				latestMessage = latestPreviewMessage(messages)
-				latestMessageByConversation[canonicalJID] = latestMessage
-			}
-		}
-
 		preview := fallbackText(chat.LastMessageText, "Sem mensagem recente.")
 		lastMessageAt := fallbackText(chat.LastMessageAt, session.UpdatedAt)
-		if latestMessage.ID != "" {
-			preview = fallbackText(latestMessage.Text, preview)
-			lastMessageAt = fallbackText(latestMessage.Timestamp, lastMessageAt)
-		}
 
 		candidate := models.ConversationRecord{
 			ID:            canonicalJID,

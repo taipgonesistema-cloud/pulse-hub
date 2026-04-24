@@ -122,6 +122,7 @@ const messageReactionOptions = ['👍', '❤️', '😂', '😮', '🙏'];
 
 const INITIAL_VISIBLE_MESSAGE_COUNT = 80;
 const MESSAGE_PAGE_SIZE = 80;
+const MESSAGE_FETCH_LIMIT = 80;
 
 const contactsKanbanStages = [
   {
@@ -243,6 +244,24 @@ type RealtimeSocketEvent = {
   occurredAt?: string;
 };
 
+type RealtimeStoredMessage = {
+  sessionId?: string;
+  id: string;
+  chatJid: string;
+  author?: string;
+  fromMe?: boolean;
+  kind?: string;
+  mimeType?: string;
+  fileName?: string;
+  text?: string;
+  timestamp: string;
+};
+
+type FetchedMessagesResult = {
+  messages: MessageRecord[];
+  hasMore: boolean;
+};
+
 type ToastItem = {
   id: number;
   tone: 'success' | 'error' | 'info';
@@ -326,6 +345,8 @@ export function DashboardClient({ initialOverview }: Props) {
   const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [loadedMessagesConversationKey, setLoadedMessagesConversationKey] = useState('');
   const [visibleMessageCount, setVisibleMessageCount] = useState(INITIAL_VISIBLE_MESSAGE_COUNT);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   const [newTimelineMessageCount, setNewTimelineMessageCount] = useState(0);
   const [replyTargetMessage, setReplyTargetMessage] = useState<MessageRecord | null>(null);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -444,6 +465,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const overviewLoadInFlightRef = useRef<Promise<void> | null>(null);
   const overviewRefreshQueuedRef = useRef(false);
   const messageCacheRef = useRef(new Map<string, MessageRecord[]>());
+  const messageHasOlderRef = useRef(new Map<string, boolean>());
   const messageLoadInFlightRef = useRef(new Map<string, Promise<void>>());
   const messageReloadQueuedRef = useRef(new Set<string>());
   const messagePrefetchRef = useRef(new Set<string>());
@@ -1274,6 +1296,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
     previousAuthUserIdRef.current = authUser.id;
     messageCacheRef.current.clear();
+    messageHasOlderRef.current.clear();
     messageLoadInFlightRef.current.clear();
     messageReloadQueuedRef.current.clear();
     messagePrefetchRef.current.clear();
@@ -1283,6 +1306,8 @@ export function DashboardClient({ initialOverview }: Props) {
     olderMessagesScrollSnapshotRef.current = null;
     setLoadedMessagesConversationKey('');
     setMessages([]);
+    setHasOlderMessages(false);
+    setIsLoadingOlderMessages(false);
     setPendingConversationKey(null);
     setSelectedSessionId('');
     setSelectedConversationId('');
@@ -1782,17 +1807,30 @@ export function DashboardClient({ initialOverview }: Props) {
     return () => URL.revokeObjectURL(preview);
   }, [instagramFile]);
 
-  const fetchConversationMessages = useCallback(async (sessionId: string, conversationId: string) => {
-    const response = await authenticatedFetch(
-      `${apiUrl}/whatsapp/sessions/${sessionId}/conversations/${conversationId}/messages`,
-      { cache: 'no-store' },
+  const fetchConversationMessages = useCallback(async (
+    sessionId: string,
+    conversationId: string,
+    options?: { before?: string; limit?: number },
+  ): Promise<FetchedMessagesResult> => {
+    const requestedLimit = Math.max(1, options?.limit ?? MESSAGE_FETCH_LIMIT);
+    const url = new URL(
+      `${apiUrl}/whatsapp/sessions/${encodeURIComponent(sessionId)}/conversations/${encodeURIComponent(conversationId)}/messages`,
     );
+    url.searchParams.set('limit', String(requestedLimit + 1));
+    if (options?.before) {
+      url.searchParams.set('before', options.before);
+    }
+
+    const response = await authenticatedFetch(url.toString(), { cache: 'no-store' });
 
     if (!response.ok) {
       throw new Error('Nao foi possivel carregar as mensagens.');
     }
 
-    return (await response.json()) as MessageRecord[];
+    const records = (await response.json()) as MessageRecord[];
+    const hasMore = records.length > requestedLimit;
+    const messages = hasMore ? records.slice(records.length - requestedLimit) : records;
+    return { messages, hasMore };
   }, [authenticatedFetch]);
 
   const loadMessages = useCallback(
@@ -1815,10 +1853,13 @@ export function DashboardClient({ initialOverview }: Props) {
         }
 
         try {
-          const data = await fetchConversationMessages(sessionId, conversationId);
+          const result = await fetchConversationMessages(sessionId, conversationId);
+          const data = result.messages;
           messageCacheRef.current.set(cacheKey, data);
+          messageHasOlderRef.current.set(cacheKey, result.hasMore);
           if (activeTimelineKeyRef.current === cacheKey) {
             setLoadedMessagesConversationKey(cacheKey);
+            setHasOlderMessages(result.hasMore);
             setMessages((current) =>
               areMessageListsEquivalent(current, data) ? current : data,
             );
@@ -1881,8 +1922,9 @@ export function DashboardClient({ initialOverview }: Props) {
 
       messagePrefetchRef.current.add(cacheKey);
       try {
-        const data = await fetchConversationMessages(sessionId, conversationId);
-        messageCacheRef.current.set(cacheKey, data);
+        const result = await fetchConversationMessages(sessionId, conversationId);
+        messageCacheRef.current.set(cacheKey, result.messages);
+        messageHasOlderRef.current.set(cacheKey, result.hasMore);
       } catch {
         return;
       } finally {
@@ -2035,11 +2077,13 @@ export function DashboardClient({ initialOverview }: Props) {
     setIsLoadingMessages(true);
     if (cachedMessages) {
       setLoadedMessagesConversationKey(cacheKey);
+      setHasOlderMessages(messageHasOlderRef.current.get(cacheKey) ?? false);
       setMessages((current) =>
         areMessageListsEquivalent(current, cachedMessages) ? current : cachedMessages,
       );
     } else {
       setLoadedMessagesConversationKey('');
+      setHasOlderMessages(false);
       setMessages([]);
     }
     setSelectedSessionId(conversation.sessionId);
@@ -2229,8 +2273,8 @@ export function DashboardClient({ initialOverview }: Props) {
     const pageVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
     const intervalMs = isRealtimeConnected
       ? pageVisible
-        ? 18000
-        : 30000
+        ? 60000
+        : 120000
       : activeSessionStatus === 'active'
         ? 8000
         : ['initializing', 'qr_ready', 'syncing'].includes(activeSessionStatus ?? '')
@@ -2256,6 +2300,7 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!activeSessionId || !activeConversationId) {
       setLoadedMessagesConversationKey('');
       setMessages([]);
+      setHasOlderMessages(false);
       return;
     }
 
@@ -2359,7 +2404,7 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
-    const intervalMs = isRealtimeConnected ? 18000 : 8000;
+    const intervalMs = isRealtimeConnected ? 60000 : 8000;
 
     const interval = window.setInterval(() => {
       void loadMessages(activeSessionId, activeConversationId, {
@@ -2417,15 +2462,24 @@ export function DashboardClient({ initialOverview }: Props) {
           return;
         }
 
+        const realtimeMessage = buildRealtimeMessageRecord(payload);
+
         const shouldRefreshOverviewForEvent = () => {
           if (payload.kind === 'connection') {
             return true;
           }
 
+          if (payload.kind === 'message.new' && realtimeMessage) {
+            return false;
+          }
+
+          if (payload.kind === 'message.ack') {
+            return false;
+          }
+
           if (
             payload.kind !== 'chat.new' &&
-            payload.kind !== 'message.new' &&
-            payload.kind !== 'message.ack'
+            payload.kind !== 'message.new'
           ) {
             return false;
           }
@@ -2473,6 +2527,41 @@ export function DashboardClient({ initialOverview }: Props) {
 
         if (shouldRefreshOverviewForEvent()) {
           scheduleOverviewRefresh();
+        }
+
+        if (payload.kind === 'message.new' && realtimeMessage && payload.sessionId) {
+          const conversationId = payload.chatJid || realtimeMessage.conversationId;
+          const cacheKey = buildConversationCacheKey(payload.sessionId, conversationId);
+          messageCacheRef.current.set(
+            cacheKey,
+            mergeMessageIntoTimeline(messageCacheRef.current.get(cacheKey) ?? [], realtimeMessage),
+          );
+
+          const {
+            isConversationsView,
+            activeSessionId,
+            activeConversationId,
+          } = realtimeContextRef.current;
+          const isActiveConversation = Boolean(
+            isConversationsView &&
+            activeSessionId === payload.sessionId &&
+            activeConversationId &&
+            isSameConversationId(activeConversationId, conversationId),
+          );
+          const isActivelyViewed = isActiveConversation && isConversationActivelyViewedRef.current(payload.sessionId, conversationId);
+
+          if (isActiveConversation) {
+            setLoadedMessagesConversationKey(cacheKey);
+            setMessages((current) => mergeMessageIntoTimeline(current, realtimeMessage));
+          }
+
+          setOverview((current) => applyRealtimeMessageToOverview(
+            current,
+            payload.sessionId,
+            conversationId,
+            realtimeMessage,
+            isActivelyViewed,
+          ));
         }
 
         if (payload.kind === 'kanban.stage.updated') {
@@ -2525,7 +2614,7 @@ export function DashboardClient({ initialOverview }: Props) {
           activeConversationId &&
           (payload.kind === 'message.new' || payload.kind === 'message.ack') &&
           payload.sessionId === activeSessionId &&
-          payload.chatJid === activeConversationId
+          Boolean(payload.chatJid && isSameConversationId(payload.chatJid, activeConversationId))
         ) {
           if (
             payload.kind === 'message.new' &&
@@ -2539,19 +2628,21 @@ export function DashboardClient({ initialOverview }: Props) {
             void markConversationAsReadRef.current(activeSessionId, activeConversationId).catch(() => undefined);
           }
 
-          const delay = payload.kind === 'message.new' && payload.direction === 'incoming' ? 300 : 0;
-          window.setTimeout(() => {
-            void loadMessagesRef.current(activeSessionId, activeConversationId, {
-              showLoading: false,
-            }).catch(() => undefined);
-          }, delay);
+          if (payload.kind === 'message.ack' || !realtimeMessage) {
+            const delay = payload.kind === 'message.new' && payload.direction === 'incoming' ? 300 : 0;
+            window.setTimeout(() => {
+              void loadMessagesRef.current(activeSessionId, activeConversationId, {
+                showLoading: false,
+              }).catch(() => undefined);
+            }, delay);
+          }
         }
 
         if (payload.kind === 'message.new' && payload.direction === 'incoming') {
           const isActiveConversation =
             isConversationsView &&
             activeSessionId === payload.sessionId &&
-            activeConversationId === payload.chatJid &&
+            Boolean(payload.chatJid && activeConversationId && isSameConversationId(activeConversationId, payload.chatJid)) &&
             isConversationActivelyViewedRef.current(payload.sessionId, payload.chatJid ?? '');
 
           if (!isActiveConversation) {
@@ -2603,6 +2694,8 @@ export function DashboardClient({ initialOverview }: Props) {
     olderMessagesScrollSnapshotRef.current = null;
     shouldStickToBottomRef.current = true;
     setVisibleMessageCount(INITIAL_VISIBLE_MESSAGE_COUNT);
+    setHasOlderMessages(false);
+    setIsLoadingOlderMessages(false);
     setNewTimelineMessageCount(0);
     setShowConversationLabelsModal(false);
     setConversationLabelSearch('');
@@ -2732,8 +2825,64 @@ export function DashboardClient({ initialOverview }: Props) {
       shouldStickToBottomRef.current = false;
     }
 
-    setVisibleMessageCount((current) => current + MESSAGE_PAGE_SIZE);
-  }, []);
+    if (visibleMessageStartIndex > 0) {
+      setVisibleMessageCount((current) => current + MESSAGE_PAGE_SIZE);
+      return;
+    }
+
+    if (
+      !activeSessionId ||
+      !activeConversationId ||
+      !hasOlderMessages ||
+      isLoadingOlderMessages ||
+      timelineMessages.length === 0
+    ) {
+      return;
+    }
+
+    const before = timelineMessages[0].timestamp;
+    const cacheKey = buildConversationCacheKey(activeSessionId, activeConversationId);
+    setIsLoadingOlderMessages(true);
+
+    void (async () => {
+      try {
+        const result = await fetchConversationMessages(activeSessionId, activeConversationId, {
+          before,
+          limit: MESSAGE_PAGE_SIZE,
+        });
+        messageHasOlderRef.current.set(cacheKey, result.hasMore);
+        setHasOlderMessages(result.hasMore);
+
+        if (result.messages.length === 0) {
+          messageHasOlderRef.current.set(cacheKey, false);
+          setHasOlderMessages(false);
+          return;
+        }
+
+        const cachedMessages = mergeMessagesIntoTimeline(
+          result.messages,
+          messageCacheRef.current.get(cacheKey) ?? [],
+        );
+        messageCacheRef.current.set(cacheKey, cachedMessages);
+
+        if (activeTimelineKeyRef.current === cacheKey) {
+          setLoadedMessagesConversationKey(cacheKey);
+          setMessages((current) => mergeMessagesIntoTimeline(result.messages, current));
+          setVisibleMessageCount((current) => current + result.messages.length);
+        }
+      } finally {
+        setIsLoadingOlderMessages(false);
+      }
+    })();
+  }, [
+    activeConversationId,
+    activeSessionId,
+    fetchConversationMessages,
+    hasOlderMessages,
+    isLoadingOlderMessages,
+    timelineMessages,
+    visibleMessageStartIndex,
+  ]);
 
   const scrollToLatestMessage = useCallback(() => {
     const container = messagesRef.current;
@@ -5889,14 +6038,17 @@ export function DashboardClient({ initialOverview }: Props) {
                     <ConversationTimelineSkeleton />
                   ) : null}
 
-                  {visibleMessageStartIndex > 0 ? (
+                  {visibleMessageStartIndex > 0 || hasOlderMessages ? (
                     <div className="flex justify-center pb-2">
                       <button
                         className="rounded-full bg-white/5 px-4 py-2 text-xs font-semibold text-[var(--muted)] transition hover:bg-white/10 hover:text-white"
+                        disabled={isLoadingOlderMessages}
                         onClick={loadOlderMessages}
                         type="button"
                       >
-                        Carregar {Math.min(MESSAGE_PAGE_SIZE, visibleMessageStartIndex)} mensagens anteriores
+                        {isLoadingOlderMessages
+                          ? 'Carregando mensagens anteriores...'
+                          : `Carregar ${visibleMessageStartIndex > 0 ? Math.min(MESSAGE_PAGE_SIZE, visibleMessageStartIndex) : MESSAGE_PAGE_SIZE} mensagens anteriores`}
                       </button>
                     </div>
                   ) : null}
@@ -9704,12 +9856,32 @@ function areMessageReactionsEquivalent(
 function mergeMessageIntoTimeline(messages: MessageRecord[], message: MessageRecord) {
   const existingIndex = messages.findIndex((current) => current.id === message.id);
   if (existingIndex === -1) {
-    return [...messages, message];
+    return sortMessageTimeline([...messages, message]);
   }
 
   const nextMessages = messages.slice();
   nextMessages[existingIndex] = message;
-  return nextMessages;
+  return sortMessageTimeline(nextMessages);
+}
+
+function mergeMessagesIntoTimeline(incoming: MessageRecord[], current: MessageRecord[]) {
+  return sortMessageTimeline(incoming.reduce(
+    (messages, message) => mergeMessageIntoTimeline(messages, message),
+    current,
+  ));
+}
+
+function sortMessageTimeline(messages: MessageRecord[]) {
+  return messages.slice().sort((left, right) => {
+    const leftTime = Date.parse(left.timestamp || '') || 0;
+    const rightTime = Date.parse(right.timestamp || '') || 0;
+
+    if (leftTime === rightTime) {
+      return left.id.localeCompare(right.id);
+    }
+
+    return leftTime - rightTime;
+  });
 }
 
 function summarizeConversationPreview(message: MessageRecord) {
@@ -9731,6 +9903,169 @@ function summarizeConversationPreview(message: MessageRecord) {
     default:
       return message.body || 'Mensagem';
   }
+}
+
+function parseRealtimeMessage(payload?: string) {
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    const message = JSON.parse(payload) as RealtimeStoredMessage;
+    if (!message.id || !message.chatJid || !message.timestamp) {
+      return null;
+    }
+    return message;
+  } catch {
+    return null;
+  }
+}
+
+function buildRealtimeMessageRecord(event: RealtimeSocketEvent) {
+  const message = parseRealtimeMessage(event.payload);
+  if (!message || message.kind === 'reaction') {
+    return null;
+  }
+
+  const sessionId = event.sessionId || message.sessionId || '';
+  const conversationId = event.chatJid || message.chatJid;
+  const kind = normalizeRealtimeMessageKind(message.kind);
+  const hasMedia = Boolean(kind && kind !== 'text' && kind !== 'media');
+
+  return {
+    id: message.id,
+    conversationId,
+    direction: message.fromMe ? 'outgoing' : 'incoming',
+    kind,
+    body: message.text ?? event.text ?? '',
+    mediaUrl: hasMedia
+      ? `/messages/${encodeURIComponent(message.id)}/media${sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''}`
+      : undefined,
+    mimeType: message.mimeType || undefined,
+    fileName: message.fileName || undefined,
+    timestamp: message.timestamp || event.occurredAt || new Date().toISOString(),
+    author: message.author || (message.fromMe ? 'Operador' : 'Contato'),
+  } satisfies MessageRecord;
+}
+
+function normalizeRealtimeMessageKind(kind?: string): MessageRecord['kind'] {
+  switch (kind) {
+    case 'image':
+    case 'video':
+    case 'audio':
+    case 'document':
+    case 'sticker':
+    case 'media':
+      return kind;
+    default:
+      return 'text';
+  }
+}
+
+function applyRealtimeMessageToOverview(
+  overview: DashboardOverview,
+  sessionId: string,
+  conversationId: string,
+  message: MessageRecord,
+  isActivelyViewed: boolean,
+) {
+  const incomingUnread = message.direction === 'incoming' && !isActivelyViewed;
+  let foundConversation = false;
+  let waitingDelta = 0;
+  let unreadDelta = 0;
+
+  const conversations = overview.conversations.map((conversation) => {
+    if (conversation.sessionId !== sessionId || !isSameConversationId(conversation.id, conversationId)) {
+      return conversation;
+    }
+
+    foundConversation = true;
+    const nextUnread = incomingUnread ? conversation.unread + 1 : conversation.unread;
+    if (incomingUnread) {
+      unreadDelta += 1;
+      if (conversation.unread === 0) {
+        waitingDelta += 1;
+      }
+    }
+
+    return {
+      ...conversation,
+      unread: isActivelyViewed ? 0 : nextUnread,
+      preview: summarizeConversationPreview(message),
+      lastMessageAt: message.timestamp,
+      waitingTime: 'agora',
+    };
+  });
+
+  if (!foundConversation) {
+    const session = overview.sessions.find((item) => item.id === sessionId);
+    const unread = incomingUnread ? 1 : 0;
+    unreadDelta += unread;
+    waitingDelta += unread > 0 ? 1 : 0;
+    conversations.unshift({
+      id: conversationId,
+      sessionId,
+      sessionName: session?.name ?? 'WhatsApp',
+      contact: message.direction === 'incoming' ? message.author : contactNameFromJid(conversationId),
+      avatarUrl: null,
+      participantId: conversationId,
+      owner: 'Sem responsavel',
+      status: 'Ativo',
+      channelName: session?.channelName ?? 'WhatsApp',
+      waitingTime: 'agora',
+      unread,
+      preview: summarizeConversationPreview(message),
+      lastMessageAt: message.timestamp,
+      messages: [],
+    });
+  }
+
+  return {
+    ...overview,
+    metrics: {
+      ...overview.metrics,
+      waitingConversations: overview.metrics.waitingConversations + waitingDelta,
+    },
+    dashboard: {
+      ...overview.dashboard,
+      snapshot: {
+        ...overview.dashboard.snapshot,
+        recentConversations: foundConversation
+          ? overview.dashboard.snapshot.recentConversations
+          : overview.dashboard.snapshot.recentConversations + 1,
+      },
+    },
+    analytics: {
+      ...overview.analytics,
+      totalConversations: foundConversation
+        ? overview.analytics.totalConversations
+        : overview.analytics.totalConversations + 1,
+      unreadVolume: overview.analytics.unreadVolume + unreadDelta,
+      waitingVolume: overview.analytics.waitingVolume + waitingDelta,
+    },
+    sessions: overview.sessions.map((session) => {
+      if (session.id !== sessionId) {
+        return session;
+      }
+
+      return {
+        ...session,
+        unread: session.unread + unreadDelta,
+        waiting: session.waiting + waitingDelta,
+        lastHeartbeat: message.timestamp,
+      };
+    }),
+    conversations: dedupeConversations(conversations),
+  };
+}
+
+function isSameConversationId(left: string, right: string) {
+  return normalizeConversationKey(left) === normalizeConversationKey(right);
+}
+
+function contactNameFromJid(value: string) {
+  const localPart = value.split('@')[0]?.split(':')[0]?.trim();
+  return localPart || value || 'Contato';
 }
 
 function dedupeConversations(conversations: ConversationRecord[]) {
