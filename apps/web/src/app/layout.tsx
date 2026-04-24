@@ -20,6 +20,10 @@ export const metadata: Metadata = {
   title: "ether command | Atendimento Omnichannel",
   description:
     "Dashboard operacional para conectar multiplos numeros de WhatsApp via QR code e evoluir para Instagram e Facebook.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
