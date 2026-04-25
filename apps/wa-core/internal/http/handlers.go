@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -56,15 +57,20 @@ type conversationPageResponse struct {
 	HasMore       bool                        `json:"hasMore"`
 }
 
+const dashboardOverviewCacheTTL = 3 * time.Second
+
 type API struct {
-	logger      *slog.Logger
-	instagram   *appinstagram.Client
-	manager     *whatsapp.Manager
-	hub         *ws.Hub
-	store       *appstore.Store
-	auth        AuthConfig
-	security    SecurityConfig
-	rateLimiter *rateLimiter
+	logger                 *slog.Logger
+	instagram              *appinstagram.Client
+	manager                *whatsapp.Manager
+	hub                    *ws.Hub
+	store                  *appstore.Store
+	auth                   AuthConfig
+	security               SecurityConfig
+	rateLimiter            *rateLimiter
+	overviewCacheMu        sync.Mutex
+	overviewCache          *models.DashboardOverview
+	overviewCacheExpiresAt time.Time
 }
 
 func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, store *appstore.Store, instagram *appinstagram.Client, auth AuthConfig, security SecurityConfig) http.Handler {
@@ -218,6 +224,7 @@ func (a *API) handleSessionInit(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err)
 		return
 	}
+	a.invalidateDashboardOverviewCache()
 	respondJSON(w, http.StatusOK, session)
 }
 
@@ -320,6 +327,7 @@ func (a *API) handleSendText(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err)
 		return
 	}
+	a.invalidateDashboardOverviewCache()
 	respondJSON(w, http.StatusCreated, message)
 }
 
@@ -340,6 +348,7 @@ func (a *API) handleSendMedia(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.invalidateDashboardOverviewCache()
 
 	respondJSON(w, http.StatusCreated, record)
 }
@@ -443,12 +452,45 @@ func (a *API) handleSignIn(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleDashboardOverview(w http.ResponseWriter, r *http.Request) {
+	if overview, ok := a.cachedDashboardOverview(); ok {
+		respondJSON(w, http.StatusOK, overview)
+		return
+	}
+
 	overview, err := a.buildDashboardOverview(r.Context())
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.cacheDashboardOverview(overview)
 	respondJSON(w, http.StatusOK, overview)
+}
+
+func (a *API) cachedDashboardOverview() (*models.DashboardOverview, bool) {
+	a.overviewCacheMu.Lock()
+	defer a.overviewCacheMu.Unlock()
+
+	if a.overviewCache == nil || time.Now().After(a.overviewCacheExpiresAt) {
+		return nil, false
+	}
+
+	return a.overviewCache, true
+}
+
+func (a *API) cacheDashboardOverview(overview *models.DashboardOverview) {
+	a.overviewCacheMu.Lock()
+	defer a.overviewCacheMu.Unlock()
+
+	a.overviewCache = overview
+	a.overviewCacheExpiresAt = time.Now().Add(dashboardOverviewCacheTTL)
+}
+
+func (a *API) invalidateDashboardOverviewCache() {
+	a.overviewCacheMu.Lock()
+	defer a.overviewCacheMu.Unlock()
+
+	a.overviewCache = nil
+	a.overviewCacheExpiresAt = time.Time{}
 }
 
 func (a *API) handleInstagramStatus(w http.ResponseWriter, r *http.Request) {
@@ -552,6 +594,7 @@ func (a *API) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 			"actorId":     auth.user.ID,
 		},
 	})
+	a.invalidateDashboardOverviewCache()
 
 	respondJSON(w, http.StatusCreated, compat)
 }
@@ -585,6 +628,7 @@ func (a *API) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 			"actorId":     auth.user.ID,
 		},
 	})
+	a.invalidateDashboardOverviewCache()
 
 	respondJSON(w, http.StatusOK, map[string]any{
 		"id":      session.ID,
@@ -618,6 +662,7 @@ func (a *API) handleConnectSession(w http.ResponseWriter, r *http.Request) {
 			"status": compat.Status,
 		},
 	})
+	a.invalidateDashboardOverviewCache()
 
 	respondJSON(w, http.StatusOK, compat)
 }
@@ -647,6 +692,7 @@ func (a *API) handleDisconnectSession(w http.ResponseWriter, r *http.Request) {
 			"status": compat.Status,
 		},
 	})
+	a.invalidateDashboardOverviewCache()
 	respondJSON(w, http.StatusOK, compat)
 }
 
@@ -816,6 +862,7 @@ func (a *API) handleConversationSend(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.invalidateDashboardOverviewCache()
 
 	respondJSON(w, http.StatusOK, record)
 }
@@ -846,6 +893,7 @@ func (a *API) handleConversationSendMedia(w http.ResponseWriter, r *http.Request
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.invalidateDashboardOverviewCache()
 
 	respondJSON(w, http.StatusOK, record)
 }
@@ -878,6 +926,7 @@ func (a *API) handleConversationReaction(w http.ResponseWriter, r *http.Request)
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.invalidateDashboardOverviewCache()
 
 	respondJSON(w, http.StatusOK, record)
 }
@@ -895,6 +944,7 @@ func (a *API) handleConversationRead(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
+	a.invalidateDashboardOverviewCache()
 
 	respondJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
@@ -1464,6 +1514,7 @@ func (a *API) handleUpdateContactCRMProfile(w http.ResponseWriter, r *http.Reque
 			"performedByRole": auth.user.Role,
 		},
 	})
+	a.invalidateDashboardOverviewCache()
 
 	respondJSON(w, http.StatusOK, record)
 }
@@ -1538,6 +1589,7 @@ func (a *API) handleUpdateContactKanbanStage(w http.ResponseWriter, r *http.Requ
 			"performedByRole": auth.user.Role,
 		},
 	})
+	a.invalidateDashboardOverviewCache()
 
 	respondJSON(w, http.StatusOK, record)
 }
@@ -1648,6 +1700,7 @@ func (a *API) handleCreateManualContact(w http.ResponseWriter, r *http.Request) 
 			"stage":     request.Stage,
 		},
 	})
+	a.invalidateDashboardOverviewCache()
 
 	respondJSON(w, http.StatusCreated, map[string]any{
 		"jid":   jid,
