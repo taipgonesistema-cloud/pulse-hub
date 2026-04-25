@@ -39,6 +39,7 @@ import {
 import {
   Fragment,
   memo,
+  type UIEvent,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -261,6 +262,82 @@ type FetchedMessagesResult = {
   messages: MessageRecord[];
   hasMore: boolean;
 };
+
+type VirtualListItem<T> = {
+  item: T;
+  index: number;
+};
+
+type KanbanColumnModel = (typeof contactsKanbanStages)[number] & {
+  contacts: ConversationRecord[];
+};
+
+function useVirtualList<T>(
+  items: T[],
+  {
+    enabled = true,
+    estimatedItemHeight,
+    overscan = 6,
+  }: {
+    enabled?: boolean;
+    estimatedItemHeight: number;
+    overscan?: number;
+  },
+) {
+  const [containerNode, setContainerNode] = useState<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+
+  const containerRef = useCallback((node: HTMLDivElement | null) => {
+    setContainerNode(node);
+    if (node) {
+      setViewportHeight(node.clientHeight);
+      setScrollTop(node.scrollTop);
+    }
+  }, []);
+
+  const onScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    setScrollTop(event.currentTarget.scrollTop);
+  }, []);
+
+  useEffect(() => {
+    if (!enabled || !containerNode) {
+      return;
+    }
+
+    const measure = () => setViewportHeight(containerNode.clientHeight);
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(containerNode);
+    return () => observer.disconnect();
+  }, [containerNode, enabled]);
+
+  const [virtualItems, paddingTop, paddingBottom] = useMemo(() => {
+    if (!enabled || items.length === 0 || viewportHeight === 0) {
+      return [items.map((item, index) => ({ item, index })) satisfies VirtualListItem<T>[], 0, 0] as const;
+    }
+
+    const startIndex = Math.max(0, Math.floor(scrollTop / estimatedItemHeight) - overscan);
+    const visibleCount = Math.ceil(viewportHeight / estimatedItemHeight) + overscan * 2;
+    const endIndex = Math.min(items.length, startIndex + visibleCount);
+
+    return [
+      items.slice(startIndex, endIndex).map((item, index) => ({
+        item,
+        index: startIndex + index,
+      })) satisfies VirtualListItem<T>[],
+      startIndex * estimatedItemHeight,
+      Math.max(0, (items.length - endIndex) * estimatedItemHeight),
+    ] as const;
+  }, [enabled, estimatedItemHeight, items, overscan, scrollTop, viewportHeight]);
+
+  return [containerRef, onScroll, virtualItems, paddingTop, paddingBottom] as const;
+}
 
 type ToastItem = {
   id: number;
@@ -657,6 +734,18 @@ export function DashboardClient({ initialOverview }: Props) {
     },
     [conversationSearchTerm, isConversationsView, sessionConversations],
   );
+
+  const [
+    conversationListRef,
+    handleConversationListScroll,
+    virtualConversations,
+    conversationListPaddingTop,
+    conversationListPaddingBottom,
+  ] = useVirtualList(visibleSessionConversations, {
+    enabled: isConversationsView && !shouldShowInitialSkeleton,
+    estimatedItemHeight: 126,
+    overscan: 8,
+  });
 
   const selectedConversation = useMemo(
     () => {
@@ -3054,6 +3143,26 @@ export function DashboardClient({ initialOverview }: Props) {
     [authUser?.email, authUser?.name, authenticatedFetch, contactKanbanStageMap, executeAction],
   );
 
+  const dropDraggedContactToStage = useCallback(
+    (stageId: ContactKanbanStageId) => {
+      if (!draggedContactKey) {
+        return;
+      }
+
+      const droppedContact = filteredContacts.find(
+        (contact) => buildContactKanbanKey(contact) === draggedContactKey,
+      );
+
+      if (droppedContact) {
+        void moveContactToStage(droppedContact, stageId);
+      }
+
+      setDraggedContactKey(null);
+      setDragOverStage(null);
+    },
+    [draggedContactKey, filteredContacts, moveContactToStage],
+  );
+
   const activateContactsBoard = useCallback(
     (boardId: ContactsBoardId) => {
       setActiveContactsBoard(boardId);
@@ -4325,96 +4434,39 @@ export function DashboardClient({ initialOverview }: Props) {
             ) : (
               <div className="flex h-full min-h-0 items-start gap-4 pb-2">
                 {kanbanColumns.map((column) => (
-                  <div
+                  <VirtualizedKanbanColumn
                     key={column.id}
-                    className={`flex h-full min-h-0 w-[19rem] shrink-0 flex-col rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-3 transition ${dragOverStage === column.id ? 'border-[var(--primary)]/35 shadow-[0_0_0_1px_rgba(127,175,255,0.12)]' : ''}`}
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      setDragOverStage(column.id);
+                    availableLabels={contactLabels}
+                    canCreateManualContacts={canCreateManualContacts}
+                    column={column}
+                    contactCrmProfileMap={contactCrmProfileMap}
+                    dragOverStage={dragOverStage}
+                    onCopyContactId={(contact) => void navigator.clipboard?.writeText(contact.participantId)}
+                    onCreateContact={(stageId) => {
+                      setCreateContactStage(stageId);
+                      setShowCreateContactModal(true);
                     }}
-                    onDragLeave={() => {
-                      if (dragOverStage === column.id) {
-                        setDragOverStage(null);
-                      }
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      if (!draggedContactKey) {
-                        return;
-                      }
-
-                      const droppedContact = filteredContacts.find(
-                        (contact) => buildContactKanbanKey(contact) === draggedContactKey,
-                      );
-
-                      if (droppedContact) {
-                        void moveContactToStage(droppedContact, column.id);
-                      }
-
+                    onDragEnd={() => {
                       setDraggedContactKey(null);
                       setDragOverStage(null);
                     }}
-                  >
-                    <div className={`rounded-[22px] border border-white/6 bg-gradient-to-br ${column.surface} px-4 py-4`}>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />
-                          <div>
-                            <p className="text-sm font-semibold text-white">{column.label}</p>
-                            <p className="mt-1 text-[11px] text-zinc-500">{column.contacts.length} contatos</p>
-                          </div>
-                        </div>
-                        <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold text-zinc-300">
-                          {column.contacts.length}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-                      {column.contacts.map((contact) => (
-                        <ContactKanbanCard
-                          key={buildContactKanbanKey(contact)}
-                          availableLabels={contactLabels}
-                          contact={contact}
-                          crmProfile={contactCrmProfileMap[buildContactKanbanKey(contact)]}
-                          onCopyId={() => void navigator.clipboard?.writeText(contact.participantId)}
-                          onDragEnd={() => {
-                            setDraggedContactKey(null);
-                            setDragOverStage(null);
-                          }}
-                          onDragStart={() => setDraggedContactKey(buildContactKanbanKey(contact))}
-                          onOpenConversation={() => {
-                            setSelectedContactId(contact.id);
-                            setSelectedSessionId(contact.sessionId);
-                            setSelectedConversationId(contact.id);
-                            navigateToView('conversations');
-                          }}
-                          onSelect={() => setSelectedContactId(contact.id)}
-                          selected={selectedContact?.id === contact.id}
-                        />
-                      ))}
-
-                      {column.contacts.length === 0 ? (
-                        <div className="rounded-[22px] border border-dashed border-white/8 bg-white/[0.02] px-4 py-6 text-center text-sm text-zinc-500">
-                          Solte um contato aqui.
-                        </div>
-                      ) : null}
-
-                      {canCreateManualContacts ? (
-                        <button
-                          className="flex w-full items-center justify-center gap-2 rounded-[20px] border border-dashed border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-zinc-400 transition hover:border-white/12 hover:bg-white/[0.05] hover:text-white"
-                          onClick={() => {
-                            setCreateContactStage(column.id);
-                            setShowCreateContactModal(true);
-                          }}
-                          type="button"
-                        >
-                          <Plus className="h-4 w-4" strokeWidth={2.1} />
-                          Adicionar contato
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
+                    onDragLeaveStage={(stageId) => {
+                      if (dragOverStage === stageId) {
+                        setDragOverStage(null);
+                      }
+                    }}
+                    onDragOverStage={setDragOverStage}
+                    onDragStart={(contact) => setDraggedContactKey(buildContactKanbanKey(contact))}
+                    onDropStage={dropDraggedContactToStage}
+                    onOpenConversation={(contact) => {
+                      setSelectedContactId(contact.id);
+                      setSelectedSessionId(contact.sessionId);
+                      setSelectedConversationId(contact.id);
+                      navigateToView('conversations');
+                    }}
+                    onSelectContact={(contact) => setSelectedContactId(contact.id)}
+                    selectedContactId={selectedContact?.id}
+                  />
                 ))}
               </div>
             )}
@@ -5863,9 +5915,21 @@ export function DashboardClient({ initialOverview }: Props) {
           ) : null}
         </div>
 
-        <div className="h-[calc(100vh-11.5rem)] space-y-1.5 overflow-y-auto pr-1">
+        <div
+          ref={conversationListRef}
+          className="h-[calc(100vh-11.5rem)] overflow-y-auto pr-1"
+          onScroll={handleConversationListScroll}
+        >
           {shouldShowInitialSkeleton ? <ListSkeleton rows={6} /> : null}
-          {!shouldShowInitialSkeleton ? visibleSessionConversations.map((conversation) => {
+          {!shouldShowInitialSkeleton ? (
+            <div
+              className="space-y-1.5"
+              style={{
+                paddingBottom: conversationListPaddingBottom,
+                paddingTop: conversationListPaddingTop,
+              }}
+            >
+              {virtualConversations.map(({ item: conversation }) => {
             const activeConversationKey = pendingConversationKey
               ?? (selectedConversation?.sessionId && selectedConversation?.id
                 ? buildConversationCacheKey(selectedConversation.sessionId, selectedConversation.id)
@@ -5943,7 +6007,9 @@ export function DashboardClient({ initialOverview }: Props) {
                 </div>
               </button>
             );
-          }) : null}
+          })}
+            </div>
+          ) : null}
 
           {(selectedSession || conversationSessionScope === 'all') && !shouldShowInitialSkeleton && visibleSessionConversations.length === 0 ? (
             <EmptyStateCard
@@ -7400,6 +7466,127 @@ function AnalyticsLoadingState() {
           {Array.from({ length: 5 }, (_, index) => (
             <SkeletonBlock key={index} className="h-10 w-full" />
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VirtualizedKanbanColumn({
+  availableLabels,
+  canCreateManualContacts,
+  column,
+  contactCrmProfileMap,
+  dragOverStage,
+  onCopyContactId,
+  onCreateContact,
+  onDragEnd,
+  onDragLeaveStage,
+  onDragOverStage,
+  onDragStart,
+  onDropStage,
+  onOpenConversation,
+  onSelectContact,
+  selectedContactId,
+}: {
+  availableLabels: ContactLabelRecord[];
+  canCreateManualContacts: boolean;
+  column: KanbanColumnModel;
+  contactCrmProfileMap: Record<string, ContactCRMProfileRecord>;
+  dragOverStage: ContactKanbanStageId | null;
+  onCopyContactId: (contact: ConversationRecord) => void;
+  onCreateContact: (stageId: ContactKanbanStageId) => void;
+  onDragEnd: () => void;
+  onDragLeaveStage: (stageId: ContactKanbanStageId) => void;
+  onDragOverStage: (stageId: ContactKanbanStageId) => void;
+  onDragStart: (contact: ConversationRecord) => void;
+  onDropStage: (stageId: ContactKanbanStageId) => void;
+  onOpenConversation: (contact: ConversationRecord) => void;
+  onSelectContact: (contact: ConversationRecord) => void;
+  selectedContactId?: string;
+}) {
+  const [
+    virtualContactsRef,
+    handleVirtualContactsScroll,
+    virtualContacts,
+    virtualContactsPaddingTop,
+    virtualContactsPaddingBottom,
+  ] = useVirtualList(column.contacts, {
+    estimatedItemHeight: 148,
+    overscan: 5,
+  });
+
+  return (
+    <div
+      className={`flex h-full min-h-0 w-[19rem] shrink-0 flex-col rounded-[28px] border border-white/6 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-3 transition ${dragOverStage === column.id ? 'border-[var(--primary)]/35 shadow-[0_0_0_1px_rgba(127,175,255,0.12)]' : ''}`}
+      onDragOver={(event) => {
+        event.preventDefault();
+        onDragOverStage(column.id);
+      }}
+      onDragLeave={() => onDragLeaveStage(column.id)}
+      onDrop={(event) => {
+        event.preventDefault();
+        onDropStage(column.id);
+      }}
+    >
+      <div className={`rounded-[22px] border border-white/6 bg-gradient-to-br ${column.surface} px-4 py-4`}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />
+            <div>
+              <p className="text-sm font-semibold text-white">{column.label}</p>
+              <p className="mt-1 text-[11px] text-zinc-500">{column.contacts.length} contatos</p>
+            </div>
+          </div>
+          <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold text-zinc-300">
+            {column.contacts.length}
+          </span>
+        </div>
+      </div>
+
+      <div
+        ref={virtualContactsRef}
+        className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1"
+        onScroll={handleVirtualContactsScroll}
+      >
+        <div
+          className="space-y-3"
+          style={{
+            paddingBottom: virtualContactsPaddingBottom,
+            paddingTop: virtualContactsPaddingTop,
+          }}
+        >
+          {virtualContacts.map(({ item: contact }) => (
+            <ContactKanbanCard
+              key={buildContactKanbanKey(contact)}
+              availableLabels={availableLabels}
+              contact={contact}
+              crmProfile={contactCrmProfileMap[buildContactKanbanKey(contact)]}
+              onCopyId={() => onCopyContactId(contact)}
+              onDragEnd={onDragEnd}
+              onDragStart={() => onDragStart(contact)}
+              onOpenConversation={() => onOpenConversation(contact)}
+              onSelect={() => onSelectContact(contact)}
+              selected={selectedContactId === contact.id}
+            />
+          ))}
+
+          {column.contacts.length === 0 ? (
+            <div className="rounded-[22px] border border-dashed border-white/8 bg-white/[0.02] px-4 py-6 text-center text-sm text-zinc-500">
+              Solte um contato aqui.
+            </div>
+          ) : null}
+
+          {canCreateManualContacts ? (
+            <button
+              className="flex w-full items-center justify-center gap-2 rounded-[20px] border border-dashed border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-zinc-400 transition hover:border-white/12 hover:bg-white/[0.05] hover:text-white"
+              onClick={() => onCreateContact(column.id)}
+              type="button"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2.1} />
+              Adicionar contato
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
