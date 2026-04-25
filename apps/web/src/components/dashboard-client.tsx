@@ -7218,213 +7218,68 @@ function WorkspaceBootstrapScreen({
   items: Array<{ label: string; ready: boolean }>;
 }) {
   const totalItems = items.length;
-  const readyItems = items.filter((item) => item.ready);
-  const readyCount = readyItems.length;
-  const pendingCount = Math.max(totalItems - readyCount, 0);
+  const readyCount = items.filter((item) => item.ready).length;
   const completionPercent = totalItems > 0 ? Math.round((readyCount / totalItems) * 100) : 0;
-  const activeStage = items.find((item) => !item.ready)?.label ?? 'Finalizando sincronizacao';
-  const progressLabel =
-    completionPercent >= 100
-      ? 'Ambiente operacional pronto'
-      : completionPercent >= 70
-        ? 'Quase liberando o workspace'
-        : completionPercent >= 35
-          ? 'Acoplando dados e conversas'
-          : 'Restaurando contexto da operacao';
-  const signalBars = Array.from({ length: 5 }, (_, index) => index < Math.max(1, Math.ceil((completionPercent / 100) * 5)));
+  const activeStage = items.find((item) => !item.ready)?.label ?? 'Finalizando';
+  const visibleProgress = Math.max(completionPercent, totalItems > 0 ? 8 : 0);
 
   return (
-    <main className="app-hero-surface relative flex min-h-screen items-center justify-center overflow-hidden px-6 py-10 text-[var(--foreground)]">
-      <div className="app-bootstrap-grid absolute inset-0 opacity-70" />
-      <div className="app-bootstrap-scan absolute inset-0 opacity-80" />
-      <div className="absolute inset-0 bg-[linear-gradient(125deg,transparent_0%,rgba(255,255,255,0.04)_28%,transparent_54%)] opacity-70" />
-      <div className="absolute left-[10%] top-[18%] h-56 w-56 rounded-full bg-[var(--primary)]/12 blur-[110px]" />
-      <div className="absolute bottom-[12%] right-[8%] h-64 w-64 rounded-full bg-[var(--secondary)]/10 blur-[120px]" />
-      <div className="absolute left-1/2 top-1/2 h-[32rem] w-[32rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(127,175,255,0.16),transparent_60%)] blur-[80px]" />
+    <main className="app-hero-surface relative grid min-h-screen place-items-center overflow-hidden px-5 py-10 text-[var(--foreground)]">
+      <div className="absolute inset-0 opacity-55 [background-image:linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] [background-size:110px_110px] [mask-image:radial-gradient(circle_at_center,black,transparent_82%)]" />
+      <div className="absolute left-1/2 top-1/2 h-[28rem] w-[28rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(127,175,255,0.16),transparent_62%)] blur-3xl" />
+      <div className="absolute bottom-[18%] right-[18%] h-48 w-48 rounded-full bg-[var(--secondary)]/10 blur-[90px]" />
 
-      <div className="app-bootstrap-surface relative w-full max-w-6xl overflow-hidden rounded-[2.6rem] border border-[var(--line)] px-6 py-6 backdrop-blur-2xl md:px-8 md:py-8 xl:px-10 xl:py-10">
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.06),transparent_28%,transparent_72%,rgba(255,255,255,0.03))] opacity-80" />
+      <div className="relative w-full max-w-lg overflow-hidden rounded-[2rem] border border-[var(--line)] bg-[linear-gradient(145deg,rgba(255,255,255,0.07),rgba(255,255,255,0.025))] px-6 py-8 text-center shadow-[0_28px_90px_rgba(0,0,0,0.32)] backdrop-blur-2xl sm:px-8">
+        <div className="absolute inset-x-8 top-0 h-px bg-[linear-gradient(90deg,transparent,var(--primary),transparent)] opacity-70" />
 
-        <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_25rem]">
-          <section className="app-panel-overlay relative overflow-hidden rounded-[2.2rem] border border-[var(--line)] px-5 py-6 md:px-7 md:py-7">
+        <div className="relative">
+          <section>
             <div className="absolute right-0 top-0 h-40 w-40 translate-x-1/4 -translate-y-1/4 rounded-full bg-[var(--primary)]/12 blur-3xl" />
             <div className="absolute bottom-0 left-0 h-32 w-32 -translate-x-1/4 translate-y-1/4 rounded-full bg-[var(--secondary)]/10 blur-3xl" />
 
             <div className="relative">
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl border border-white/10 bg-white/[0.04] shadow-[inset_0_0_34px_rgba(255,255,255,0.04),0_0_40px_rgba(127,175,255,0.12)]">
+                <div className="relative h-9 w-9">
+                  <div className="absolute inset-0 rounded-full border-2 border-white/10 border-t-[var(--primary)] app-bootstrap-ring-fast" />
+                  <div className="absolute inset-3 rounded-full bg-[var(--secondary)] shadow-[0_0_18px_rgba(93,253,138,0.45)]" />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-3">
                 <span className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--panel-contrast-background)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[var(--primary)]">
                   <span className="h-2 w-2 rounded-full bg-[var(--primary)] shadow-[0_0_16px_rgba(127,175,255,0.85)]" />
                   ether command
                 </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-[rgba(93,253,138,0.18)] bg-[rgba(93,253,138,0.08)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--secondary)]">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-current" />
-                  bootstrap live
-                </span>
               </div>
 
-              <div className="mt-6 max-w-3xl">
-                <h1 className="font-headline bg-[linear-gradient(92deg,var(--foreground),var(--foreground)_55%,var(--primary))] bg-clip-text text-4xl font-semibold text-transparent md:text-6xl md:leading-[1.02]">
+              <div className="mx-auto mt-6 max-w-md">
+                <h1 className="font-headline text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl">
                   {title}
                 </h1>
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)] md:text-base">{subtitle}</p>
+                <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[var(--muted)]">{subtitle}</p>
               </div>
 
-              <div className="mt-7 grid gap-3 md:grid-cols-3">
-                <div className="rounded-[1.55rem] border border-[var(--line)] bg-[var(--panel-contrast-background)] px-4 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">Camadas online</span>
-                    <BadgeCheck className="h-4 w-4 text-[var(--secondary)]" />
-                  </div>
-                  <p className="mt-3 text-3xl font-semibold text-[var(--foreground)]">{readyCount}/{totalItems}</p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">{pendingCount === 0 ? 'Tudo sincronizado' : `${pendingCount} camadas ainda em hidratação`}</p>
-                </div>
-
-                <div className="rounded-[1.55rem] border border-[var(--line)] bg-[var(--panel-contrast-background)] px-4 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">Pipeline ativo</span>
-                    <Sparkles className="h-4 w-4 text-[var(--primary)]" />
-                  </div>
-                  <p className="mt-3 text-lg font-semibold text-[var(--foreground)]">{activeStage}</p>
-                  <p className="mt-1 text-xs text-[var(--muted)]">{progressLabel}</p>
-                </div>
-
-                <div className="rounded-[1.55rem] border border-[var(--line)] bg-[var(--panel-contrast-background)] px-4 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">Telemetria</span>
-                    <Wifi className="h-4 w-4 text-[var(--tertiary)]" />
-                  </div>
-                  <div className="mt-4 flex items-end gap-1.5">
-                    {signalBars.map((active, index) => (
-                      <span
-                        key={`signal-${index}`}
-                        className={`block w-3 rounded-full transition ${active ? 'bg-[linear-gradient(180deg,var(--primary),var(--secondary))] shadow-[0_0_16px_rgba(127,175,255,0.35)]' : 'bg-[var(--line)]'}`}
-                        style={{ height: `${12 + index * 7}px` }}
-                      />
-                    ))}
-                  </div>
-                  <p className="mt-3 text-xs text-[var(--muted)]">Sinal de inicializacao em {completionPercent}%.</p>
-                </div>
-              </div>
-
-              <div className="mt-7 rounded-[1.7rem] border border-[var(--line)] bg-[var(--panel-overlay-background)] p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="mt-7 rounded-[1.5rem] border border-[var(--line)] bg-[var(--panel-overlay-background)] p-4 text-left">
+                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">Sequencia de bootstrap</p>
-                    <p className="mt-1 text-sm text-[var(--foreground)]">Liberando o operador sem travar a entrada do workspace.</p>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">Carregando</p>
+                    <p className="mt-1 text-sm text-[var(--foreground)]">{activeStage}</p>
                   </div>
                   <span className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--panel-contrast-background)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--foreground)]">
                     <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--primary)]" />
-                    {completionPercent}% synced
+                    {completionPercent}%
                   </span>
                 </div>
 
                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-[var(--line)]">
                   <div
                     className="h-full rounded-full bg-[linear-gradient(90deg,var(--primary),var(--secondary),var(--tertiary))] shadow-[0_0_24px_rgba(127,175,255,0.38)] transition-[width] duration-500"
-                    style={{ width: `${Math.max(completionPercent, totalItems > 0 ? 8 : 0)}%` }}
+                    style={{ width: `${visibleProgress}%` }}
                   />
-                </div>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {items.map((item, index) => (
-                    <div
-                      key={item.label}
-                      className={`rounded-[1.35rem] border px-4 py-4 transition ${item.ready ? 'border-[rgba(93,253,138,0.22)] bg-[linear-gradient(135deg,rgba(93,253,138,0.12),rgba(93,253,138,0.03))]' : 'border-[var(--line)] bg-[linear-gradient(135deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))]'}`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-[var(--foreground)]">{item.label}</p>
-                          <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                            {item.ready ? 'Camada autenticada e pronta para operacao.' : 'Sincronizando dependencias e hidrando dados.'}
-                          </p>
-                        </div>
-                        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">{String(index + 1).padStart(2, '0')}</span>
-                      </div>
-
-                      <div className="mt-4 flex items-center justify-between gap-3">
-                        <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${item.ready ? 'bg-[rgba(93,253,138,0.12)] text-[var(--secondary)]' : 'bg-[var(--panel-contrast-background)] text-[var(--muted)]'}`}>
-                          <span className={`h-2 w-2 rounded-full ${item.ready ? 'bg-[var(--secondary)]' : 'bg-[var(--primary)] app-bootstrap-pulse'}`} />
-                          {item.ready ? 'online' : 'syncing'}
-                        </span>
-                        {!item.ready ? <span className="inline-block h-4 w-4 rounded-full border border-[var(--line)] border-t-[var(--primary)] app-bootstrap-ring-fast" /> : null}
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
             </div>
           </section>
-
-          <aside className="relative overflow-hidden rounded-[2.2rem] border border-[var(--line)] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-5 py-6 md:px-6 md:py-7">
-            <div className="absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(127,175,255,0.12),transparent)]" />
-            <div className="absolute bottom-0 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-[var(--tertiary)]/12 blur-[80px]" />
-
-            <div className="relative flex h-full flex-col">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">Control core</p>
-                  <p className="mt-1 text-sm text-[var(--foreground)]">Renderizando seu cockpit operacional.</p>
-                </div>
-                <span className="inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--panel-contrast-background)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--foreground)]">
-                  <BarChart3 className="h-3.5 w-3.5 text-[var(--primary)]" />
-                  live
-                </span>
-              </div>
-
-              <div className="app-bootstrap-float relative mt-8 flex flex-1 items-center justify-center">
-                <div className="absolute inset-0 m-auto h-[18rem] w-[18rem] rounded-full border border-[var(--line)] opacity-80" />
-                <div className="absolute inset-0 m-auto h-[18rem] w-[18rem] rounded-full border border-dashed border-[rgba(127,175,255,0.26)] app-bootstrap-ring-slow" />
-                <div className="absolute inset-0 m-auto h-[15rem] w-[15rem] rounded-full border border-[rgba(93,253,138,0.24)] [border-top-color:var(--secondary)] [border-right-color:var(--secondary)] app-bootstrap-ring-reverse" />
-                <div className="absolute inset-0 m-auto h-[11.5rem] w-[11.5rem] rounded-full border border-[rgba(255,255,255,0.08)] [border-top-color:var(--primary)] app-bootstrap-ring-fast" />
-                <div className="absolute inset-0 m-auto h-[15rem] w-[15rem] app-bootstrap-ring-slow">
-                  <span className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 rounded-full bg-[var(--primary)] shadow-[0_0_18px_rgba(127,175,255,0.85)]" />
-                </div>
-                <div className="absolute inset-0 m-auto h-[11.5rem] w-[11.5rem] app-bootstrap-ring-reverse">
-                  <span className="absolute bottom-0 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-[var(--secondary)] shadow-[0_0_16px_rgba(93,253,138,0.65)]" />
-                </div>
-
-                <div className="app-bootstrap-orb relative z-10 grid h-36 w-36 place-items-center rounded-full border border-[var(--line)] shadow-[inset_0_0_60px_rgba(255,255,255,0.06),0_0_60px_rgba(127,175,255,0.12)] md:h-40 md:w-40">
-                  <div className="absolute inset-3 rounded-full bg-[radial-gradient(circle,rgba(127,175,255,0.22),rgba(127,175,255,0.06)_42%,transparent_72%)] blur-sm" />
-                  <div className="relative text-center">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-[var(--muted)]">sync</p>
-                    <p className="mt-2 text-5xl font-semibold text-[var(--foreground)] md:text-6xl">{completionPercent}</p>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[var(--primary)]">percent</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-8 space-y-3">
-                <div className="rounded-[1.4rem] border border-[var(--line)] bg-[var(--panel-contrast-background)] px-4 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">Status stream</span>
-                    <span className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--secondary)]">
-                      <span className="h-2 w-2 rounded-full bg-current" />
-                      realtime
-                    </span>
-                  </div>
-                  <div className="mt-4 space-y-2.5 text-sm text-[var(--foreground)]">
-                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-[var(--line)] bg-[rgba(255,255,255,0.025)] px-3 py-2.5">
-                      <span>Autenticacao</span>
-                      <span className={`text-xs font-semibold ${readyCount > 0 ? 'text-[var(--secondary)]' : 'text-[var(--muted)]'}`}>{readyCount > 0 ? 'stable' : 'awaiting'}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-[var(--line)] bg-[rgba(255,255,255,0.025)] px-3 py-2.5">
-                      <span>Workspace graph</span>
-                      <span className="text-xs font-semibold text-[var(--primary)]">{activeStage}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 rounded-[1rem] border border-[var(--line)] bg-[rgba(255,255,255,0.025)] px-3 py-2.5">
-                      <span>Operator release</span>
-                      <span className="text-xs font-semibold text-[var(--foreground)]">{pendingCount === 0 ? 'unlocked' : 'warming up'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="app-bootstrap-footer rounded-[1.4rem] border border-[var(--line)] px-4 py-4">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">Workspace bootstrap</p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Experiencia de entrada reforcada com progresso visual real, sem esconder o estado do carregamento.</p>
-                </div>
-              </div>
-            </div>
-          </aside>
         </div>
       </div>
     </main>
