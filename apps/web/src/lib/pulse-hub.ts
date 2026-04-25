@@ -61,6 +61,12 @@ export type ConversationRecord = {
   messages: MessageRecord[];
 };
 
+export type ConversationPage = {
+  conversations: ConversationRecord[];
+  nextCursor: string;
+  hasMore: boolean;
+};
+
 export type SessionRecord = {
   id: string;
   name: string;

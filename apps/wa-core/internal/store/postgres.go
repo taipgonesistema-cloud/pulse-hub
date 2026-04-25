@@ -239,6 +239,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	CREATE INDEX IF NOT EXISTS idx_contacts_display_name ON contacts(display_name);
 	CREATE INDEX IF NOT EXISTS idx_chats_last_message_at ON chats(last_message_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_chats_session_id ON chats(session_id, last_message_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_chats_session_conversation_sort ON chats(session_id, (COALESCE(NULLIF(remote_jid, ''), jid)), (COALESCE(NULLIF(last_message_at, ''), updated_at)) DESC);
 	CREATE INDEX IF NOT EXISTS idx_chats_session_unread ON chats(session_id, unread_count);
 	CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp ON messages(chat_jid, timestamp ASC);
 	CREATE INDEX IF NOT EXISTS idx_messages_chat_timestamp_desc ON messages(chat_jid, timestamp DESC, id DESC);
@@ -1381,6 +1382,82 @@ func (s *Store) ListChatsBySession(ctx context.Context, sessionID string) ([]mod
 		if strings.TrimSpace(remoteJID) != "" {
 			chat.JID = strings.TrimSpace(remoteJID)
 		}
+		chats = append(chats, chat)
+	}
+
+	return chats, rows.Err()
+}
+
+func (s *Store) ListChatsBySessionPage(ctx context.Context, sessionID string, limit int, cursorSortAt, cursorName, cursorJID string) ([]models.Chat, error) {
+	sessionID = normalizeSessionID(sessionID)
+	if limit <= 0 {
+		limit = 80
+	}
+	if limit > 250 {
+		limit = 250
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		WITH ranked_chats AS (
+			SELECT
+				COALESCE(NULLIF(remote_jid, ''), jid) AS conversation_id,
+				session_id,
+				name,
+				contact_jid,
+				is_group,
+				unread_count,
+				last_message_id,
+				last_message_text,
+				last_message_at,
+				updated_at,
+				COALESCE(NULLIF(last_message_at, ''), updated_at) AS sort_at,
+				ROW_NUMBER() OVER (
+					PARTITION BY COALESCE(NULLIF(remote_jid, ''), jid)
+					ORDER BY COALESCE(NULLIF(last_message_at, ''), updated_at) DESC, name ASC, jid ASC
+				) AS row_number
+			FROM chats
+			WHERE session_id = $1
+				AND jid NOT LIKE '%@broadcast'
+				AND jid NOT LIKE '%@newsletter'
+				AND (remote_jid = '' OR (remote_jid NOT LIKE '%@broadcast' AND remote_jid NOT LIKE '%@newsletter'))
+		)
+		SELECT conversation_id, session_id, name, contact_jid, is_group, unread_count, last_message_id,
+			last_message_text, last_message_at, updated_at
+		FROM ranked_chats
+		WHERE row_number = 1
+			AND (
+				$2 = ''
+				OR sort_at < $2
+				OR (sort_at = $2 AND name > $3)
+				OR (sort_at = $2 AND name = $3 AND conversation_id > $4)
+			)
+		ORDER BY sort_at DESC, name ASC, conversation_id ASC
+		LIMIT $5
+	`, sessionID, strings.TrimSpace(cursorSortAt), strings.TrimSpace(cursorName), strings.TrimSpace(cursorJID), limit)
+	if err != nil {
+		return nil, fmt.Errorf("list chat page for session %s: %w", sessionID, err)
+	}
+	defer rows.Close()
+
+	chats := make([]models.Chat, 0, limit)
+	for rows.Next() {
+		var chat models.Chat
+		var sessionIDValue string
+		if err := rows.Scan(
+			&chat.JID,
+			&sessionIDValue,
+			&chat.Name,
+			&chat.ContactJID,
+			&chat.IsGroup,
+			&chat.UnreadCount,
+			&chat.LastMessageID,
+			&chat.LastMessageText,
+			&chat.LastMessageAt,
+			&chat.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan chat page: %w", err)
+		}
+		chat.SessionID = normalizeSessionID(sessionIDValue)
 		chats = append(chats, chat)
 	}
 

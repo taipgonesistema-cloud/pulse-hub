@@ -589,6 +589,26 @@ func (m *Manager) ListChatsBySession(ctx context.Context, sessionID string) ([]m
 	return chats, nil
 }
 
+func (m *Manager) ListChatsPageBySession(ctx context.Context, sessionID string, limit int, cursorSortAt, cursorName, cursorJID string) ([]models.Chat, error) {
+	chats, err := m.store.ListChatsBySessionPage(ctx, sessionID, limit, cursorSortAt, cursorName, cursorJID)
+	if err != nil {
+		return nil, err
+	}
+
+	if m.shouldRefreshGroupNamesForSession(sessionID, chats) {
+		if err := m.SyncGroupNamesBySession(ctx, sessionID); err != nil {
+			m.logger.Warn("sync group names before list chat page failed", "error", err)
+		} else {
+			refreshedChats, refreshErr := m.store.ListChatsBySessionPage(ctx, sessionID, limit, cursorSortAt, cursorName, cursorJID)
+			if refreshErr == nil {
+				chats = refreshedChats
+			}
+		}
+	}
+
+	return chats, nil
+}
+
 func (m *Manager) shouldRefreshGroupNames(chats []models.Chat) bool {
 	return m.shouldRefreshGroupNamesForSession(models.DefaultSessionID, chats)
 }

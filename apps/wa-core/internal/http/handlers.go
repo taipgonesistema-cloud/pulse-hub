@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,6 +42,18 @@ type AuthConfig struct {
 	CookieDomain   string
 	CookieSecure   bool
 	CookieSameSite http.SameSite
+}
+
+type conversationCursor struct {
+	SortAt string
+	Name   string
+	JID    string
+}
+
+type conversationPageResponse struct {
+	Conversations []models.ConversationRecord `json:"conversations"`
+	NextCursor    string                      `json:"nextCursor"`
+	HasMore       bool                        `json:"hasMore"`
 }
 
 type API struct {
@@ -122,6 +135,7 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 			r.Get("/contacts/kanban", api.handleListContactKanbanStages)
 			r.Post("/contacts/manual", api.handleCreateManualContact)
 			r.Put("/contacts/kanban", api.handleUpdateContactKanbanStage)
+			r.Get("/conversations", api.handleConversationPage)
 			r.Get("/sessions", api.handleListSessions)
 			r.Post("/sessions", api.handleCreateSession)
 			r.Delete("/sessions/{id}", api.handleDeleteSession)
@@ -690,12 +704,48 @@ func (a *API) handleConversations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.TrimSpace(r.URL.Query().Get("limit")) != "" || strings.TrimSpace(r.URL.Query().Get("cursor")) != "" {
+		page, err := a.buildConversationRecordsForSessionPage(r.Context(), session, conversationPageLimit(r), strings.TrimSpace(r.URL.Query().Get("cursor")))
+		if err != nil {
+			respondError(w, http.StatusBadRequest, err)
+			return
+		}
+		respondJSON(w, http.StatusOK, page)
+		return
+	}
+
 	conversations, err := a.buildConversationRecordsForSession(r.Context(), session)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, err)
 		return
 	}
 	respondJSON(w, http.StatusOK, conversations)
+}
+
+func (a *API) handleConversationPage(w http.ResponseWriter, r *http.Request) {
+	sessionID := strings.TrimSpace(r.URL.Query().Get("sessionId"))
+	if sessionID == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "sessionId e obrigatorio."})
+		return
+	}
+
+	session, err := a.manager.GetSessionByID(r.Context(), sessionID)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if session == nil {
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		return
+	}
+
+	page, err := a.buildConversationRecordsForSessionPage(r.Context(), session, conversationPageLimit(r), strings.TrimSpace(r.URL.Query().Get("cursor")))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, page)
 }
 
 func (a *API) handleConversationMessages(w http.ResponseWriter, r *http.Request) {
@@ -2668,6 +2718,47 @@ func (a *API) buildConversationRecordsForSession(ctx context.Context, session *m
 	if err != nil {
 		return nil, err
 	}
+	return a.buildConversationRecordsFromChats(ctx, session, chats)
+}
+
+func (a *API) buildConversationRecordsForSessionPage(ctx context.Context, session *models.Session, limit int, rawCursor string) (conversationPageResponse, error) {
+	cursor, err := decodeConversationCursor(rawCursor)
+	if err != nil {
+		return conversationPageResponse{}, err
+	}
+
+	chats, err := a.manager.ListChatsPageBySession(ctx, session.ID, limit+1, cursor.SortAt, cursor.Name, cursor.JID)
+	if err != nil {
+		return conversationPageResponse{}, err
+	}
+
+	hasMore := len(chats) > limit
+	pageChats := chats
+	if hasMore {
+		pageChats = chats[:limit]
+	}
+
+	conversations, err := a.buildConversationRecordsFromChats(ctx, session, pageChats)
+	if err != nil {
+		return conversationPageResponse{}, err
+	}
+
+	nextCursor := ""
+	if hasMore && len(pageChats) > 0 {
+		nextCursor = encodeConversationCursor(pageChats[len(pageChats)-1])
+	}
+
+	return conversationPageResponse{
+		Conversations: conversations,
+		NextCursor:    nextCursor,
+		HasMore:       hasMore,
+	}, nil
+}
+
+func (a *API) buildConversationRecordsFromChats(ctx context.Context, session *models.Session, chats []models.Chat) ([]models.ConversationRecord, error) {
+	if len(chats) == 0 {
+		return []models.ConversationRecord{}, nil
+	}
 
 	contacts, err := a.manager.ListContacts(ctx)
 	if err != nil {
@@ -2744,6 +2835,57 @@ func (a *API) buildConversationRecordsForSession(ctx context.Context, session *m
 	})
 
 	return conversations, nil
+}
+
+func conversationPageLimit(r *http.Request) int {
+	limit := 80
+	if rawLimit := strings.TrimSpace(r.URL.Query().Get("limit")); rawLimit != "" {
+		if parsedLimit, err := strconv.Atoi(rawLimit); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+	if limit > 200 {
+		return 200
+	}
+	return limit
+}
+
+func decodeConversationCursor(raw string) (conversationCursor, error) {
+	if strings.TrimSpace(raw) == "" {
+		return conversationCursor{}, nil
+	}
+
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return conversationCursor{}, errors.New("cursor de conversas invalido")
+	}
+
+	parts := strings.SplitN(string(decoded), "\x00", 3)
+	if len(parts) != 3 || parts[0] == "" || parts[2] == "" {
+		return conversationCursor{}, errors.New("cursor de conversas invalido")
+	}
+
+	return conversationCursor{
+		SortAt: parts[0],
+		Name:   parts[1],
+		JID:    parts[2],
+	}, nil
+}
+
+func encodeConversationCursor(chat models.Chat) string {
+	parts := []string{
+		conversationSortTime(chat),
+		chat.Name,
+		chat.JID,
+	}
+	return base64.RawURLEncoding.EncodeToString([]byte(strings.Join(parts, "\x00")))
+}
+
+func conversationSortTime(chat models.Chat) string {
+	if strings.TrimSpace(chat.LastMessageAt) != "" {
+		return strings.TrimSpace(chat.LastMessageAt)
+	}
+	return strings.TrimSpace(chat.UpdatedAt)
 }
 
 func (a *API) toMessageRecords(ctx context.Context, messages []models.Message, conversationID string) ([]models.MessageRecord, error) {

@@ -55,6 +55,7 @@ import type {
   AuthUser,
   ChannelRecord,
   ContactLabelRecord,
+  ConversationPage,
   ConversationRecord,
   DashboardOverview,
   InstagramPublishResult,
@@ -124,6 +125,7 @@ const messageReactionOptions = ['👍', '❤️', '😂', '😮', '🙏'];
 const INITIAL_VISIBLE_MESSAGE_COUNT = 80;
 const MESSAGE_PAGE_SIZE = 80;
 const MESSAGE_FETCH_LIMIT = 80;
+const CONVERSATION_PAGE_SIZE = 80;
 
 const contactsKanbanStages = [
   {
@@ -222,6 +224,14 @@ type ConversationFilter = 'all' | 'direct' | 'groups' | 'unread';
 
 type Props = {
   initialOverview: DashboardOverview;
+};
+
+type ConversationPageState = {
+  conversations: ConversationRecord[];
+  nextCursor: string;
+  hasMore: boolean;
+  isLoading: boolean;
+  loaded: boolean;
 };
 
 type RealtimeSocketEvent = {
@@ -432,6 +442,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [showConversationFilters, setShowConversationFilters] = useState(false);
   const [conversationSessionScope, setConversationSessionScope] = useState<'selected' | 'all'>('selected');
   const [conversationSessionFilterIds, setConversationSessionFilterIds] = useState<string[]>([]);
+  const [sessionConversationPages, setSessionConversationPages] = useState<Record<string, ConversationPageState>>({});
   const [contactsFilter, setContactsFilter] = useState<ConversationFilter>('all');
   const [contactsAudienceFilter, setContactsAudienceFilter] = useState<'all' | 'verified'>('all');
   const [contactsChannelFilter, setContactsChannelFilter] = useState<
@@ -649,6 +660,8 @@ export function DashboardClient({ initialOverview }: Props) {
       isDisconnectingSelectedSession ? 'Desconectando sessao...' :
         isDeletingSelectedSession ? 'Removendo sessao e limpando dados vinculados...' : '';
 
+  const conversationSearchTerm = globalSearch.trim().toLowerCase();
+
   const allSessionConversations = useMemo(
     () => {
       if (!isConversationsView) {
@@ -656,6 +669,11 @@ export function DashboardClient({ initialOverview }: Props) {
       }
 
       if (conversationSessionScope === 'selected') {
+        const selectedSessionPage = selectedSession?.id ? sessionConversationPages[selectedSession.id] : undefined;
+        if (conversationFilter === 'all' && !conversationSearchTerm && selectedSessionPage?.loaded) {
+          return selectedSessionPage.conversations;
+        }
+
         return overview.conversations.filter(
           (conversation) => conversation.sessionId === selectedSession?.id,
         );
@@ -668,7 +686,16 @@ export function DashboardClient({ initialOverview }: Props) {
       const allowedSessionIds = new Set(conversationSessionFilterIds);
       return overview.conversations.filter((conversation) => allowedSessionIds.has(conversation.sessionId));
     },
-    [conversationSessionFilterIds, conversationSessionScope, isConversationsView, overview.conversations, selectedSession?.id],
+    [
+      conversationFilter,
+      conversationSearchTerm,
+      conversationSessionFilterIds,
+      conversationSessionScope,
+      isConversationsView,
+      overview.conversations,
+      selectedSession?.id,
+      sessionConversationPages,
+    ],
   );
 
   const conversationSessionOptions = useMemo(
@@ -706,8 +733,6 @@ export function DashboardClient({ initialOverview }: Props) {
     [allSessionConversations, conversationFilter],
   );
 
-  const conversationSearchTerm = globalSearch.trim().toLowerCase();
-
   const visibleSessionConversations = useMemo(
     () => {
       if (!isConversationsView) {
@@ -737,7 +762,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const [
     conversationListRef,
-    handleConversationListScroll,
+    handleConversationVirtualScroll,
     virtualConversations,
     conversationListPaddingTop,
     conversationListPaddingBottom,
@@ -1586,6 +1611,106 @@ export function DashboardClient({ initialOverview }: Props) {
     return request;
   }, [activeConversationId, activeSessionId, authenticatedFetch, isConversationActivelyViewed]);
 
+  const loadSessionConversationPage = useCallback(async (
+    sessionId: string,
+    options: { append?: boolean } = {},
+  ) => {
+    if (!sessionId) {
+      return;
+    }
+
+    const currentPage = sessionConversationPages[sessionId];
+    if (options.append && (!currentPage?.hasMore || currentPage.isLoading)) {
+      return;
+    }
+    if (!options.append && currentPage?.isLoading) {
+      return;
+    }
+
+    const cursor = options.append ? currentPage?.nextCursor ?? '' : '';
+    setSessionConversationPages((current) => ({
+      ...current,
+      [sessionId]: {
+        conversations: options.append ? current[sessionId]?.conversations ?? [] : [],
+        nextCursor: cursor,
+        hasMore: current[sessionId]?.hasMore ?? true,
+        isLoading: true,
+        loaded: current[sessionId]?.loaded ?? false,
+      },
+    }));
+
+    try {
+      const params = new URLSearchParams({
+        limit: String(CONVERSATION_PAGE_SIZE),
+        sessionId,
+      });
+      if (cursor) {
+        params.set('cursor', cursor);
+      }
+
+      const response = await authenticatedFetch(`${apiUrl}/whatsapp/conversations?${params.toString()}`, {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        throw new Error('Nao foi possivel carregar conversas paginadas.');
+      }
+
+      const data = (await response.json()) as ConversationPage;
+      setSessionConversationPages((current) => {
+        const previousConversations = options.append ? current[sessionId]?.conversations ?? [] : [];
+        return {
+          ...current,
+          [sessionId]: {
+            conversations: dedupeConversations([...previousConversations, ...data.conversations]),
+            nextCursor: data.nextCursor,
+            hasMore: data.hasMore,
+            isLoading: false,
+            loaded: true,
+          },
+        };
+      });
+    } catch (error) {
+      setSessionConversationPages((current) => ({
+        ...current,
+        [sessionId]: {
+          conversations: current[sessionId]?.conversations ?? [],
+          nextCursor: current[sessionId]?.nextCursor ?? '',
+          hasMore: current[sessionId]?.hasMore ?? true,
+          isLoading: false,
+          loaded: current[sessionId]?.loaded ?? false,
+        },
+      }));
+      throw error;
+    }
+  }, [authenticatedFetch, sessionConversationPages]);
+
+  const handleConversationListScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    handleConversationVirtualScroll(event);
+
+    if (
+      conversationSessionScope !== 'selected' ||
+      conversationFilter !== 'all' ||
+      conversationSearchTerm ||
+      !selectedSession?.id
+    ) {
+      return;
+    }
+
+    const target = event.currentTarget;
+    const distanceFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
+    if (distanceFromBottom < 420) {
+      void loadSessionConversationPage(selectedSession.id, { append: true }).catch(() => undefined);
+    }
+  }, [
+    conversationFilter,
+    conversationSearchTerm,
+    conversationSessionScope,
+    handleConversationVirtualScroll,
+    loadSessionConversationPage,
+    selectedSession?.id,
+  ]);
+
   const loadContactKanbanStages = useCallback(async () => {
     const response = await authenticatedFetch(`${apiUrl}/whatsapp/contacts/kanban`, {
       cache: 'no-store',
@@ -1731,6 +1856,35 @@ export function DashboardClient({ initialOverview }: Props) {
       .catch(() => undefined)
       .finally(() => setHasLoadedInitialOverview(true));
   }, [isAuthReady, loadOverview]);
+
+  useEffect(() => {
+    if (
+      !isAuthReady ||
+      !isConversationsView ||
+      conversationSessionScope !== 'selected' ||
+      conversationFilter !== 'all' ||
+      conversationSearchTerm ||
+      !selectedSession?.id
+    ) {
+      return;
+    }
+
+    const currentPage = sessionConversationPages[selectedSession.id];
+    if (currentPage?.loaded || currentPage?.isLoading) {
+      return;
+    }
+
+    void loadSessionConversationPage(selectedSession.id).catch(() => undefined);
+  }, [
+    conversationFilter,
+    conversationSearchTerm,
+    conversationSessionScope,
+    isAuthReady,
+    isConversationsView,
+    loadSessionConversationPage,
+    selectedSession?.id,
+    sessionConversationPages,
+  ]);
 
   useEffect(() => {
     if (!isAuthReady) {
@@ -2053,6 +2207,11 @@ export function DashboardClient({ initialOverview }: Props) {
           conversations,
         };
       });
+
+      setSessionConversationPages((current) => updateSessionConversationPage(current, sessionId, conversationId, (conversation) => ({
+        ...conversation,
+        unread: 0,
+      })));
 
       try {
         await authenticatedFetch(
@@ -2646,6 +2805,14 @@ export function DashboardClient({ initialOverview }: Props) {
 
           setOverview((current) => applyRealtimeMessageToOverview(
             current,
+            payload.sessionId,
+            conversationId,
+            realtimeMessage,
+            isActivelyViewed,
+          ));
+          setSessionConversationPages((current) => applyRealtimeMessageToSessionConversationPages(
+            current,
+            overviewRef.current,
             payload.sessionId,
             conversationId,
             realtimeMessage,
@@ -10243,6 +10410,73 @@ function applyRealtimeMessageToOverview(
       };
     }),
     conversations: dedupeConversations(conversations),
+  };
+}
+
+function applyRealtimeMessageToSessionConversationPages(
+  pages: Record<string, ConversationPageState>,
+  overview: DashboardOverview,
+  sessionId: string,
+  conversationId: string,
+  message: MessageRecord,
+  isActivelyViewed: boolean,
+) {
+  const page = pages[sessionId];
+  if (!page?.loaded) {
+    return pages;
+  }
+
+  const pageOverview = applyRealtimeMessageToOverview(
+    {
+      ...overview,
+      conversations: page.conversations,
+    },
+    sessionId,
+    conversationId,
+    message,
+    isActivelyViewed,
+  );
+
+  return {
+    ...pages,
+    [sessionId]: {
+      ...page,
+      conversations: pageOverview.conversations,
+    },
+  };
+}
+
+function updateSessionConversationPage(
+  pages: Record<string, ConversationPageState>,
+  sessionId: string,
+  conversationId: string,
+  updateConversation: (conversation: ConversationRecord) => ConversationRecord,
+) {
+  const page = pages[sessionId];
+  if (!page?.loaded) {
+    return pages;
+  }
+
+  let hasChanges = false;
+  const conversations = page.conversations.map((conversation) => {
+    if (!isSameConversationId(conversation.id, conversationId)) {
+      return conversation;
+    }
+
+    hasChanges = true;
+    return updateConversation(conversation);
+  });
+
+  if (!hasChanges) {
+    return pages;
+  }
+
+  return {
+    ...pages,
+    [sessionId]: {
+      ...page,
+      conversations,
+    },
   };
 }
 
