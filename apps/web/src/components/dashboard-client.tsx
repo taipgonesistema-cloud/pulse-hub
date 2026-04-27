@@ -218,6 +218,7 @@ type WorkspaceView =
   | 'conversations'
   | 'contacts'
   | 'analytics'
+  | 'help'
   | 'settings';
 
 type ConversationFilter = 'all' | 'direct' | 'groups' | 'unread';
@@ -4924,6 +4925,129 @@ export function DashboardClient({ initialOverview }: Props) {
     </section>
   );
 
+  const renderHelpView = () => {
+    const guideCards = [
+      {
+        title: 'Conectar WhatsApp',
+        description: 'Abra Configuracoes, crie ou selecione uma sessao, gere o QR e acompanhe o status ate ficar online.',
+        icon: QrCode,
+        tone: 'from-sky-400/22 to-blue-500/8 text-sky-200',
+      },
+      {
+        title: 'Atender conversas',
+        description: 'Use Conversas para filtrar a fila, abrir uma timeline, responder, anexar midias e aplicar etiquetas no contato.',
+        icon: MessageCircle,
+        tone: 'from-emerald-400/22 to-emerald-500/8 text-emerald-200',
+      },
+      {
+        title: 'Organizar contatos',
+        description: 'No CRM, arraste cards entre etapas, salve responsavel, prioridade, observacoes e etiquetas do atendimento.',
+        icon: LayoutGrid,
+        tone: 'from-violet-400/22 to-pink-500/8 text-violet-100',
+      },
+      {
+        title: 'Publicar no Instagram',
+        description: 'Entre em Configuracoes > Instagram, escolha Feed ou Story, envie a midia, revise o preview e publique.',
+        icon: Camera,
+        tone: 'from-pink-400/24 to-rose-500/10 text-pink-100',
+      },
+    ];
+    const quickQuestions = [
+      {
+        question: 'Nao aparece QR code?',
+        answer: 'Clique em Gerar QR / conectar na sessao. Se continuar vazio, atualize o painel e confira se a sessao esta desconectada.',
+      },
+      {
+        question: 'Mensagem nao chegou na timeline?',
+        answer: 'Use Atualizar na conversa. A timeline tambem sincroniza em tempo real quando a sessao esta online.',
+      },
+      {
+        question: 'Como ativar alertas?',
+        answer: 'Use o sino no topo para notificacoes do navegador e o botao de som ao lado para alerta sonoro.',
+      },
+      {
+        question: 'Onde mudo permissao de usuario?',
+        answer: 'Administradores acessam Configuracoes > Usuarios para alterar role, status e sessoes ativas.',
+      },
+    ];
+
+    return (
+      <section className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
+        <div className="mx-auto max-w-none space-y-5">
+          <div className="relative overflow-hidden rounded-[38px] border border-white/10 bg-[linear-gradient(135deg,rgba(127,175,255,0.14),rgba(255,255,255,0.035)_48%,rgba(93,253,138,0.08))] p-6 shadow-[0_28px_80px_-56px_rgba(0,0,0,0.95)] md:p-8">
+            <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(127,175,255,0.22),transparent_64%)]" />
+            <div className="pointer-events-none absolute -bottom-24 left-20 h-64 w-64 rounded-full bg-[radial-gradient(circle,rgba(93,253,138,0.14),transparent_62%)]" />
+            <div className="relative max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
+                <CircleHelp className="h-3.5 w-3.5 text-[var(--primary)]" strokeWidth={2.1} />
+                Guias rapidos
+              </div>
+              <h2 className="font-headline mt-4 text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">
+                Ajuda e duvidas do workspace
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+                Um painel curto para lembrar os fluxos principais e resolver duvidas comuns sem sair do dashboard.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="glass-panel rounded-[30px] p-6">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                    Guias essenciais
+                  </p>
+                  <p className="mt-2 text-sm text-[var(--muted)]">
+                    Os caminhos mais usados no dia a dia da operacao.
+                  </p>
+                </div>
+                <Sparkles className="h-5 w-5 text-[var(--primary)]" strokeWidth={2.1} />
+              </div>
+
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                {guideCards.map((item) => {
+                  const Icon = item.icon;
+
+                  return (
+                    <div key={item.title} className="rounded-[26px] border border-white/8 bg-white/[0.035] p-5">
+                      <div className={`grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br ${item.tone}`}>
+                        <Icon className="h-5 w-5" strokeWidth={2.1} />
+                      </div>
+                      <h3 className="mt-4 text-base font-semibold text-white">{item.title}</h3>
+                      <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{item.description}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="glass-panel rounded-[30px] p-6">
+              <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
+                Duvidas rapidas
+              </p>
+              <div className="mt-5 space-y-3">
+                {quickQuestions.map((item) => (
+                  <div key={item.question} className="rounded-[24px] border border-white/8 bg-white/[0.035] p-4">
+                    <p className="text-sm font-semibold text-white">{item.question}</p>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{item.answer}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-5 rounded-[24px] border border-[var(--primary)]/18 bg-[var(--primary)]/10 p-4">
+                <p className="text-sm font-semibold text-white">Atalho util</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                  Use <span className="font-semibold text-[var(--primary)]">Alt + numero</span> para alternar entre as abas principais da barra lateral.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
   const renderSettingsView = () => {
     const settingsHeading = settingsSection === 'users'
       ? 'Gerenciar usuarios do workspace'
@@ -6745,17 +6869,18 @@ export function DashboardClient({ initialOverview }: Props) {
             >
               <MessageSquarePlus className="h-4 w-4" strokeWidth={2.2} />
             </button>
-            {canAccessSettings ? (
-              <button
-                aria-label="Ajuda"
-                className="flex w-full items-center justify-center rounded-xl px-3 py-3 text-zinc-500 transition-all hover:bg-zinc-800/50 hover:text-zinc-300"
-                onClick={() => navigateToView('settings')}
-                title="Ajuda"
-                type="button"
-              >
-                <CircleHelp className="h-5 w-5" strokeWidth={2.1} />
-              </button>
-            ) : null}
+            <button
+              aria-label="Ajuda"
+              className={`relative flex w-full items-center justify-center rounded-xl px-3 py-3 transition-all ${currentView === 'help' ? 'bg-blue-600/10 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.22)]' : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'}`}
+              onClick={() => navigateToView('help')}
+              title="Ajuda"
+              type="button"
+            >
+              {currentView === 'help' ? (
+                <span className="absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-[var(--primary)]" />
+              ) : null}
+              <CircleHelp className="h-5 w-5" strokeWidth={currentView === 'help' ? 2.4 : 2.1} />
+            </button>
             <button
               aria-label="Sair"
               className="flex w-full items-center justify-center rounded-xl px-3 py-3 text-[var(--error-dim)] transition-all hover:bg-white/5"
@@ -6852,6 +6977,8 @@ export function DashboardClient({ initialOverview }: Props) {
             renderContactsView()
           ) : activeView === 'analytics' ? (
             renderAnalyticsView()
+          ) : activeView === 'help' ? (
+            renderHelpView()
           ) : activeView === 'settings' ? (
             renderSettingsView()
           ) : (
@@ -7173,6 +7300,11 @@ function WorkspaceLoadingScreen({ targetView }: { targetView: WorkspaceView }) {
       label: 'Analytics',
       detail: 'Calculando estatisticas e organizando a leitura operacional...',
       icon: BarChart3,
+    },
+    help: {
+      label: 'Ajuda',
+      detail: 'Abrindo guias rapidos e respostas para duvidas comuns...',
+      icon: CircleHelp,
     },
     settings: {
       label: 'Configuracoes',
