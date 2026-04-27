@@ -16,9 +16,49 @@ import (
 	"pulsehub/wa-core/internal/models"
 )
 
-const redisChannel = "pulsehub:events"
+const (
+	redisChannel          = "pulsehub:events"
+	clientQueueSize       = 128
+	websocketWriteTimeout = 5 * time.Second
+	websocketPongTimeout  = 60 * time.Second
+	websocketPingInterval = (websocketPongTimeout * 9) / 10
+)
 
 type subscriber chan []byte
+
+type client struct {
+	conn   *websocket.Conn
+	send   chan []byte
+	mu     sync.Mutex
+	closed bool
+}
+
+func (c *client) enqueue(payload []byte) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return false
+	}
+
+	select {
+	case c.send <- payload:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *client) close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.closed {
+		return
+	}
+	c.closed = true
+	close(c.send)
+}
 
 type redisEnvelope struct {
 	Source  string          `json:"source"`
@@ -29,7 +69,7 @@ type Hub struct {
 	mu          sync.RWMutex
 	logger      *slog.Logger
 	instanceID  string
-	clients     map[*websocket.Conn]struct{}
+	clients     map[*client]struct{}
 	subscribers map[subscriber]struct{}
 	upgrader    websocket.Upgrader
 	redisClient *redis.Client
@@ -40,7 +80,7 @@ func NewHub(ctx context.Context, logger *slog.Logger, redisURL string) (*Hub, er
 	hub := &Hub{
 		logger:      logger,
 		instanceID:  uuid.NewString(),
-		clients:     make(map[*websocket.Conn]struct{}),
+		clients:     make(map[*client]struct{}),
 		subscribers: make(map[subscriber]struct{}),
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -83,6 +123,7 @@ func NewHub(ctx context.Context, logger *slog.Logger, redisURL string) (*Hub, er
 }
 
 func (h *Hub) Close() error {
+	h.closeClients()
 	if h.pubsub != nil {
 		_ = h.pubsub.Close()
 	}
@@ -135,24 +176,72 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	client := &client{
+		conn: conn,
+		send: make(chan []byte, clientQueueSize),
+	}
+	h.addClient(client)
+
+	go h.writePump(client)
+	h.readPump(client)
+}
+
+func (h *Hub) addClient(client *client) {
 	h.mu.Lock()
-	h.clients[conn] = struct{}{}
+	h.clients[client] = struct{}{}
 	h.mu.Unlock()
+}
+
+func (h *Hub) readPump(client *client) {
+	defer h.removeClient(client)
+
+	client.conn.SetReadLimit(1024)
+	_ = client.conn.SetReadDeadline(time.Now().Add(websocketPongTimeout))
+	client.conn.SetPongHandler(func(string) error {
+		return client.conn.SetReadDeadline(time.Now().Add(websocketPongTimeout))
+	})
 
 	for {
-		if _, _, err := conn.ReadMessage(); err != nil {
-			h.removeClient(conn)
-			_ = conn.Close()
+		if _, _, err := client.conn.ReadMessage(); err != nil {
 			return
+		}
+	}
+}
+
+func (h *Hub) writePump(client *client) {
+	ticker := time.NewTicker(websocketPingInterval)
+	defer func() {
+		ticker.Stop()
+		_ = client.conn.Close()
+	}()
+
+	for {
+		select {
+		case payload, ok := <-client.send:
+			_ = client.conn.SetWriteDeadline(time.Now().Add(websocketWriteTimeout))
+			if !ok {
+				_ = client.conn.WriteMessage(websocket.CloseMessage, nil)
+				return
+			}
+			if err := client.conn.WriteMessage(websocket.TextMessage, payload); err != nil {
+				h.removeClient(client)
+				return
+			}
+		case <-ticker.C:
+			_ = client.conn.SetWriteDeadline(time.Now().Add(websocketWriteTimeout))
+			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				h.removeClient(client)
+				return
+			}
 		}
 	}
 }
 
 func (h *Hub) emitLocal(payload []byte) {
 	h.mu.RLock()
-	clients := make([]*websocket.Conn, 0, len(h.clients))
-	for conn := range h.clients {
-		clients = append(clients, conn)
+	clients := make([]*client, 0, len(h.clients))
+	for client := range h.clients {
+		clients = append(clients, client)
 	}
 	subscribers := make([]subscriber, 0, len(h.subscribers))
 	for ch := range h.subscribers {
@@ -167,11 +256,12 @@ func (h *Hub) emitLocal(payload []byte) {
 		}
 	}
 
-	for _, conn := range clients {
-		_ = conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
-			h.removeClient(conn)
-			_ = conn.Close()
+	for _, client := range clients {
+		if !client.enqueue(payload) {
+			if h.logger != nil {
+				h.logger.Warn("dropping slow websocket client")
+			}
+			h.removeClient(client)
 		}
 	}
 }
@@ -202,8 +292,25 @@ func (h *Hub) consumeRedis(ctx context.Context, messages <-chan *redis.Message) 
 	}
 }
 
-func (h *Hub) removeClient(conn *websocket.Conn) {
+func (h *Hub) removeClient(client *client) {
 	h.mu.Lock()
-	delete(h.clients, conn)
+	if _, ok := h.clients[client]; ok {
+		delete(h.clients, client)
+		client.close()
+	}
 	h.mu.Unlock()
+}
+
+func (h *Hub) closeClients() {
+	h.mu.Lock()
+	clients := make([]*client, 0, len(h.clients))
+	for client := range h.clients {
+		clients = append(clients, client)
+		delete(h.clients, client)
+	}
+	h.mu.Unlock()
+
+	for _, client := range clients {
+		client.close()
+	}
 }
