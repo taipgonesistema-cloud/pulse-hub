@@ -4924,98 +4924,107 @@ export function DashboardClient({ initialOverview }: Props) {
     </section>
   );
 
-  const renderSettingsView = () => (
+  const renderSettingsView = () => {
+    const settingsHeading = settingsSection === 'users'
+      ? 'Gerenciar usuarios do workspace'
+      : settingsSection === 'labels'
+        ? 'Etiquetas visuais dos contatos'
+        : settingsSection === 'quickReplies'
+          ? 'Respostas rapidas'
+          : settingsSection === 'instagram'
+            ? 'Estudio Instagram'
+            : settingsSection === 'audit'
+              ? 'Audit log'
+              : 'Conectar e gerenciar sessoes';
+    const settingsDescription = settingsSection === 'users'
+      ? 'Controle acessos por role sem derrubar a sessao compartilhada do WhatsApp.'
+      : settingsSection === 'labels'
+        ? 'Crie etiquetas com nome, emoji e cor para aplicar visualmente aos contatos do CRM.'
+        : settingsSection === 'quickReplies'
+          ? 'Cadastre atalhos reutilizaveis para acelerar o atendimento e acione autocomplete no chat ao digitar /.'
+          : settingsSection === 'instagram'
+            ? 'Prepare feed e stories em um espaco limpo, sem detalhes internos aparecendo para a operacao.'
+            : settingsSection === 'audit'
+              ? 'Acompanhe quem executou mudancas sensiveis no workspace, em que recurso e quando isso aconteceu.'
+              : 'Crie uma sessao operacional, gere QR code, reconecte numeros e acompanhe o estado da autenticacao sem sair do painel.';
+    const settingsTabs = [
+      {
+        id: 'sessions' as const,
+        label: 'Sessoes',
+        description: 'WhatsApp e canais',
+        icon: Wifi,
+        enabled: true,
+        accent: 'from-sky-400/24 to-blue-500/8 text-sky-200',
+        activeRing: 'border-sky-300/28 bg-sky-400/10 shadow-[0_18px_50px_-34px_rgba(56,189,248,0.85)]',
+      },
+      {
+        id: 'users' as const,
+        label: 'Usuarios',
+        description: 'Acesso e roles',
+        icon: ContactRound,
+        enabled: isAdminUser,
+        accent: 'from-emerald-400/24 to-emerald-500/8 text-emerald-200',
+        activeRing: 'border-emerald-300/28 bg-emerald-400/10 shadow-[0_18px_50px_-34px_rgba(52,211,153,0.85)]',
+      },
+      {
+        id: 'labels' as const,
+        label: 'Etiquetas',
+        description: 'CRM visual',
+        icon: BadgeCheck,
+        enabled: canManageContactLabels,
+        accent: 'from-amber-300/24 to-orange-500/8 text-amber-100',
+        activeRing: 'border-amber-300/28 bg-amber-300/10 shadow-[0_18px_50px_-34px_rgba(251,191,36,0.85)]',
+      },
+      {
+        id: 'quickReplies' as const,
+        label: 'Atalhos',
+        description: 'Respostas rapidas',
+        icon: MessageSquarePlus,
+        enabled: canManageQuickReplies,
+        accent: 'from-violet-400/24 to-pink-500/8 text-violet-100',
+        activeRing: 'border-violet-300/28 bg-violet-400/10 shadow-[0_18px_50px_-34px_rgba(167,139,250,0.85)]',
+      },
+      {
+        id: 'instagram' as const,
+        label: 'Instagram',
+        description: 'Feed e stories',
+        icon: Camera,
+        enabled: canManageInstagram,
+        accent: 'from-pink-400/28 to-rose-500/10 text-pink-100',
+        activeRing: 'border-pink-300/30 bg-pink-400/10 shadow-[0_18px_50px_-34px_rgba(244,114,182,0.9)]',
+      },
+      {
+        id: 'audit' as const,
+        label: 'Auditoria',
+        description: 'Eventos sensiveis',
+        icon: BarChart3,
+        enabled: canViewAuditLogs,
+        accent: 'from-zinc-200/18 to-white/5 text-zinc-200',
+        activeRing: 'border-white/18 bg-white/8 shadow-[0_18px_50px_-34px_rgba(255,255,255,0.55)]',
+      },
+    ].filter((tab) => tab.enabled);
+
+    return (
     <section className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-6">
       <div className="mx-auto max-w-none space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-              Workspace administration
-            </p>
-            <h2 className="font-headline mt-2 text-2xl font-semibold text-white">
-              {settingsSection === 'users'
-                ? 'Gerenciar usuarios do workspace'
-                : settingsSection === 'labels'
-                  ? 'Etiquetas visuais dos contatos'
-                : settingsSection === 'quickReplies'
-                  ? 'Respostas rapidas'
-                  : settingsSection === 'instagram'
-                    ? 'Publicador do Instagram'
-                  : settingsSection === 'audit'
-                    ? 'Audit log'
-                  : 'Conectar e gerenciar sessoes'}
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-              {settingsSection === 'users'
-                ? 'Controle acessos por role sem derrubar a sessao compartilhada do WhatsApp.'
-                : settingsSection === 'labels'
-                  ? 'Crie etiquetas com nome, emoji e cor para aplicar visualmente aos contatos do CRM.'
-                : settingsSection === 'quickReplies'
-                  ? 'Cadastre atalhos reutilizaveis para acelerar o atendimento e acione autocomplete no chat ao digitar /.'
-                  : settingsSection === 'instagram'
-                    ? 'Publique posts de feed e stories diretamente do dashboard usando a integracao da Instagram Graph API.'
-                  : settingsSection === 'audit'
-                    ? 'Acompanhe quem executou mudancas sensiveis no workspace, em que recurso e quando isso aconteceu.'
-                  : 'Crie uma sessao operacional, gere QR code, reconecte numeros e acompanhe o estado da autenticacao sem sair do painel.'}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 rounded-full border border-white/8 bg-white/5 p-1">
-              <button
-                className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'sessions' ? 'bg-[var(--primary)] text-black' : 'text-[var(--muted)] hover:text-white'}`}
-                onClick={() => setSettingsSection('sessions')}
-                type="button"
-              >
-                Sessions
-              </button>
-              {isAdminUser ? (
-                <button
-                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'users' ? 'bg-[var(--secondary)] text-black' : 'text-[var(--muted)] hover:text-white'}`}
-                  onClick={() => setSettingsSection('users')}
-                  type="button"
-                >
-                  Users
-                </button>
-              ) : null}
-              {canManageContactLabels ? (
-                <button
-                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'labels' ? 'bg-amber-300 text-black' : 'text-[var(--muted)] hover:text-white'}`}
-                  onClick={() => setSettingsSection('labels')}
-                  type="button"
-                >
-                  Labels
-                </button>
-              ) : null}
-              {canManageQuickReplies ? (
-                <button
-                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'quickReplies' ? 'bg-[var(--tertiary)] text-black' : 'text-[var(--muted)] hover:text-white'}`}
-                  onClick={() => setSettingsSection('quickReplies')}
-                  type="button"
-                >
-                  Quick replies
-                </button>
-              ) : null}
-              {canManageInstagram ? (
-                <button
-                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'instagram' ? 'bg-pink-400 text-black' : 'text-[var(--muted)] hover:text-white'}`}
-                  onClick={() => setSettingsSection('instagram')}
-                  type="button"
-                >
-                  Instagram
-                </button>
-              ) : null}
-              {canViewAuditLogs ? (
-                <button
-                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${settingsSection === 'audit' ? 'bg-white text-black' : 'text-[var(--muted)] hover:text-white'}`}
-                  onClick={() => setSettingsSection('audit')}
-                  type="button"
-                >
-                  Audit log
-                </button>
-              ) : null}
+        <div className="relative overflow-hidden rounded-[38px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.025))] p-5 shadow-[0_28px_80px_-56px_rgba(0,0,0,0.95)] md:p-6">
+          <div className="pointer-events-none absolute -right-24 -top-28 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(127,175,255,0.22),transparent_64%)]" />
+          <div className="pointer-events-none absolute -bottom-24 left-24 h-64 w-64 rounded-full bg-[radial-gradient(circle,rgba(255,124,188,0.16),transparent_62%)]" />
+          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
+                <Sparkles className="h-3.5 w-3.5 text-[var(--primary)]" strokeWidth={2.1} />
+                Central de controle
+              </div>
+              <h2 className="font-headline mt-4 text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">
+                {settingsHeading}
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+                {settingsDescription}
+              </p>
             </div>
             <button
-              className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-xs text-[var(--muted)] hover:text-white disabled:cursor-wait disabled:opacity-70"
+              className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-black/15 px-4 py-2.5 text-xs font-semibold text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-white/18 hover:bg-white/8 hover:text-white disabled:cursor-wait disabled:opacity-70"
               disabled={settingsSection === 'instagram' && isRefreshingInstagramStatus}
               onClick={() => {
                 if (settingsSection === 'instagram') {
@@ -5037,15 +5046,34 @@ export function DashboardClient({ initialOverview }: Props) {
               }}
               type="button"
             >
-              {settingsSection === 'instagram' && isRefreshingInstagramStatus ? (
-                <>
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" strokeWidth={2.1} />
-                  Atualizando Instagram...
-                </>
-              ) : (
-                `Refresh ${settingsSection}`
-              )}
+              <RefreshCw className={`h-3.5 w-3.5 ${settingsSection === 'instagram' && isRefreshingInstagramStatus ? 'animate-spin' : ''}`} strokeWidth={2.1} />
+              Atualizar painel
             </button>
+          </div>
+
+          <div className="relative mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+            {settingsTabs.map((tab) => {
+              const active = settingsSection === tab.id;
+              const Icon = tab.icon;
+
+              return (
+                <button
+                  key={tab.id}
+                  className={`group overflow-hidden rounded-[26px] border p-4 text-left transition hover:-translate-y-0.5 hover:border-white/16 hover:bg-white/7 ${active ? tab.activeRing : 'border-white/8 bg-black/10'}`}
+                  onClick={() => setSettingsSection(tab.id)}
+                  type="button"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br ${tab.accent}`}>
+                      <Icon className="h-5 w-5" strokeWidth={2.1} />
+                    </span>
+                    <span className={`h-2.5 w-2.5 rounded-full transition ${active ? 'bg-[var(--primary)] shadow-[0_0_18px_rgba(127,175,255,0.85)]' : 'bg-white/14 group-hover:bg-white/28'}`} />
+                  </div>
+                  <p className="mt-4 text-sm font-semibold text-white">{tab.label}</p>
+                  <p className="mt-1 text-xs text-[var(--muted)]">{tab.description}</p>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -5053,39 +5081,34 @@ export function DashboardClient({ initialOverview }: Props) {
           canManageInstagram ? (
             <div className="grid gap-5 xl:grid-cols-[0.88fr_1.12fr]">
               <div className="space-y-6">
-                <div className="glass-panel rounded-[30px] p-6">
-                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                    Integracao
-                  </p>
-                  <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-2">
-                    <MetricCard
-                      compact
-                      detail={instagramStatus?.tokenValid ? 'Token validado no Graph API' : instagramStatus?.lastError || 'Configure INSTAGRAM_ACCESS_TOKEN no backend'}
-                      label="API"
-                      tone="primary"
-                      value={instagramStatus?.tokenValid ? 'ok' : 'off'}
-                    />
-                    <MetricCard
-                      compact
-                      detail={instagramStatus?.appSecretProofEnabled ? 'appsecret_proof ativo nos requests' : 'Configure INSTAGRAM_APP_SECRET para reforcar a seguranca'}
-                      label="Proof"
-                      tone="tertiary"
-                      value={instagramStatus?.appSecretProofEnabled ? 'ok' : 'env'}
-                    />
-                    <MetricCard
-                      compact
-                      detail={instagramStatus?.imageHostingConfigured ? 'Hospedagem de midia configurada para arquivos locais' : 'Sem hospedagem configurada para upload local'}
-                      label="Media host"
-                      tone="tertiary"
-                      value={instagramStatus?.imageHostingConfigured ? 'ok' : 'url'}
-                    />
-                    <MetricCard
-                      compact
-                      detail={instagramStatus?.username ? `${instagramStatus.username} · ${instagramStatus.accountType || 'conta profissional'}` : instagramStatus?.userId ? 'Conta de destino resolvida' : 'Aguardando resolucao automatica da conta'}
-                      label="Conta"
-                      tone="secondary"
-                      value={instagramStatus?.userId ? maskAccountId(instagramStatus.userId) : '--'}
-                    />
+                <div className="relative overflow-hidden rounded-[34px] border border-pink-300/16 bg-[linear-gradient(145deg,rgba(255,124,188,0.16),rgba(255,255,255,0.04)_48%,rgba(127,175,255,0.08))] p-6 shadow-[0_28px_70px_-48px_rgba(244,114,182,0.9)]">
+                  <div className="pointer-events-none absolute -right-20 -top-24 h-60 w-60 rounded-full bg-[radial-gradient(circle,rgba(255,154,215,0.28),transparent_62%)]" />
+                  <div className="relative">
+                    <div className="grid h-14 w-14 place-items-center rounded-[22px] bg-[linear-gradient(135deg,#ff9ad7,#ff7cbc)] text-black shadow-[0_18px_42px_-28px_rgba(255,124,188,0.95)]">
+                      <Camera className="h-6 w-6" strokeWidth={2.2} />
+                    </div>
+                    <p className="mt-6 text-xs font-bold uppercase tracking-[0.24em] text-pink-100">
+                      Estudio social
+                    </p>
+                    <h3 className="font-headline mt-3 text-2xl font-semibold tracking-[-0.035em] text-white">
+                      Publique sem expor a parte tecnica
+                    </h3>
+                    <p className="mt-3 text-sm leading-6 text-zinc-300">
+                      A aba agora fica focada no fluxo criativo: selecionar midia, escolher Feed ou Story, revisar preview e publicar. Detalhes internos e dados da conta ficam fora da interface operacional.
+                    </p>
+                    <div className="mt-5 grid gap-3 text-sm text-zinc-300">
+                      <div className="rounded-2xl border border-white/8 bg-black/12 px-4 py-3">
+                        Feed aceita legenda e usa video como reel quando aplicavel.
+                      </div>
+                      <div className="rounded-2xl border border-white/8 bg-black/12 px-4 py-3">
+                        Story prioriza a arte visual; texto deve estar dentro da imagem ou video.
+                      </div>
+                    </div>
+                    {!isLoadingInstagramStatus && instagramStatus && !instagramStatus.configured ? (
+                      <div className="mt-5 rounded-[24px] border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">
+                        Publicacao indisponivel no momento. Revise a configuracao do publicador antes de usar esta area.
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -5104,17 +5127,16 @@ export function DashboardClient({ initialOverview }: Props) {
                     {lastInstagramPublish ? (
                       <div className="rounded-[24px] border border-white/8 bg-white/4 p-4">
                         <p className="text-sm font-semibold text-white">Publicacao enviada com sucesso</p>
-                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-300">
-                          <span className="rounded-full bg-white/5 px-2.5 py-1">publicado {lastInstagramPublish.publishedId}</span>
-                          <span className="rounded-full bg-white/5 px-2.5 py-1">container {lastInstagramPublish.creationId}</span>
-                        </div>
+                        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                          O conteudo foi entregue ao Instagram. Use o link abaixo para revisar a midia enviada.
+                        </p>
                         <a className="mt-4 inline-flex text-sm text-[var(--primary)] underline-offset-4 hover:underline" href={lastInstagramPublish.imageUrl} rel="noreferrer" target="_blank">
                           Abrir midia publicada
                         </a>
                       </div>
                     ) : (
                       <EmptyStateCard
-                        description="Assim que voce publicar um feed ou story daqui, o ultimo resultado aparece nesta area com ids e imagem enviada."
+                        description="Assim que voce publicar um feed ou story daqui, o ultimo resultado aparece nesta area com um resumo simples."
                         title="Nenhuma publicacao nesta sessao"
                       />
                     )}
@@ -5129,7 +5151,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       Publicar conteudo
                     </p>
                     <p className="mt-2 text-sm text-[var(--muted)]">
-                      Use uma URL publica ou envie imagem/video local. Feed com video sera publicado como reel; story aceita imagem ou video.
+                      Selecione uma midia, revise o preview e publique no formato certo para a campanha.
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 rounded-[1.35rem] border border-white/10 bg-white/5 p-2">
@@ -5163,7 +5185,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       type="file"
                     />
                     <p className="mt-3 text-xs text-[var(--muted)]">
-                      Se nao houver chave de upload configurada no backend, use a URL publica abaixo.
+                      Voce tambem pode usar uma URL publica se a arte ja estiver hospedada.
                     </p>
                   </div>
 
@@ -5183,7 +5205,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     />
                   ) : (
                     <div className="rounded-[24px] border border-white/8 bg-white/4 px-4 py-4 text-sm text-[var(--muted)]">
-                      Stories via API usam apenas a imagem. Texto deve estar na propria arte.
+                      Stories usam a arte enviada. Texto deve estar na propria imagem ou video.
                     </div>
                   )}
 
@@ -5209,7 +5231,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
                   {!isLoadingInstagramStatus && instagramStatus && !instagramStatus.configured ? (
                     <div className="rounded-[24px] border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                      Configure `INSTAGRAM_ACCESS_TOKEN` no backend. `INSTAGRAM_USER_ID` agora pode ficar vazio se o token conseguir resolver a conta automaticamente. Para mais seguranca, adicione tambem `INSTAGRAM_APP_SECRET`.
+                      Publicacao indisponivel no momento. Revise a configuracao do publicador antes de tentar enviar conteudo.
                     </div>
                   ) : null}
 
@@ -5924,6 +5946,7 @@ export function DashboardClient({ initialOverview }: Props) {
       </div>
     </section>
   );
+  };
 
   const renderConversationsView = () => (
     <div className="grid min-h-0 flex-1 overflow-hidden grid-cols-1 xl:grid-cols-[19rem_minmax(0,1fr)]">
@@ -9158,18 +9181,18 @@ function ToastCard({
 
   return (
     <div
-      className={`pointer-events-auto relative overflow-hidden rounded-[22px] border bg-[rgba(10,14,18,0.94)] px-4 py-3 shadow-[0_18px_36px_-20px_rgba(0,0,0,0.72)] backdrop-blur-xl before:absolute before:inset-y-3 before:left-3 before:w-1 before:rounded-full ${toneClass}`}
+      className={`pointer-events-auto relative overflow-hidden rounded-[22px] border bg-[var(--surface-highest)] px-4 py-3 text-[var(--foreground)] shadow-[0_18px_36px_-20px_rgba(0,0,0,0.36)] backdrop-blur-xl before:absolute before:inset-y-3 before:left-3 before:w-1 before:rounded-full ${toneClass}`}
     >
       <div className="flex items-start justify-between gap-3 pl-3">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-white">{toast.title}</p>
+          <p className="text-sm font-semibold text-[var(--foreground)]">{toast.title}</p>
           {toast.description ? (
-            <p className="mt-1 text-xs leading-5 text-zinc-400">{toast.description}</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{toast.description}</p>
           ) : null}
         </div>
         <button
           aria-label="Fechar notificacao"
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[var(--line)] bg-[var(--surface-high)] text-[var(--muted)] transition hover:text-[var(--foreground)]"
           onClick={() => onDismiss(toast.id)}
           type="button"
         >
@@ -9216,15 +9239,6 @@ function formatRoleLabel(role: AuthUser['role']) {
     default:
       return 'Atendente';
   }
-}
-
-function maskAccountId(value: string) {
-  const trimmed = value.trim();
-  if (trimmed.length <= 4) {
-    return trimmed || '--';
-  }
-
-  return `***${trimmed.slice(-4)}`;
 }
 
 function formatAuditDetailLabel(value: string) {
