@@ -98,13 +98,51 @@
   --bootstrap-scan-line: rgba(47, 111, 223, 0.12);
   --color-white: #17212c;
   --color-black: #ffffff;
+  --color-slate-950: #ffffff;
+  --color-zinc-50: #17212c;
+  --color-zinc-100: #1f2b3a;
+  --color-zinc-200: #2a3748;
   --color-zinc-300: #324152;
   --color-zinc-400: #536273;
   --color-zinc-500: #6a7686;
   --color-zinc-600: #7b8694;
   --color-zinc-700: #d7ccbe;
   --color-zinc-800: #ebe3d6;
+  --color-zinc-900: #f3ede4;
   --color-zinc-950: #f8f3eb;
+  --color-blue-300: #245fbf;
+  --color-blue-400: #2f6fdf;
+  --color-blue-500: #2f6fdf;
+  --color-blue-600: #1f5ec6;
+  --color-sky-100: #155a8a;
+  --color-sky-200: #155a8a;
+  --color-sky-300: #1b74a8;
+  --color-sky-400: #2b91c8;
+  --color-sky-500: #2b91c8;
+  --color-emerald-100: #0f6b42;
+  --color-emerald-200: #0f6b42;
+  --color-emerald-300: #137c4d;
+  --color-emerald-400: #149557;
+  --color-emerald-500: #149557;
+  --color-rose-50: #9d2f3f;
+  --color-rose-100: #9d2f3f;
+  --color-rose-200: #a83445;
+  --color-rose-300: #b43a4c;
+  --color-rose-400: #c84456;
+  --color-rose-500: #c84456;
+  --color-red-500: #c84444;
+  --color-amber-100: #8a5a00;
+  --color-amber-200: #8a5a00;
+  --color-amber-300: #b57912;
+  --color-amber-400: #c88917;
+  --color-amber-500: #c88917;
+  --color-yellow-500: #b97900;
+  --color-orange-700: #a14f18;
+  --color-violet-400: #7653c9;
+  --color-violet-500: #7653c9;
+  --color-pink-100: #9a3569;
+  --color-pink-400: #c24f8c;
+  --color-pink-500: #c24f8c;
 }
 
 @theme inline {
@@ -130,6 +168,23 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans-stack);
   transition: background 200ms ease, color 200ms ease;
+}
+
+body,
+.app-shell-sidebar,
+.app-shell-header,
+.app-panel-strong,
+.app-panel-overlay,
+.app-panel-contrast,
+.glass-panel,
+.app-modal-surface,
+.app-hero-surface {
+  transition:
+    background 200ms ease,
+    background-color 200ms ease,
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    color 200ms ease;
 }
 
 button,
