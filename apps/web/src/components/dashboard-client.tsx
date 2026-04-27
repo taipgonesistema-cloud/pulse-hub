@@ -562,6 +562,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const lastConversationAnchorRef = useRef<string | null>(null);
   const preserveScrollOnOlderMessagesRef = useRef(false);
   const olderMessagesScrollSnapshotRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+  const olderMessagesAutoLoadLockRef = useRef(false);
   const viewTransitionTimerRef = useRef<number | null>(null);
   const [viewTransition, setViewTransition] = useState<WorkspaceView | null>(null);
   const [openedUnreadMarker, setOpenedUnreadMarker] = useState<{
@@ -2981,6 +2982,7 @@ export function DashboardClient({ initialOverview }: Props) {
         const scrollDelta = container.scrollHeight - snapshot.scrollHeight;
         container.scrollTop = snapshot.scrollTop + scrollDelta;
       }
+      olderMessagesAutoLoadLockRef.current = false;
       return;
     }
 
@@ -3006,22 +3008,6 @@ export function DashboardClient({ initialOverview }: Props) {
     typingConversationId,
     visibleMessageCount,
   ]);
-
-  const handleMessagesScroll = useCallback(() => {
-    const container = messagesRef.current;
-
-    if (!container) {
-      return;
-    }
-
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-
-    shouldStickToBottomRef.current = distanceFromBottom <= 96;
-    if (distanceFromBottom <= 96) {
-      setNewTimelineMessageCount(0);
-    }
-  }, []);
 
   const registerMessageElement = useCallback((messageId: string, node: HTMLDivElement | null) => {
     if (!messageId) {
@@ -3137,6 +3123,43 @@ export function DashboardClient({ initialOverview }: Props) {
     hasOlderMessages,
     isLoadingOlderMessages,
     timelineMessages,
+    visibleMessageStartIndex,
+  ]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const container = messagesRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+
+    shouldStickToBottomRef.current = distanceFromBottom <= 96;
+    if (distanceFromBottom <= 96) {
+      setNewTimelineMessageCount(0);
+    }
+
+    if (container.scrollTop > 160) {
+      olderMessagesAutoLoadLockRef.current = false;
+    }
+
+    if (
+      container.scrollTop <= 96 &&
+      !olderMessagesAutoLoadLockRef.current &&
+      !isConversationSwitching &&
+      !isLoadingMessages &&
+      (visibleMessageStartIndex > 0 || hasOlderMessages)
+    ) {
+      olderMessagesAutoLoadLockRef.current = true;
+      loadOlderMessages();
+    }
+  }, [
+    hasOlderMessages,
+    isConversationSwitching,
+    isLoadingMessages,
+    loadOlderMessages,
     visibleMessageStartIndex,
   ]);
 
