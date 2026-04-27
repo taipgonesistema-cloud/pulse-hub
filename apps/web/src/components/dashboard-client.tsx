@@ -5087,15 +5087,6 @@ export function DashboardClient({ initialOverview }: Props) {
                     <div className="grid h-14 w-14 place-items-center rounded-[22px] bg-[linear-gradient(135deg,#ff9ad7,#ff7cbc)] text-black shadow-[0_18px_42px_-28px_rgba(255,124,188,0.95)]">
                       <Camera className="h-6 w-6" strokeWidth={2.2} />
                     </div>
-                    <p className="mt-6 text-xs font-bold uppercase tracking-[0.24em] text-pink-100">
-                      Estudio social
-                    </p>
-                    <h3 className="font-headline mt-3 text-2xl font-semibold tracking-[-0.035em] text-white">
-                      Publique sem expor a parte tecnica
-                    </h3>
-                    <p className="mt-3 text-sm leading-6 text-zinc-300">
-                      A aba agora fica focada no fluxo criativo: selecionar midia, escolher Feed ou Story, revisar preview e publicar. Detalhes internos e dados da conta ficam fora da interface operacional.
-                    </p>
                     <div className="mt-5 grid gap-3 text-sm text-zinc-300">
                       <div className="rounded-2xl border border-white/8 bg-black/12 px-4 py-3">
                         Feed aceita legenda e usa video como reel quando aplicavel.
