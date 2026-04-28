@@ -123,8 +123,6 @@ const statusTone: Record<SessionRecord['status'], string> = {
 
 const composerEmojis = ['🙂', '😂', '😍', '🙏', '🎉', '🔥', '✅', '❤️'];
 
-const messageReactionOptions = ['👍', '❤️', '😂', '😮', '🙏'];
-
 const INITIAL_VISIBLE_MESSAGE_COUNT = 80;
 const MESSAGE_PAGE_SIZE = 80;
 const MESSAGE_FETCH_LIMIT = 80;
@@ -4200,39 +4198,6 @@ export function DashboardClient({ initialOverview }: Props) {
     [applyOutgoingMessageUpdate, authenticatedFetch, executeAction, loadMessages, loadOverview, replyTargetMessage, selectedConversation, selectedSession],
   );
 
-  const reactToMessage = useCallback(
-    (message: MessageRecord, emoji: string) => {
-      if (!selectedSession || !selectedConversation || !emoji.trim()) {
-        return Promise.resolve(false);
-      }
-
-      return executeAction(async () => {
-        const response = await authenticatedFetch(
-          `${apiUrl}/whatsapp/sessions/${selectedSession.id}/conversations/${selectedConversation.id}/reactions`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messageId: message.id,
-              emoji: emoji.trim(),
-              author: 'Operador',
-            }),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error('Nao foi possivel reagir a mensagem.');
-        }
-
-        void loadMessages(selectedSession.id, selectedConversation.id, {
-          showLoading: false,
-        }).catch(() => undefined);
-        void loadOverview().catch(() => undefined);
-      });
-    },
-    [authenticatedFetch, executeAction, loadMessages, loadOverview, selectedConversation, selectedSession],
-  );
-
   if (!isAuthReady) {
     return (
       <WorkspaceBootstrapScreen
@@ -6407,8 +6372,8 @@ export function DashboardClient({ initialOverview }: Props) {
       <section className={`${isMobileConversationOpen ? 'flex' : 'hidden'} min-h-0 flex-col overflow-hidden bg-[var(--surface)] xl:flex`}>
         {selectedSession ? (
           <>
-            <div className="app-panel-overlay flex flex-wrap items-center justify-between gap-4 border-b border-white/5 px-4 py-3 backdrop-blur-md">
-              <div className="flex items-center gap-3">
+            <div className="app-panel-overlay flex items-start justify-between gap-3 border-b border-white/5 px-3 py-3 backdrop-blur-md md:px-4">
+              <div className="flex min-w-0 items-center gap-3">
                 <button
                   aria-label="Voltar para lista de conversas"
                   className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-white/[0.04] text-[var(--muted)] transition hover:bg-white/[0.08] hover:text-white xl:hidden"
@@ -6428,8 +6393,8 @@ export function DashboardClient({ initialOverview }: Props) {
                 ) : (
                   <span className="h-3 w-3 rounded-full bg-[var(--secondary)] shadow-[0_0_16px_rgba(93,253,138,0.8)]" />
                 )}
-                <div>
-                  <p className="font-headline text-xl font-semibold text-white md:text-2xl">
+                <div className="min-w-0">
+                  <p className="truncate font-headline text-xl font-semibold text-white md:text-2xl">
                     {selectedConversation?.contact ?? selectedSession.name}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
@@ -6464,14 +6429,14 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
 
               {selectedConversation ? (
-                <div className="flex items-center gap-2">
+                <div className="shrink-0 pt-0.5">
                   <button
-                    className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] px-3 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white md:px-4"
                     onClick={() => setShowConversationLabelsModal(true)}
                     type="button"
                   >
                     <BadgeCheck className="h-4 w-4" strokeWidth={2.1} />
-                    Etiquetas {activeConversationLabels.length > 0 ? `(${activeConversationLabels.length})` : ''}
+                    <span className="hidden sm:inline">Etiquetas {activeConversationLabels.length > 0 ? `(${activeConversationLabels.length})` : ''}</span>
                   </button>
                 </div>
               ) : null}
@@ -6523,8 +6488,6 @@ export function DashboardClient({ initialOverview }: Props) {
                         message={message}
                         messageLookup={messagesById}
                         onJumpToMessage={jumpToMessage}
-                        onReact={reactToMessage}
-                        onReply={setReplyTargetMessage}
                         registerElement={registerMessageElement}
                       />
                     </Fragment>
@@ -6573,7 +6536,7 @@ export function DashboardClient({ initialOverview }: Props) {
               )}
             </div>
 
-            <div className="border-t border-white/5 bg-[var(--surface-low)]/45 px-3 py-3 backdrop-blur-xl md:px-4">
+            <div className="border-t border-white/5 bg-[var(--surface-low)]/45 px-3 py-2 backdrop-blur-xl md:px-4 md:py-3">
               <ConversationComposer
                 key={`${selectedSession.id}:${selectedConversation?.id ?? 'none'}:${authUser?.id ?? 'guest'}`}
                 defaultSignatureName={authUser?.name ?? 'Operador'}
@@ -6952,7 +6915,7 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden pb-20 md:pb-0">
+        <div className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pb-0 ${activeView === 'conversations' && isMobileConversationOpen ? 'pb-0' : 'pb-20'}`}>
           <header className="app-shell-header sticky top-0 z-20 flex items-center justify-between border-b border-white/8 px-4 py-2.5 backdrop-blur-2xl md:px-5">
             <div className="flex items-center gap-5">
               <span className="font-headline text-xl font-bold tracking-tight text-transparent bg-gradient-to-br from-blue-400 to-blue-600 bg-clip-text">
@@ -7045,7 +7008,7 @@ export function DashboardClient({ initialOverview }: Props) {
           )}
         </div>
       </div>
-      <nav className="fixed inset-x-3 bottom-3 z-40 flex gap-1 overflow-x-auto rounded-[24px] border border-white/10 bg-[var(--surface-highest)]/95 p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl md:hidden">
+      <nav className={`${activeView === 'conversations' && isMobileConversationOpen ? 'hidden' : 'flex'} fixed inset-x-3 bottom-3 z-40 gap-1 overflow-x-auto rounded-[24px] border border-white/10 bg-[var(--surface-highest)]/95 p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl md:hidden`}>
         {[...availableNavigationItems, { id: 'help' as const, label: 'Ajuda', icon: CircleHelp }].map(({ id, label, icon: Icon }, index) => {
           const isActive = currentView === id;
 
@@ -7053,7 +7016,7 @@ export function DashboardClient({ initialOverview }: Props) {
             <button
               key={id}
               aria-label={label}
-              className={`flex min-w-[4rem] flex-1 flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-2 text-[10px] font-semibold transition ${
+              className={`flex min-w-[3.75rem] shrink-0 flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-2 text-[9px] font-semibold transition ${
                 isActive
                   ? 'bg-[var(--primary)] text-black shadow-[0_10px_24px_rgba(127,175,255,0.22)]'
                   : 'text-[var(--muted)] hover:bg-white/6 hover:text-[var(--foreground)]'
@@ -7063,18 +7026,18 @@ export function DashboardClient({ initialOverview }: Props) {
               type="button"
             >
               <Icon className="h-4 w-4" strokeWidth={isActive ? 2.4 : 2.1} />
-              <span>{label}</span>
+              <span className="whitespace-nowrap">{label}</span>
             </button>
           );
         })}
         <button
           aria-label="Sair"
-          className="flex min-w-[4rem] flex-1 flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-2 text-[10px] font-semibold text-[var(--error-dim)] transition hover:bg-white/6"
+          className="flex min-w-[3.75rem] shrink-0 flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-2 text-[9px] font-semibold text-[var(--error-dim)] transition hover:bg-white/6"
           onClick={signOut}
           type="button"
         >
           <LogOut className="h-4 w-4" strokeWidth={2.1} />
-          <span>Sair</span>
+          <span className="whitespace-nowrap">Sair</span>
         </button>
       </nav>
     </main>
@@ -8760,7 +8723,7 @@ function ConversationComposer({
         />
       </div>
 
-      <div className="mb-3 flex flex-wrap items-center gap-3 rounded-[24px] border border-white/10 bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.9)]">
+      <div className="mb-2 flex items-center gap-3 rounded-[22px] border border-white/10 bg-[var(--surface-high)] px-3 py-2 shadow-[0_18px_36px_-24px_rgba(0,0,0,0.9)] md:mb-3 md:flex-wrap md:rounded-[24px] md:py-3">
         <button
           aria-pressed={signatureEnabled}
           className={`relative inline-flex h-7 w-12 items-center rounded-full border transition ${signatureEnabled ? 'border-[var(--primary)]/40 bg-[var(--primary)]/20' : 'border-white/10 bg-white/5'}`}
@@ -8773,12 +8736,12 @@ function ConversationComposer({
           />
         </button>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
+          <p className="hidden text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)] md:block">
             Assinatura do operador
           </p>
-          <div className="mt-2">
+          <div className="md:mt-2">
             <input
-              className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none transition focus:border-[var(--primary)]/40"
+              className="w-full min-w-0 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none transition focus:border-[var(--primary)]/40 md:py-2.5"
               disabled={composerBusy}
               onChange={(event) => setSignatureName(event.target.value)}
               placeholder="Nome da assinatura"
@@ -8788,11 +8751,11 @@ function ConversationComposer({
         </div>
       </div>
 
-      <div className="flex items-center gap-3 rounded-[30px] bg-[var(--surface-high)] px-3 py-3 shadow-[0_18px_36px_-18px_rgba(0,0,0,0.9)]">
+      <div className="flex items-center gap-2 rounded-[26px] bg-[var(--surface-high)] px-3 py-2.5 shadow-[0_18px_36px_-18px_rgba(0,0,0,0.9)] md:gap-3 md:rounded-[30px] md:py-3">
         <div className="relative">
           <button
             aria-label="Abrir anexos"
-            className="grid h-11 w-11 place-items-center rounded-full bg-white/5 text-[var(--muted)]"
+            className="grid h-10 w-10 place-items-center rounded-full bg-white/5 text-[var(--muted)] md:h-11 md:w-11"
             disabled={composerBusy}
             onClick={() => {
               setShowAttachmentMenu((current) => !current);
@@ -8831,7 +8794,7 @@ function ConversationComposer({
         </div>
         <button
           aria-label="Abrir emojis"
-          className={`grid h-11 w-11 place-items-center rounded-full text-[var(--muted)] transition ${showEmojiPicker ? 'bg-[var(--primary)]/12 text-[var(--primary)]' : 'bg-white/5'}`}
+          className={`grid h-10 w-10 place-items-center rounded-full text-[var(--muted)] transition md:h-11 md:w-11 ${showEmojiPicker ? 'bg-[var(--primary)]/12 text-[var(--primary)]' : 'bg-white/5'}`}
           disabled={composerBusy}
           onClick={() => {
             setShowEmojiPicker((current) => !current);
@@ -8843,7 +8806,7 @@ function ConversationComposer({
         </button>
         <textarea
           ref={composerInputRef}
-          className="h-20 max-h-40 flex-1 resize-none overflow-y-auto bg-transparent py-1 text-sm leading-6 text-white outline-none placeholder:text-zinc-500"
+          className="h-12 max-h-32 flex-1 resize-none overflow-y-auto bg-transparent py-1 text-sm leading-6 text-white outline-none placeholder:text-zinc-500 md:h-20 md:max-h-40"
           disabled={composerBusy}
           onChange={(event) => handleDraftChange(event.target.value)}
           onBlur={() => setIsComposerFocused(false)}
@@ -8909,7 +8872,7 @@ function ConversationComposer({
           value={draft}
         />
         <button
-          className="grid h-12 w-12 place-items-center rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] text-black shadow-[0_0_22px_rgba(127,175,255,0.32)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50"
+          className="grid h-11 w-11 place-items-center rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] text-black shadow-[0_0_22px_rgba(127,175,255,0.32)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 md:h-12 md:w-12"
           disabled={composerBusy || (!draft.trim() && !selectedAttachment)}
           onClick={() => void submit()}
           type="button"
@@ -8933,8 +8896,6 @@ const MessageBubble = memo(function MessageBubble({
   isUnread = false,
   messageLookup,
   onJumpToMessage,
-  onReact,
-  onReply,
   registerElement,
 }: {
   message: MessageRecord;
@@ -8944,14 +8905,10 @@ const MessageBubble = memo(function MessageBubble({
   isUnread?: boolean;
   messageLookup: Map<string, MessageRecord>;
   onJumpToMessage: (messageId: string) => void;
-  onReact: (message: MessageRecord, emoji: string) => Promise<boolean>;
-  onReply: (message: MessageRecord) => void;
   registerElement: (messageId: string, node: HTMLDivElement | null) => void;
 }) {
   const incoming = message.direction !== 'outgoing';
   const showGroupAuthor = shouldShowGroupMessageAuthor(message, conversation);
-  const [showReactionPicker, setShowReactionPicker] = useState(false);
-  const reactionPickerRef = useRef<HTMLDivElement | null>(null);
   const repliedMessage = message.replyTo ? messageLookup.get(message.replyTo.messageId) : undefined;
   const replyAuthor = repliedMessage
     ? repliedMessage.direction === 'outgoing'
@@ -8962,23 +8919,6 @@ const MessageBubble = memo(function MessageBubble({
     ? summarizeMessageForReply(repliedMessage)
     : summarizeReplyRecord(message.replyTo);
 
-  useEffect(() => {
-    if (!showReactionPicker) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (reactionPickerRef.current?.contains(event.target as Node)) {
-        return;
-      }
-
-      setShowReactionPicker(false);
-    };
-
-    window.addEventListener('pointerdown', handlePointerDown);
-    return () => window.removeEventListener('pointerdown', handlePointerDown);
-  }, [showReactionPicker]);
-
   const bubbleBody = (
     <div
       className={`group relative ${incoming
@@ -8987,46 +8927,6 @@ const MessageBubble = memo(function MessageBubble({
           }`
         : 'rounded-[26px] rounded-tr-none border border-[rgba(127,175,255,0.2)] bg-[linear-gradient(180deg,rgba(100,161,255,0.16),rgba(100,161,255,0.08))] px-5 py-4 shadow-[inset_0_0_18px_rgba(127,175,255,0.08)]'}`}
     >
-      <div
-        ref={reactionPickerRef}
-        className={`absolute top-3 z-10 flex items-center gap-2 ${incoming ? 'right-3' : 'left-3'}`}
-      >
-        {showReactionPicker ? (
-          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-[rgba(10,14,18,0.96)] px-2 py-2 shadow-[0_20px_36px_-20px_rgba(0,0,0,0.95)]">
-            {messageReactionOptions.map((emoji) => (
-              <button
-                key={`${message.id}:${emoji}`}
-                className="grid h-8 w-8 place-items-center rounded-full bg-white/5 text-base transition hover:bg-white/10"
-                onClick={() => {
-                  setShowReactionPicker(false);
-                  void onReact(message, emoji);
-                }}
-                type="button"
-              >
-                <span aria-hidden>{emoji}</span>
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <button
-          aria-label="Reagir a mensagem"
-          className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-[rgba(12,16,22,0.92)] text-zinc-300 shadow-[0_16px_28px_-18px_rgba(0,0,0,0.9)] transition hover:text-white md:opacity-0 md:group-hover:opacity-100"
-          onClick={() => setShowReactionPicker((current) => !current)}
-          type="button"
-        >
-          <Heart className="h-4 w-4" strokeWidth={2.1} />
-        </button>
-        <button
-          aria-label="Responder mensagem"
-          className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-[rgba(12,16,22,0.92)] text-zinc-300 shadow-[0_16px_28px_-18px_rgba(0,0,0,0.9)] transition hover:text-white md:opacity-0 md:group-hover:opacity-100"
-          onClick={() => onReply(message)}
-          type="button"
-        >
-          <Reply className="h-4 w-4" strokeWidth={2.1} />
-        </button>
-      </div>
-
       {showGroupAuthor ? (
         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--secondary)]">
           {message.author}
