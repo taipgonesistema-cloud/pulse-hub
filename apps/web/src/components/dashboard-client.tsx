@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
+  ArrowLeft,
   BarChart3,
   BadgeCheck,
   Bell,
@@ -432,6 +433,7 @@ export function DashboardClient({ initialOverview }: Props) {
   const [selectedConversationId, setSelectedConversationId] = useState(
     initialOverview.conversations[0]?.id ?? '',
   );
+  const [isMobileConversationOpen, setIsMobileConversationOpen] = useState(false);
   const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [loadedMessagesConversationKey, setLoadedMessagesConversationKey] = useState('');
   const [visibleMessageCount, setVisibleMessageCount] = useState(INITIAL_VISIBLE_MESSAGE_COUNT);
@@ -2318,6 +2320,8 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
+    setIsMobileConversationOpen(true);
+
     if (conversation.id === selectedConversationId && conversation.sessionId === selectedSessionId) {
       return;
     }
@@ -2352,11 +2356,18 @@ export function DashboardClient({ initialOverview }: Props) {
 
   useEffect(() => {
     if (!isConversationsView) {
+      setIsMobileConversationOpen(false);
+    }
+  }, [isConversationsView]);
+
+  useEffect(() => {
+    if (!isConversationsView) {
       return;
     }
 
     if (!selectedSession) {
       setSelectedConversationId('');
+      setIsMobileConversationOpen(false);
       return;
     }
 
@@ -2367,6 +2378,7 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!currentConversationExists) {
       const nextConversation = visibleSessionConversations[0];
       setSelectedConversationId(nextConversation?.id ?? '');
+      setIsMobileConversationOpen(false);
       if (nextConversation) {
         setSelectedSessionId(nextConversation.sessionId);
       }
@@ -4100,6 +4112,7 @@ export function DashboardClient({ initialOverview }: Props) {
         setSelectedSessionId(nextSelectedSessionId);
         if (!nextSelectedSessionId) {
           setSelectedConversationId('');
+          setIsMobileConversationOpen(false);
           setSelectedContactId('');
           setLoadedMessagesConversationKey('');
           setMessages([]);
@@ -4389,6 +4402,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     onOpen={() => {
                       setSelectedSessionId(conversation.sessionId);
                       setSelectedConversationId(conversation.id);
+                      setIsMobileConversationOpen(true);
                       navigateToView('conversations');
                     }}
                   />
@@ -4685,6 +4699,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       setSelectedContactId(contact.id);
                       setSelectedSessionId(contact.sessionId);
                       setSelectedConversationId(contact.id);
+                      setIsMobileConversationOpen(true);
                       navigateToView('conversations');
                     }}
                     onSelectContact={(contact) => setSelectedContactId(contact.id)}
@@ -4714,6 +4729,7 @@ export function DashboardClient({ initialOverview }: Props) {
               onOpenConversation={() => {
                 setSelectedSessionId(selectedContact.sessionId);
                 setSelectedConversationId(selectedContact.id);
+                setIsMobileConversationOpen(true);
                 navigateToView('conversations');
               }}
               stage={resolveContactKanbanStage(selectedContact, contactKanbanStageMap)}
@@ -6097,7 +6113,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const renderConversationsView = () => (
     <div className="grid min-h-0 flex-1 overflow-hidden grid-cols-1 xl:grid-cols-[19rem_minmax(0,1fr)]">
-      <section className="min-h-0 overflow-hidden border-r border-white/5 bg-[var(--surface-low)]/35 px-3 py-4">
+      <section className={`${isMobileConversationOpen ? 'hidden xl:block' : 'block'} min-h-0 overflow-hidden border-r border-white/5 bg-[var(--surface-low)]/35 px-3 py-4`}>
         <div className="mb-4 flex items-center justify-between px-1">
           <div>
             <h2 className="font-headline text-xl font-bold text-white">Conversas</h2>
@@ -6277,7 +6293,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
         <div
           ref={conversationListRef}
-          className="h-[calc(100vh-11.5rem)] overflow-y-auto pr-1"
+          className="h-[calc(100dvh-18rem)] overflow-y-auto pr-1 xl:h-[calc(100vh-11.5rem)]"
           onScroll={handleConversationListScroll}
         >
           {shouldShowInitialSkeleton ? <ListSkeleton rows={6} /> : null}
@@ -6388,11 +6404,22 @@ export function DashboardClient({ initialOverview }: Props) {
         </div>
       </section>
 
-      <section className="flex min-h-0 flex-col overflow-hidden bg-[var(--surface)]">
+      <section className={`${isMobileConversationOpen ? 'flex' : 'hidden'} min-h-0 flex-col overflow-hidden bg-[var(--surface)] xl:flex`}>
         {selectedSession ? (
           <>
             <div className="app-panel-overlay flex flex-wrap items-center justify-between gap-4 border-b border-white/5 px-4 py-3 backdrop-blur-md">
               <div className="flex items-center gap-3">
+                <button
+                  aria-label="Voltar para lista de conversas"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-white/[0.04] text-[var(--muted)] transition hover:bg-white/[0.08] hover:text-white xl:hidden"
+                  onClick={() => {
+                    setReplyTargetMessage(null);
+                    setIsMobileConversationOpen(false);
+                  }}
+                  type="button"
+                >
+                  <ArrowLeft className="h-4 w-4" strokeWidth={2.2} />
+                </button>
                 {selectedConversation ? (
                   <AvatarBadge
                     label={selectedConversation.contact}
