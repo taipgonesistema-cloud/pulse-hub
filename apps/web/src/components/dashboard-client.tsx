@@ -75,6 +75,7 @@ import {
   deleteQuickReply,
   autocompleteQuickReplies,
   getCurrentUser,
+  getStoredCsrfToken,
   getInstagramPublishStatus,
   listAuditLogs,
   listQuickReplies,
@@ -1377,6 +1378,14 @@ export function DashboardClient({ initialOverview }: Props) {
 
   useEffect(() => {
     let cancelled = false;
+
+    if (!getStoredCsrfToken()) {
+      clearStoredAuthSession();
+      router.replace('/login');
+      return () => {
+        cancelled = true;
+      };
+    }
 
     void getCurrentUser()
       .then((result) => {

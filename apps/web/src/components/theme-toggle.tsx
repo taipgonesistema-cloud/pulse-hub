@@ -1,11 +1,16 @@
 'use client';
 
 import { MoonStar, SunMedium } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 
 const themeStorageKey = 'pulse-hub.theme';
 
 type ThemeMode = 'dark' | 'light';
+
+type ThemeListener = () => void;
+
+let currentTheme: ThemeMode = 'dark';
+const themeListeners = new Set<ThemeListener>();
 
 function resolvePreferredTheme(): ThemeMode {
   if (typeof window === 'undefined') {
@@ -26,14 +31,35 @@ function applyTheme(theme: ThemeMode) {
   window.localStorage.setItem(themeStorageKey, theme);
 }
 
+function subscribeTheme(listener: ThemeListener) {
+  themeListeners.add(listener);
+  return () => {
+    themeListeners.delete(listener);
+  };
+}
+
+function getThemeSnapshot() {
+  return currentTheme;
+}
+
+function getServerThemeSnapshot(): ThemeMode {
+  return 'dark';
+}
+
+function updateTheme(theme: ThemeMode) {
+  currentTheme = theme;
+  applyTheme(theme);
+  themeListeners.forEach((listener) => listener());
+}
+
 export function ThemeToggle({ compact = false }: { compact?: boolean }) {
-  const [theme, setTheme] = useState<ThemeMode>(() => resolvePreferredTheme());
+  const theme = useSyncExternalStore(subscribeTheme, getThemeSnapshot, getServerThemeSnapshot);
 
   const isLight = theme === 'light';
 
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    updateTheme(resolvePreferredTheme());
+  }, []);
 
   return (
     <button
@@ -43,7 +69,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
       }`}
       onClick={() => {
         const nextTheme: ThemeMode = isLight ? 'dark' : 'light';
-        setTheme(nextTheme);
+        updateTheme(nextTheme);
       }}
       type="button"
     >
