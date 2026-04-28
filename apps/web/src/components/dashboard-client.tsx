@@ -9046,11 +9046,11 @@ const MessageBubble = memo(function MessageBubble({
       className="relative flex shrink-0 flex-col gap-1 self-end pb-2 opacity-100 transition md:opacity-0 md:group-hover/message:opacity-100 md:focus-within:opacity-100"
     >
       {showReactionPicker ? (
-        <div className={`absolute bottom-full z-10 mb-2 flex items-center gap-1 rounded-full border border-white/10 bg-[rgba(10,14,18,0.96)] px-2 py-2 shadow-[0_20px_36px_-20px_rgba(0,0,0,0.95)] ${incoming ? 'left-0' : 'right-0'}`}>
+        <div className={`absolute bottom-full z-10 mb-2 flex items-center gap-1 rounded-full border border-[var(--line)] bg-[var(--surface-highest)] px-2 py-2 shadow-[0_20px_36px_-20px_rgba(0,0,0,0.45)] ${incoming ? 'left-0' : 'right-0'}`}>
           {messageReactionOptions.map((emoji) => (
             <button
               key={`${message.id}:${emoji}`}
-              className="grid h-8 w-8 place-items-center rounded-full bg-white/5 text-base transition hover:bg-white/10"
+              className="grid h-8 w-8 place-items-center rounded-full bg-[var(--surface-high)] text-base transition hover:bg-[var(--surface-low)]"
               onClick={() => {
                 setShowReactionPicker(false);
                 void onReact(message, emoji);
@@ -9065,7 +9065,7 @@ const MessageBubble = memo(function MessageBubble({
 
       <button
         aria-label="Reagir a mensagem"
-        className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-[rgba(12,16,22,0.88)] text-zinc-300 shadow-[0_12px_22px_-16px_rgba(0,0,0,0.9)] transition hover:bg-white/8 hover:text-white md:h-9 md:w-9"
+        className="grid h-8 w-8 place-items-center rounded-full border border-[var(--line)] bg-[var(--surface-highest)] text-[var(--muted)] shadow-[0_12px_22px_-16px_rgba(0,0,0,0.45)] transition hover:bg-[var(--surface-high)] hover:text-[var(--primary)] md:h-9 md:w-9"
         onClick={() => setShowReactionPicker((current) => !current)}
         type="button"
       >
@@ -9073,7 +9073,7 @@ const MessageBubble = memo(function MessageBubble({
       </button>
       <button
         aria-label="Responder mensagem"
-        className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-[rgba(12,16,22,0.88)] text-zinc-300 shadow-[0_12px_22px_-16px_rgba(0,0,0,0.9)] transition hover:bg-white/8 hover:text-white md:h-9 md:w-9"
+        className="grid h-8 w-8 place-items-center rounded-full border border-[var(--line)] bg-[var(--surface-highest)] text-[var(--muted)] shadow-[0_12px_22px_-16px_rgba(0,0,0,0.45)] transition hover:bg-[var(--surface-high)] hover:text-[var(--primary)] md:h-9 md:w-9"
         onClick={() => onReply(message)}
         type="button"
       >
