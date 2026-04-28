@@ -286,7 +286,7 @@ a {
 }
 
 .app-mobile-shell-padding {
-  padding-bottom: calc(5.35rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0;
 }
 
 .app-mobile-nav {
@@ -299,7 +299,13 @@ a {
   scrollbar-gutter: stable;
 }
 
-@media (max-width: 380px), (max-height: 680px) {
+@media (max-width: 767px) {
+  .app-mobile-shell-padding {
+    padding-bottom: calc(5.35rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-width: 380px), (max-width: 767px) and (max-height: 680px) {
   html {
     font-size: 14px;
   }
