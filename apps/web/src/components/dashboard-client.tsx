@@ -6293,7 +6293,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
         <div
           ref={conversationListRef}
-          className="h-[calc(100dvh-18rem)] overflow-y-auto pr-1 xl:h-[calc(100vh-11.5rem)]"
+          className="app-scroll-stable h-[calc(100dvh-18rem)] overflow-y-auto pr-1 xl:h-[calc(100dvh-11.5rem)]"
           onScroll={handleConversationListScroll}
         >
           {shouldShowInitialSkeleton ? <ListSkeleton rows={6} /> : null}
@@ -6480,7 +6480,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
             <div
               ref={messagesRef}
-              className="min-h-0 flex-1 overflow-y-auto px-3 py-4 md:px-4"
+              className="app-scroll-stable min-h-0 flex-1 overflow-y-auto px-2 py-3 sm:px-3 sm:py-4 md:px-4"
               onScroll={handleMessagesScroll}
             >
               {isConversationSwitching ? (
@@ -6609,7 +6609,7 @@ export function DashboardClient({ initialOverview }: Props) {
   );
 
   return (
-    <main className="h-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
+    <main className="app-root-shell overflow-hidden bg-[var(--background)] text-[var(--foreground)]">
       <div className="pointer-events-none fixed right-4 top-4 z-50 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2">
         {toasts.map((toast) => (
           <ToastCard key={toast.id} toast={toast} onDismiss={dismissToast} />
@@ -6952,10 +6952,10 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
         </aside>
 
-        <div className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pb-0 ${activeView === 'conversations' && isMobileConversationOpen ? 'pb-0' : 'pb-20'}`}>
-          <header className="app-shell-header sticky top-0 z-20 flex items-center justify-between border-b border-white/8 px-4 py-2.5 backdrop-blur-2xl md:px-5">
-            <div className="flex items-center gap-5">
-              <span className="font-headline text-xl font-bold tracking-tight text-transparent bg-gradient-to-br from-blue-400 to-blue-600 bg-clip-text">
+        <div className={`flex min-w-0 flex-1 flex-col overflow-hidden md:pb-0 ${activeView === 'conversations' && isMobileConversationOpen ? 'pb-0' : 'app-mobile-shell-padding'}`}>
+          <header className="app-shell-header sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-white/8 px-3 py-2.5 backdrop-blur-2xl sm:px-4 md:px-5">
+            <div className="flex min-w-0 items-center gap-3 md:gap-5">
+              <span className="truncate font-headline text-[clamp(1rem,4vw,1.25rem)] font-bold tracking-tight text-transparent bg-gradient-to-br from-blue-400 to-blue-600 bg-clip-text">
                 ether command
               </span>
               <div className="hidden items-center gap-3 rounded-full border border-white/5 bg-white/5 px-4 py-1.5 transition-all duration-300 focus-within:border-[var(--primary)]/50 lg:flex">
@@ -6973,7 +6973,7 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <button
                 aria-label={notificationsEnabled ? 'Desativar notificacoes' : 'Ativar notificacoes'}
                 className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${notificationsEnabled ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-[var(--primary)]' : 'border-white/10 bg-white/5 text-[var(--muted)] hover:text-white'}`}
@@ -7045,7 +7045,7 @@ export function DashboardClient({ initialOverview }: Props) {
           )}
         </div>
       </div>
-      <nav className={`${activeView === 'conversations' && isMobileConversationOpen ? 'hidden' : 'flex'} fixed inset-x-3 bottom-3 z-40 gap-1 overflow-x-auto rounded-[24px] border border-white/10 bg-[var(--surface-highest)]/95 p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl md:hidden`}>
+      <nav className={`${activeView === 'conversations' && isMobileConversationOpen ? 'hidden' : 'flex'} app-mobile-nav fixed z-40 gap-1 overflow-x-auto rounded-[22px] border border-white/10 bg-[var(--surface-highest)]/95 p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl md:hidden`}>
         {[...availableNavigationItems, { id: 'help' as const, label: 'Ajuda', icon: CircleHelp }].map(({ id, label, icon: Icon }, index) => {
           const isActive = currentView === id;
 
@@ -7484,7 +7484,7 @@ function WorkspaceBootstrapScreen({
   const visibleProgress = Math.max(completionPercent, totalItems > 0 ? 8 : 0);
 
   return (
-    <main className="app-hero-surface relative grid min-h-screen place-items-center overflow-hidden px-5 py-10 text-[var(--foreground)]">
+    <main className="app-hero-surface relative grid min-h-[100dvh] place-items-center overflow-hidden px-5 py-10 text-[var(--foreground)]">
       <div className="absolute inset-0 opacity-55 [background-image:linear-gradient(rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.035)_1px,transparent_1px)] [background-size:110px_110px] [mask-image:radial-gradient(circle_at_center,black,transparent_82%)]" />
       <div className="absolute left-1/2 top-1/2 h-[28rem] w-[28rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(127,175,255,0.16),transparent_62%)] blur-3xl" />
       <div className="absolute bottom-[18%] right-[18%] h-48 w-48 rounded-full bg-[var(--secondary)]/10 blur-[90px]" />

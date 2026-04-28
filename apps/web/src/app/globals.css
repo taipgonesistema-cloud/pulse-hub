@@ -158,16 +158,26 @@
 
 html {
   scroll-behavior: smooth;
-  font-size: 15px;
+  font-size: clamp(14px, calc(13.2px + 0.22vw), 16px);
   color-scheme: var(--theme-color-scheme, dark);
+  min-height: 100%;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  min-height: 100%;
+  min-height: 100dvh;
   background: var(--body-background);
   color: var(--foreground);
   font-family: var(--font-sans-stack);
+  overflow: hidden;
   transition: background 200ms ease, color 200ms ease;
+}
+
+@supports (height: 100svh) {
+  body {
+    min-height: 100svh;
+  }
 }
 
 body,
@@ -191,6 +201,13 @@ button,
 input,
 textarea {
   font: inherit;
+}
+
+input,
+textarea,
+select,
+button {
+  max-width: 100%;
 }
 
 a {
@@ -261,6 +278,41 @@ a {
 
 .app-bootstrap-footer {
   background: var(--bootstrap-footer-background);
+}
+
+.app-root-shell {
+  height: 100dvh;
+  min-height: 100svh;
+}
+
+.app-mobile-shell-padding {
+  padding-bottom: calc(5.35rem + env(safe-area-inset-bottom, 0px));
+}
+
+.app-mobile-nav {
+  bottom: max(0.65rem, env(safe-area-inset-bottom, 0px));
+  left: max(0.5rem, env(safe-area-inset-left, 0px));
+  right: max(0.5rem, env(safe-area-inset-right, 0px));
+}
+
+.app-scroll-stable {
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 380px), (max-height: 680px) {
+  html {
+    font-size: 14px;
+  }
+
+  .app-mobile-shell-padding {
+    padding-bottom: calc(4.85rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (min-width: 1600px) {
+  html {
+    font-size: 16px;
+  }
 }
 
 .app-bootstrap-grid {

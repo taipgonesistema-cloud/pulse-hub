@@ -93,7 +93,7 @@ const sections = [
 export default function PrivacyPolicyPage() {
   return (
     <main
-      className="relative min-h-screen overflow-hidden px-4 py-8 text-[var(--foreground)] sm:px-6 lg:px-10 lg:py-10"
+      className="relative min-h-[100dvh] overflow-y-auto px-4 py-6 text-[var(--foreground)] sm:px-6 sm:py-8 lg:px-10 lg:py-10"
       style={{ background: 'var(--login-background)' }}
     >
       <div className="pointer-events-none absolute inset-0 opacity-70 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:120px_120px] [mask-image:radial-gradient(circle_at_center,black,transparent_90%)]" />
