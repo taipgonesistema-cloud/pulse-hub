@@ -1,6 +1,4 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { ChevronLeft } from 'lucide-react';
 import { LoginForm } from '@/components/login-form';
 import { ThemeToggle } from '@/components/theme-toggle';
 
@@ -18,15 +16,7 @@ export default function LoginPage() {
       <div className="pointer-events-none absolute inset-0 opacity-70 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:120px_120px] [mask-image:radial-gradient(circle_at_center,black,transparent_90%)]" />
 
       <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-7xl flex-col justify-between gap-8">
-        <div className="flex items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/72 transition hover:border-white/20 hover:bg-white/8 hover:text-white"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Voltar para dashboard
-          </Link>
-
+        <div className="flex items-center justify-end gap-4">
           <div className="flex items-center gap-3">
             <div className="rounded-full border border-[rgba(255,255,255,0.08)] bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.3em] text-white/55">
               ether command access
