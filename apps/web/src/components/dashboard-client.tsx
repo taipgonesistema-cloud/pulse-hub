@@ -6902,7 +6902,7 @@ export function DashboardClient({ initialOverview }: Props) {
           </div>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden pb-20 md:pb-0">
           <header className="app-shell-header sticky top-0 z-20 flex items-center justify-between border-b border-white/8 px-4 py-2.5 backdrop-blur-2xl md:px-5">
             <div className="flex items-center gap-5">
               <span className="font-headline text-xl font-bold tracking-tight text-transparent bg-gradient-to-br from-blue-400 to-blue-600 bg-clip-text">
@@ -6995,6 +6995,38 @@ export function DashboardClient({ initialOverview }: Props) {
           )}
         </div>
       </div>
+      <nav className="fixed inset-x-3 bottom-3 z-40 flex gap-1 overflow-x-auto rounded-[24px] border border-white/10 bg-[var(--surface-highest)]/95 p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl md:hidden">
+        {[...availableNavigationItems, { id: 'help' as const, label: 'Ajuda', icon: CircleHelp }].map(({ id, label, icon: Icon }, index) => {
+          const isActive = currentView === id;
+
+          return (
+            <button
+              key={id}
+              aria-label={label}
+              className={`flex min-w-[4rem] flex-1 flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-2 text-[10px] font-semibold transition ${
+                isActive
+                  ? 'bg-[var(--primary)] text-black shadow-[0_10px_24px_rgba(127,175,255,0.22)]'
+                  : 'text-[var(--muted)] hover:bg-white/6 hover:text-[var(--foreground)]'
+              }`}
+              onClick={() => navigateToView(id)}
+              title={`${label}${id !== 'help' ? ` (Alt+${index + 1})` : ''}`}
+              type="button"
+            >
+              <Icon className="h-4 w-4" strokeWidth={isActive ? 2.4 : 2.1} />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+        <button
+          aria-label="Sair"
+          className="flex min-w-[4rem] flex-1 flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-2 text-[10px] font-semibold text-[var(--error-dim)] transition hover:bg-white/6"
+          onClick={signOut}
+          type="button"
+        >
+          <LogOut className="h-4 w-4" strokeWidth={2.1} />
+          <span>Sair</span>
+        </button>
+      </nav>
     </main>
   );
 }
