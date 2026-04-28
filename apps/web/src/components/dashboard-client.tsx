@@ -70,6 +70,7 @@ import {
   authFetch,
   buildAuthenticatedWebSocketUrl,
   clearStoredAuthSession,
+  createWebSocketAuthToken,
   createQuickReply,
   createUser,
   deleteQuickReply,
@@ -2706,7 +2707,29 @@ export function DashboardClient({ initialOverview }: Props) {
         return;
       }
 
-      socket = new WebSocket(buildAuthenticatedWebSocketUrl(`${apiUrl}/ws`));
+      void createWebSocketAuthToken()
+        .then((token) => {
+          if (cancelled) {
+            return;
+          }
+
+          openSocket(token);
+        })
+        .catch(() => {
+          if (cancelled) {
+            return;
+          }
+
+          openSocket();
+        });
+    };
+
+    const openSocket = (token?: string) => {
+      if (cancelled) {
+        return;
+      }
+
+      socket = new WebSocket(buildAuthenticatedWebSocketUrl(`${apiUrl}/ws`, token));
 
       socket.onopen = () => {
         setIsRealtimeConnected(true);

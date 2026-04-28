@@ -14,6 +14,12 @@ import (
 )
 
 const authSessionDuration = 30 * 24 * time.Hour
+const webSocketAuthTokenDuration = 45 * time.Second
+
+type webSocketAuthToken struct {
+	UserID    string
+	ExpiresAt time.Time
+}
 
 type authContextValue struct {
 	user      models.AuthUser
@@ -256,6 +262,74 @@ func (a *API) handleMe(w http.ResponseWriter, r *http.Request) {
 		a.setCSRFCookie(w, csrfToken)
 	}
 	respondJSON(w, http.StatusOK, models.CurrentUserResponse{User: auth.user, CSRFToken: csrfToken})
+}
+
+func (a *API) handleWebSocketToken(w http.ResponseWriter, r *http.Request) {
+	auth := currentAuth(r)
+	if auth == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Autenticacao obrigatoria."})
+		return
+	}
+
+	token, err := appauth.GenerateToken()
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	expiresAt := time.Now().UTC().Add(webSocketAuthTokenDuration)
+	a.webSocketAuthTokenMu.Lock()
+	a.pruneExpiredWebSocketAuthTokens(time.Now().UTC())
+	a.webSocketAuthTokens[token] = webSocketAuthToken{
+		UserID:    auth.user.ID,
+		ExpiresAt: expiresAt,
+	}
+	a.webSocketAuthTokenMu.Unlock()
+
+	respondJSON(w, http.StatusOK, map[string]any{
+		"token":     token,
+		"expiresAt": expiresAt.Format(time.RFC3339),
+	})
+}
+
+func (a *API) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	if a.consumeWebSocketAuthToken(r.URL.Query().Get("token")) {
+		a.hub.ServeHTTP(w, r)
+		return
+	}
+
+	a.requireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		a.hub.ServeHTTP(w, r)
+	})).ServeHTTP(w, r)
+}
+
+func (a *API) consumeWebSocketAuthToken(token string) bool {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return false
+	}
+
+	now := time.Now().UTC()
+	a.webSocketAuthTokenMu.Lock()
+	defer a.webSocketAuthTokenMu.Unlock()
+	a.pruneExpiredWebSocketAuthTokens(now)
+
+	record, ok := a.webSocketAuthTokens[token]
+	if !ok || !record.ExpiresAt.After(now) {
+		delete(a.webSocketAuthTokens, token)
+		return false
+	}
+
+	delete(a.webSocketAuthTokens, token)
+	return true
+}
+
+func (a *API) pruneExpiredWebSocketAuthTokens(now time.Time) {
+	for token, record := range a.webSocketAuthTokens {
+		if !record.ExpiresAt.After(now) {
+			delete(a.webSocketAuthTokens, token)
+		}
+	}
 }
 
 func (a *API) handleSignOut(w http.ResponseWriter, r *http.Request) {

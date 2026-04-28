@@ -71,18 +71,21 @@ type API struct {
 	overviewCacheMu        sync.Mutex
 	overviewCache          *models.DashboardOverview
 	overviewCacheExpiresAt time.Time
+	webSocketAuthTokenMu   sync.Mutex
+	webSocketAuthTokens    map[string]webSocketAuthToken
 }
 
 func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, store *appstore.Store, instagram *appinstagram.Client, auth AuthConfig, security SecurityConfig) http.Handler {
 	api := &API{
-		logger:      logger,
-		instagram:   instagram,
-		manager:     manager,
-		hub:         hub,
-		store:       store,
-		auth:        auth,
-		security:    security,
-		rateLimiter: newRateLimiter(),
+		logger:              logger,
+		instagram:           instagram,
+		manager:             manager,
+		hub:                 hub,
+		store:               store,
+		auth:                auth,
+		security:            security,
+		rateLimiter:         newRateLimiter(),
+		webSocketAuthTokens: make(map[string]webSocketAuthToken),
 	}
 
 	r := chi.NewRouter()
@@ -95,11 +98,13 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 
 	r.Get("/health", api.handleHealth)
 	r.Post("/auth/sign-in", api.handleSignIn)
+	r.Get("/ws", api.handleWebSocket)
 
 	r.Group(func(r chi.Router) {
 		r.Use(api.requireAuth)
 
 		r.Get("/auth/me", api.handleMe)
+		r.Get("/auth/ws-token", api.handleWebSocketToken)
 		r.Post("/auth/sign-out", api.handleSignOut)
 		r.Get("/auth/users", api.handleListUsers)
 		r.Get("/auth/audit-logs", api.handleListAuditLogs)
@@ -121,7 +126,6 @@ func NewRouter(logger *slog.Logger, manager *whatsapp.Manager, hub *ws.Hub, stor
 		r.Post("/messages/text", api.handleSendText)
 		r.Post("/messages/media", api.handleSendMedia)
 		r.Get("/messages/{id}/media", api.handleMessageMedia)
-		r.Get("/ws", api.handleWebSocket)
 		r.Get("/dashboard/overview", api.handleDashboardOverview)
 		r.Route("/whatsapp", func(r chi.Router) {
 			r.Get("/contacts/boards", api.handleListContactKanbanBoards)
@@ -375,10 +379,6 @@ func (a *API) handleMessageMedia(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "private, max-age=300")
 	_, _ = w.Write(data)
-}
-
-func (a *API) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	a.hub.ServeHTTP(w, r)
 }
 
 func (a *API) handleSignIn(w http.ResponseWriter, r *http.Request) {

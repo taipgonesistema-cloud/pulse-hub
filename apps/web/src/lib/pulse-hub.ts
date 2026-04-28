@@ -389,7 +389,7 @@ export async function authFetch(input: string, init?: RequestInit) {
   });
 }
 
-export function buildAuthenticatedWebSocketUrl(baseUrl: string) {
+export function buildAuthenticatedWebSocketUrl(baseUrl: string, token?: string) {
   const url = new URL(baseUrl);
 
   if (url.protocol === 'https:') {
@@ -398,7 +398,28 @@ export function buildAuthenticatedWebSocketUrl(baseUrl: string) {
     url.protocol = 'ws:';
   }
 
+  if (token) {
+    url.searchParams.set('token', token);
+  }
+
   return url.toString();
+}
+
+export async function createWebSocketAuthToken() {
+  const response = await authFetch(`${apiUrl}/auth/ws-token`, {
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error('Falha ao preparar conexao em tempo real.');
+  }
+
+  const payload = (await response.json()) as { token?: string };
+  if (!payload.token) {
+    throw new Error('Token de tempo real indisponivel.');
+  }
+
+  return payload.token;
 }
 
 export async function getDashboardOverview() {
