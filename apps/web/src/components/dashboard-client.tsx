@@ -123,6 +123,8 @@ const statusTone: Record<SessionRecord['status'], string> = {
 
 const composerEmojis = ['🙂', '😂', '😍', '🙏', '🎉', '🔥', '✅', '❤️'];
 
+const messageReactionOptions = ['👍', '❤️', '😂', '😮', '🙏'];
+
 const INITIAL_VISIBLE_MESSAGE_COUNT = 80;
 const MESSAGE_PAGE_SIZE = 80;
 const MESSAGE_FETCH_LIMIT = 80;
@@ -4198,6 +4200,39 @@ export function DashboardClient({ initialOverview }: Props) {
     [applyOutgoingMessageUpdate, authenticatedFetch, executeAction, loadMessages, loadOverview, replyTargetMessage, selectedConversation, selectedSession],
   );
 
+  const reactToMessage = useCallback(
+    (message: MessageRecord, emoji: string) => {
+      if (!selectedSession || !selectedConversation || !emoji.trim()) {
+        return Promise.resolve(false);
+      }
+
+      return executeAction(async () => {
+        const response = await authenticatedFetch(
+          `${apiUrl}/whatsapp/sessions/${selectedSession.id}/conversations/${selectedConversation.id}/reactions`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messageId: message.id,
+              emoji: emoji.trim(),
+              author: 'Operador',
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error('Nao foi possivel reagir a mensagem.');
+        }
+
+        void loadMessages(selectedSession.id, selectedConversation.id, {
+          showLoading: false,
+        }).catch(() => undefined);
+        void loadOverview().catch(() => undefined);
+      });
+    },
+    [authenticatedFetch, executeAction, loadMessages, loadOverview, selectedConversation, selectedSession],
+  );
+
   if (!isAuthReady) {
     return (
       <WorkspaceBootstrapScreen
@@ -6488,6 +6523,8 @@ export function DashboardClient({ initialOverview }: Props) {
                         message={message}
                         messageLookup={messagesById}
                         onJumpToMessage={jumpToMessage}
+                        onReact={reactToMessage}
+                        onReply={setReplyTargetMessage}
                         registerElement={registerMessageElement}
                       />
                     </Fragment>
@@ -8896,6 +8933,8 @@ const MessageBubble = memo(function MessageBubble({
   isUnread = false,
   messageLookup,
   onJumpToMessage,
+  onReact,
+  onReply,
   registerElement,
 }: {
   message: MessageRecord;
@@ -8905,10 +8944,14 @@ const MessageBubble = memo(function MessageBubble({
   isUnread?: boolean;
   messageLookup: Map<string, MessageRecord>;
   onJumpToMessage: (messageId: string) => void;
+  onReact: (message: MessageRecord, emoji: string) => Promise<boolean>;
+  onReply: (message: MessageRecord) => void;
   registerElement: (messageId: string, node: HTMLDivElement | null) => void;
 }) {
   const incoming = message.direction !== 'outgoing';
   const showGroupAuthor = shouldShowGroupMessageAuthor(message, conversation);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const actionRailRef = useRef<HTMLDivElement | null>(null);
   const repliedMessage = message.replyTo ? messageLookup.get(message.replyTo.messageId) : undefined;
   const replyAuthor = repliedMessage
     ? repliedMessage.direction === 'outgoing'
@@ -8918,6 +8961,23 @@ const MessageBubble = memo(function MessageBubble({
   const replyPreview = repliedMessage
     ? summarizeMessageForReply(repliedMessage)
     : summarizeReplyRecord(message.replyTo);
+
+  useEffect(() => {
+    if (!showReactionPicker) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (actionRailRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setShowReactionPicker(false);
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => window.removeEventListener('pointerdown', handlePointerDown);
+  }, [showReactionPicker]);
 
   const bubbleBody = (
     <div
@@ -8980,15 +9040,58 @@ const MessageBubble = memo(function MessageBubble({
     </div>
   );
 
+  const actionRail = (
+    <div
+      ref={actionRailRef}
+      className="relative flex shrink-0 flex-col gap-1 self-end pb-2 opacity-100 transition md:opacity-0 md:group-hover/message:opacity-100 md:focus-within:opacity-100"
+    >
+      {showReactionPicker ? (
+        <div className={`absolute bottom-full z-10 mb-2 flex items-center gap-1 rounded-full border border-white/10 bg-[rgba(10,14,18,0.96)] px-2 py-2 shadow-[0_20px_36px_-20px_rgba(0,0,0,0.95)] ${incoming ? 'left-0' : 'right-0'}`}>
+          {messageReactionOptions.map((emoji) => (
+            <button
+              key={`${message.id}:${emoji}`}
+              className="grid h-8 w-8 place-items-center rounded-full bg-white/5 text-base transition hover:bg-white/10"
+              onClick={() => {
+                setShowReactionPicker(false);
+                void onReact(message, emoji);
+              }}
+              type="button"
+            >
+              <span aria-hidden>{emoji}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <button
+        aria-label="Reagir a mensagem"
+        className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-[rgba(12,16,22,0.88)] text-zinc-300 shadow-[0_12px_22px_-16px_rgba(0,0,0,0.9)] transition hover:bg-white/8 hover:text-white md:h-9 md:w-9"
+        onClick={() => setShowReactionPicker((current) => !current)}
+        type="button"
+      >
+        <Heart className="h-3.5 w-3.5 md:h-4 md:w-4" strokeWidth={2.1} />
+      </button>
+      <button
+        aria-label="Responder mensagem"
+        className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-[rgba(12,16,22,0.88)] text-zinc-300 shadow-[0_12px_22px_-16px_rgba(0,0,0,0.9)] transition hover:bg-white/8 hover:text-white md:h-9 md:w-9"
+        onClick={() => onReply(message)}
+        type="button"
+      >
+        <Reply className="h-3.5 w-3.5 md:h-4 md:w-4" strokeWidth={2.1} />
+      </button>
+    </div>
+  );
+
   if (incoming) {
     return (
       <div
         ref={(node) => registerElement(message.id, node)}
-        className={`flex max-w-[80%] gap-4 rounded-[30px] transition ${isHighlighted ? 'bg-[var(--secondary)]/10 ring-1 ring-[var(--secondary)]/30' : ''}`}
+        className={`group/message flex max-w-[96%] gap-2 rounded-[30px] transition md:max-w-[80%] md:gap-4 ${isHighlighted ? 'bg-[var(--secondary)]/10 ring-1 ring-[var(--secondary)]/30' : ''}`}
         data-message-id={message.id}
       >
         <AvatarBadge label={message.author} small src={showGroupAuthor ? null : avatarUrl} />
         {bubbleBody}
+        {actionRail}
       </div>
     );
   }
@@ -8996,9 +9099,10 @@ const MessageBubble = memo(function MessageBubble({
   return (
     <div
       ref={(node) => registerElement(message.id, node)}
-      className={`ml-auto flex max-w-[80%] justify-end rounded-[30px] transition ${isHighlighted ? 'bg-[var(--primary)]/10 ring-1 ring-[var(--primary)]/30' : ''}`}
+      className={`group/message ml-auto flex max-w-[96%] justify-end gap-2 rounded-[30px] transition md:max-w-[80%] ${isHighlighted ? 'bg-[var(--primary)]/10 ring-1 ring-[var(--primary)]/30' : ''}`}
       data-message-id={message.id}
     >
+      {actionRail}
       {bubbleBody}
     </div>
   );
