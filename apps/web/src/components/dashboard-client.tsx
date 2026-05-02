@@ -4408,11 +4408,11 @@ export function DashboardClient({ initialOverview }: Props) {
                   />
                 ))
               ) : (
-                <EmptyStateCard
-                  actionLabel={canAccessSettings ? 'Abrir configuracoes' : 'Abrir conversas'}
-                  description="Conecte uma sessao do WhatsApp e troque mensagens reais para alimentar o feed operacional ao vivo."
+                <WhatsAppOnboardingCard
+                  actionLabel={canAccessSettings ? 'Conectar WhatsApp' : 'Abrir conversas'}
                   onAction={() => navigateToView(canAccessSettings ? 'settings' : 'conversations')}
-                  title="Ainda nao ha atividade recente"
+                  secondaryActionLabel="Ver conversas"
+                  onSecondaryAction={() => navigateToView('conversations')}
                 />
               )}
             </div>
@@ -5908,12 +5908,24 @@ export function DashboardClient({ initialOverview }: Props) {
         ) : (
           <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
             <div className="space-y-6">
+              {overview.sessions.length === 0 ? (
+                <WhatsAppOnboardingCard
+                  actionLabel="Criar primeira sessao"
+                  description="Comece criando uma sessao operacional. Depois gere o QR, escaneie no WhatsApp e as conversas entram em tempo real."
+                  onAction={() => {
+                    document.getElementById('session-name-input')?.focus();
+                  }}
+                  title="Configure o WhatsApp em poucos passos"
+                />
+              ) : null}
+
               <div className="glass-panel rounded-[30px] p-6">
                 <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
                   Provision new session
                 </p>
                 <div className="mt-5 space-y-3">
                   <Field
+                    id="session-name-input"
                     onChange={(value) =>
                       setSessionForm((current) => ({ ...current, name: value }))
                     }
@@ -6076,20 +6088,28 @@ export function DashboardClient({ initialOverview }: Props) {
                     </p>
                     <div className="app-panel-contrast mt-5 flex min-h-[320px] items-center justify-center rounded-[28px] border border-dashed border-white/10 p-6">
                       {selectedSession.qrCodeDataUrl ? (
-                        <div className="rounded-[28px] bg-white p-4">
-                          <Image
-                            alt={`QR code da sessao ${selectedSession.name}`}
-                            className="mx-auto rounded-[20px]"
-                            height={260}
-                            src={selectedSession.qrCodeDataUrl}
-                            unoptimized
-                            width={260}
-                          />
+                        <div className="space-y-4 text-center">
+                          <div className="mx-auto w-fit rounded-[28px] bg-white p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.8)]">
+                            <Image
+                              alt={`QR code da sessao ${selectedSession.name}`}
+                              className="mx-auto rounded-[20px]"
+                              height={260}
+                              src={selectedSession.qrCodeDataUrl}
+                              unoptimized
+                              width={260}
+                            />
+                          </div>
+                          <div className="mx-auto max-w-md rounded-[22px] border border-[var(--primary)]/20 bg-[var(--primary)]/10 px-4 py-3 text-left">
+                            <p className="text-sm font-semibold text-white">Escaneie pelo WhatsApp</p>
+                            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                              Abra WhatsApp &gt; Aparelhos conectados &gt; Conectar aparelho. Assim que ficar online, as conversas aparecem automaticamente.
+                            </p>
+                          </div>
                         </div>
                       ) : (
                         <EmptyStateCard
                           actionLabel="Gerar QR / conectar"
-                          description="Gere um novo QR para autenticar esta sessao. Se ja houver login persistido, a conexao pode voltar sem novo codigo."
+                          description="Gere o QR, escaneie pelo WhatsApp e aguarde o status mudar para Online. Se ja houver login salvo, a conexao pode voltar sem novo codigo."
                           onAction={() => connectSession(selectedSession.id)}
                           title="QR aguardando conexao"
                         />
@@ -6594,11 +6614,11 @@ export function DashboardClient({ initialOverview }: Props) {
         ) : (
           <div className="grid flex-1 place-items-center p-6">
             <div className="space-y-4 text-center">
-              <EmptyStateCard
+              <WhatsAppOnboardingCard
                 actionLabel={canAccessSettings ? 'Abrir configuracoes' : 'Voltar ao dashboard'}
-                description="Crie ou restaure uma sessao do WhatsApp para liberar a lista de conversas e a timeline operacional."
+                description="Assim que a sessao WhatsApp estiver online, esta tela vira sua central de atendimento em tempo real."
                 onAction={() => navigateToView(canAccessSettings ? 'settings' : 'dashboard')}
-                title="Nenhuma sessao ativa para conversar"
+                title="Conecte o WhatsApp para iniciar conversas"
               />
             </div>
           </div>
@@ -7625,6 +7645,78 @@ function EmptyStateCard({
         >
           {actionLabel}
         </button>
+      ) : null}
+    </div>
+  );
+}
+
+function WhatsAppOnboardingCard({
+  title = 'Conecte o WhatsApp para ver atividade real',
+  description = 'Crie uma sessao, escaneie o QR e comece a receber mensagens no painel sem precisar atualizar a pagina.',
+  actionLabel,
+  onAction,
+  secondaryActionLabel,
+  onSecondaryAction,
+}: {
+  title?: string;
+  description?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
+}) {
+  const steps = [
+    { label: '1', title: 'Crie a sessao', description: 'Use um nome simples para identificar o numero no workspace.' },
+    { label: '2', title: 'Escaneie o QR', description: 'Abra Aparelhos conectados no WhatsApp e leia o codigo.' },
+    { label: '3', title: 'Atenda em tempo real', description: 'As conversas aparecem aqui assim que chegarem novas mensagens.' },
+  ];
+
+  return (
+    <div className="overflow-hidden rounded-[30px] border border-[var(--primary)]/18 bg-[linear-gradient(145deg,rgba(127,175,255,0.12),rgba(255,255,255,0.03))] p-5 text-left shadow-[0_24px_70px_-42px_rgba(0,0,0,0.8)]">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-xl">
+          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[var(--primary)]">Primeiro atendimento</p>
+          <h3 className="mt-3 font-headline text-2xl font-semibold text-white">{title}</h3>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{description}</p>
+        </div>
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[var(--primary)]/14 text-[var(--primary)]">
+          <QrCode className="h-6 w-6" strokeWidth={2.1} />
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        {steps.map((step) => (
+          <div key={step.label} className="rounded-[22px] border border-[var(--line)] bg-[var(--surface-variant)] px-4 py-4">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-[var(--primary)] text-xs font-bold text-black">
+              {step.label}
+            </span>
+            <p className="mt-3 text-sm font-semibold text-white">{step.title}</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{step.description}</p>
+          </div>
+        ))}
+      </div>
+
+      {(actionLabel && onAction) || (secondaryActionLabel && onSecondaryAction) ? (
+        <div className="mt-5 flex flex-wrap gap-3">
+          {actionLabel && onAction ? (
+            <button
+              className="rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-black transition hover:brightness-110"
+              onClick={onAction}
+              type="button"
+            >
+              {actionLabel}
+            </button>
+          ) : null}
+          {secondaryActionLabel && onSecondaryAction ? (
+            <button
+              className="rounded-full border border-[var(--line)] bg-[var(--surface-high)] px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-[var(--foreground)] transition hover:bg-[var(--surface-highest)]"
+              onClick={onSecondaryAction}
+              type="button"
+            >
+              {secondaryActionLabel}
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
@@ -9333,11 +9425,13 @@ const LazyMessageMedia = memo(function LazyMessageMedia({
 });
 
 function Field({
+  id,
   value,
   placeholder,
   onChange,
   type = 'text',
 }: {
+  id?: string;
   value: string;
   placeholder: string;
   onChange: (value: string) => void;
@@ -9346,6 +9440,7 @@ function Field({
   return (
     <input
       className="w-full rounded-2xl border-0 border-b-2 border-transparent bg-[var(--surface-high)] px-4 py-3 text-sm text-white outline-none transition focus:border-[var(--primary)]"
+      id={id}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
       type={type}
