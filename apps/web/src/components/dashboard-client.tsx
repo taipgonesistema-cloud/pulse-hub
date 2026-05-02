@@ -6087,7 +6087,20 @@ export function DashboardClient({ initialOverview }: Props) {
                       QR authentication
                     </p>
                     <div className="app-panel-contrast mt-5 flex min-h-[320px] items-center justify-center rounded-[28px] border border-dashed border-white/10 p-6">
-                      {selectedSession.qrCodeDataUrl ? (
+                      {isConnectingSelectedSession ? (
+                        <div className="flex max-w-md flex-col items-center text-center">
+                          <div className="relative grid h-20 w-20 place-items-center rounded-[28px] border border-[var(--primary)]/25 bg-[var(--primary)]/10 text-[var(--primary)] shadow-[0_0_34px_rgba(127,175,255,0.16)]">
+                            <RefreshCw className="h-8 w-8 animate-spin" strokeWidth={2.1} />
+                          </div>
+                          <p className="mt-5 font-headline text-2xl font-semibold text-white">Gerando QR code</p>
+                          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+                            Estamos preparando a autenticacao da sessao. O QR aparece aqui automaticamente assim que estiver pronto.
+                          </p>
+                          <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-high)]">
+                            <div className="h-full w-1/2 animate-pulse rounded-full bg-[var(--primary)]" />
+                          </div>
+                        </div>
+                      ) : selectedSession.qrCodeDataUrl ? (
                         <div className="space-y-4 text-center">
                           <div className="mx-auto w-fit rounded-[28px] bg-white p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.8)]">
                             <Image
