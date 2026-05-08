@@ -262,4 +262,4 @@ npm run build:server
 
 ## Licenca
 
-Projeto privado. Defina uma licenca antes de publicar como open source.
+Este projeto esta licenciado sob a licenca MIT. Consulte o arquivo [`LICENSE`](LICENSE) para mais detalhes.
