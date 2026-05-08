@@ -6,6 +6,7 @@ If you find a security vulnerability in this project, please do not open a publi
 
 Report it privately by contacting the maintainer through GitHub:
 
+- Email: taipgonesistema@gmail.com
 - GitHub profile: https://github.com/taipgonesistema-cloud
 - Repository: https://github.com/taipgonesistema-cloud/pulse-hub
 
