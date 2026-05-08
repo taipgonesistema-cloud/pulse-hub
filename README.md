@@ -1,6 +1,6 @@
 # Pulse Hub
 
-Central de atendimento e CRM omnichannel com foco em WhatsApp, dashboard em tempo real, gestao de contatos, kanban, respostas rapidas, usuarios, auditoria e publicacao no Instagram.
+Omnichannel support and CRM platform focused on WhatsApp, realtime dashboards, contact management, kanban, quick replies, users, audit logs, and Instagram publishing.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111)
@@ -9,173 +9,173 @@ Central de atendimento e CRM omnichannel com foco em WhatsApp, dashboard em temp
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
 
-## Visao Geral
+## Overview
 
-O Pulse Hub e uma plataforma para operar atendimentos em canais de conversa a partir de uma interface unica. O frontend consome uma API Go responsavel por autenticacao, sessoes do WhatsApp, conversas, mensagens, contatos, metricas, eventos em tempo real e integracao com Instagram.
+Pulse Hub is a platform for managing customer conversations from a single interface. The frontend consumes a Go API responsible for authentication, WhatsApp sessions, conversations, messages, contacts, metrics, realtime events, and Instagram integration.
 
-Principais recursos:
+Main features:
 
-- Dashboard operacional com metricas de atendimento.
-- Login com sessoes, CSRF, papeis de usuario e trilha de auditoria.
-- Multi-sessoes de WhatsApp com QR Code, status e envio de mensagens.
-- Conversas em tempo real via WebSocket.
-- CRM de contatos com kanban, etiquetas e perfis.
-- Respostas rapidas com autocomplete.
-- Envio de texto, midia, reacoes e marcacao de leitura.
-- Publicacao de feed e stories no Instagram quando as credenciais estao configuradas.
-- Deploy containerizado com Docker Compose.
+- Operational dashboard with support metrics.
+- Login with sessions, CSRF protection, user roles, and audit trail.
+- Multiple WhatsApp sessions with QR Code, status tracking, and message sending.
+- Realtime conversations through WebSocket.
+- Contact CRM with kanban, labels, and profiles.
+- Quick replies with autocomplete.
+- Text, media, reactions, and read receipts.
+- Feed and story publishing to Instagram when credentials are configured.
+- Containerized deployment with Docker Compose.
 
-## Arquitetura
+## Architecture
 
 ```txt
 .
 +-- apps
-|   +-- web       # Frontend Next.js 16 + React 19 + Tailwind CSS 4
-|   +-- wa-core   # API Go, WhatsApp, WebSocket, Postgres e Redis
-|   +-- server    # Servidor NestJS mantido no repositorio
-+-- scripts       # Utilitarios de desenvolvimento
+|   +-- web       # Next.js 16 + React 19 + Tailwind CSS 4 frontend
+|   +-- wa-core   # Go API, WhatsApp, WebSocket, Postgres, and Redis
+|   +-- server    # NestJS server kept in the repository
++-- scripts       # Development utilities
 +-- docker-compose.yml
 +-- package.json
 ```
 
-Servicos principais:
+Main services:
 
-- `web`: interface web em `http://localhost:3000`.
-- `wa-core`: API HTTP/WebSocket em `http://localhost:3333`.
-- `postgres`: banco principal e armazenamento do WhatsApp.
-- `redis`: pub/sub e suporte a eventos em tempo real.
+- `web`: web interface at `http://localhost:3000`.
+- `wa-core`: HTTP/WebSocket API at `http://localhost:3333`.
+- `postgres`: main database and WhatsApp storage.
+- `redis`: pub/sub and realtime event support.
 
 ## Stack
 
 - Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS 4, Lucide React.
-- Backend principal: Go 1.25, chi, whatsmeow, PostgreSQL, Redis, WebSocket.
-- Backend alternativo/legado: NestJS 11 em `apps/server`.
-- Infra: Docker, Docker Compose, PostgreSQL 16, Redis 7.
+- Main backend: Go 1.25, chi, whatsmeow, PostgreSQL, Redis, WebSocket.
+- Alternative/legacy backend: NestJS 11 in `apps/server`.
+- Infrastructure: Docker, Docker Compose, PostgreSQL 16, Redis 7.
 
-## Requisitos
+## Requirements
 
-- Node.js 20 ou superior.
-- npm 10 ou superior.
-- Go 1.25 ou superior.
-- Docker e Docker Compose.
+- Node.js 20 or higher.
+- npm 10 or higher.
+- Go 1.25 or higher.
+- Docker and Docker Compose.
 
-## Como Rodar Localmente
+## Running Locally
 
-### 1. Instale as dependencias
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Suba Postgres e Redis
+### 2. Start Postgres and Redis
 
 ```bash
 npm run dev:infra
 ```
 
-### 3. Inicie a API Go
+### 3. Start the Go API
 
 ```bash
 npm run dev:server
 ```
 
-A API ficara disponivel em `http://localhost:3333`.
+The API will be available at `http://localhost:3333`.
 
-### 4. Inicie o frontend
+### 4. Start the frontend
 
-Em outro terminal:
+In another terminal:
 
 ```bash
 npm run dev:web
 ```
 
-O painel ficara disponivel em `http://localhost:3000`.
+The dashboard will be available at `http://localhost:3000`.
 
-## Rodando Tudo com Docker
+## Running Everything with Docker
 
 ```bash
 docker compose up --build
 ```
 
-URLs padrao:
+Default URLs:
 
 - Frontend: `http://localhost:3000`
 - API: `http://localhost:3333`
 - Health check: `http://localhost:3333/health`
 
-Para parar os containers:
+To stop the containers:
 
 ```bash
 docker compose down
 ```
 
-Para remover tambem os volumes locais:
+To also remove local volumes:
 
 ```bash
 docker compose down -v
 ```
 
-## Acesso Inicial
+## Initial Access
 
-Em desenvolvimento, a API cria um usuario inicial automaticamente com os valores abaixo, caso as variaveis nao sejam sobrescritas:
+In development, the API automatically creates an initial user with the values below when the environment variables are not overridden:
 
 ```txt
 Email: admin@pulsehub.local
-Senha: PulseHub123!
-Papel: admin
+Password: PulseHub123!
+Role: admin
 ```
 
-Altere `AUTH_SEED_EMAIL`, `AUTH_SEED_PASSWORD`, `AUTH_SEED_NAME` e `AUTH_SEED_ROLE` em ambientes reais.
+Change `AUTH_SEED_EMAIL`, `AUTH_SEED_PASSWORD`, `AUTH_SEED_NAME`, and `AUTH_SEED_ROLE` in real environments.
 
-## Variaveis de Ambiente
+## Environment Variables
 
-O arquivo `.env.easypanel.example` serve como referencia para deploy. Para desenvolvimento local, os defaults do `docker-compose.yml` ja funcionam sem `.env`.
+The `.env.easypanel.example` file can be used as a deployment reference. For local development, the defaults in `docker-compose.yml` work without a `.env` file.
 
-Variaveis principais:
+Main variables:
 
-| Variavel | Descricao | Padrao local |
+| Variable | Description | Local default |
 | --- | --- | --- |
-| `PORT` | Porta da API Go | `3333` |
-| `DATABASE_URL` | DSN do PostgreSQL da aplicacao | `postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable` |
-| `WHATSMEOW_DATABASE_URL` | DSN usado pelo WhatsApp/whatsmeow | Mesmo valor de `DATABASE_URL` |
-| `REDIS_URL` | URL de conexao com Redis | `redis://localhost:6379/0` |
-| `NEXT_PUBLIC_API_URL` | URL publica da API consumida pelo frontend | `http://localhost:3333` |
-| `AUTH_SEED_EMAIL` | Email do usuario inicial | `admin@pulsehub.local` |
-| `AUTH_SEED_PASSWORD` | Senha do usuario inicial | `PulseHub123!` |
-| `AUTH_COOKIE_SECURE` | Cookies apenas via HTTPS | `false` |
-| `AUTH_COOKIE_SAME_SITE` | Politica SameSite do cookie | `lax` |
-| `CORS_ALLOWED_ORIGINS` | Origens permitidas, separadas por virgula | localhost do frontend |
+| `PORT` | Go API port | `3333` |
+| `DATABASE_URL` | Application PostgreSQL DSN | `postgres://postgres:postgres@localhost:5432/pulse_hub?sslmode=disable` |
+| `WHATSMEOW_DATABASE_URL` | WhatsApp/whatsmeow DSN | Same value as `DATABASE_URL` |
+| `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
+| `NEXT_PUBLIC_API_URL` | Public API URL consumed by the frontend | `http://localhost:3333` |
+| `AUTH_SEED_EMAIL` | Initial user email | `admin@pulsehub.local` |
+| `AUTH_SEED_PASSWORD` | Initial user password | `PulseHub123!` |
+| `AUTH_COOKIE_SECURE` | Secure cookies over HTTPS only | `false` |
+| `AUTH_COOKIE_SAME_SITE` | Cookie SameSite policy | `lax` |
+| `CORS_ALLOWED_ORIGINS` | Allowed origins, comma-separated | Frontend localhost URLs |
 
-Variaveis opcionais para Instagram e hospedagem de imagem:
+Optional variables for Instagram and image hosting:
 
-| Variavel | Descricao |
+| Variable | Description |
 | --- | --- |
-| `INSTAGRAM_APP_ID` | ID do app Meta/Instagram |
-| `INSTAGRAM_APP_SECRET` | Secret do app Meta/Instagram |
-| `INSTAGRAM_ACCESS_TOKEN` | Token Graph API |
-| `INSTAGRAM_USER_ID` | ID do usuario/conta Instagram |
+| `INSTAGRAM_APP_ID` | Meta/Instagram app ID |
+| `INSTAGRAM_APP_SECRET` | Meta/Instagram app secret |
+| `INSTAGRAM_ACCESS_TOKEN` | Graph API token |
+| `INSTAGRAM_USER_ID` | Instagram user/account ID |
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
 | `CLOUDINARY_API_KEY` | Cloudinary API key |
 | `CLOUDINARY_API_SECRET` | Cloudinary API secret |
-| `CLOUDINARY_FOLDER` | Pasta de upload no Cloudinary |
-| `INSTAGRAM_IMAGE_HOST_API_KEY` | Chave alternativa para hospedagem de imagem |
+| `CLOUDINARY_FOLDER` | Cloudinary upload folder |
+| `INSTAGRAM_IMAGE_HOST_API_KEY` | Alternative image hosting API key |
 
-## Scripts Disponiveis
+## Available Scripts
 
-Na raiz do projeto:
+From the project root:
 
-| Comando | Descricao |
+| Command | Description |
 | --- | --- |
-| `npm run dev:infra` | Sobe Postgres e Redis via Docker Compose |
-| `npm run dev:infra:down` | Para Postgres e Redis |
-| `npm run dev:web` | Inicia o frontend Next.js |
-| `npm run dev:server` | Inicia a API Go em modo desenvolvimento |
-| `npm run build:web` | Gera build de producao do frontend |
-| `npm run build:server` | Compila a API Go |
-| `npm run lint:web` | Executa ESLint no frontend |
-| `npm run lint:server` | Executa `go test ./...` na API Go |
+| `npm run dev:infra` | Starts Postgres and Redis with Docker Compose |
+| `npm run dev:infra:down` | Stops Postgres and Redis |
+| `npm run dev:web` | Starts the Next.js frontend |
+| `npm run dev:server` | Starts the Go API in development mode |
+| `npm run build:web` | Builds the frontend for production |
+| `npm run build:server` | Builds the Go API |
+| `npm run lint:web` | Runs ESLint for the frontend |
+| `npm run lint:server` | Runs `go test ./...` for the Go API |
 
-No app web:
+Inside the web app:
 
 ```bash
 npm run dev --workspace web
@@ -184,17 +184,17 @@ npm run start --workspace web
 npm run lint --workspace web
 ```
 
-## API Principal
+## Main API
 
-Base URL local: `http://localhost:3333`
+Local base URL: `http://localhost:3333`
 
-Endpoints publicos:
+Public endpoints:
 
 - `GET /health`
 - `POST /auth/sign-in`
 - `GET /ws`
 
-Endpoints autenticados incluem:
+Authenticated endpoints include:
 
 - `GET /auth/me`
 - `POST /auth/sign-out`
@@ -217,11 +217,11 @@ Endpoints autenticados incluem:
 - `POST /instagram/feed`
 - `POST /instagram/story`
 
-## Deploy
+## Deployment
 
 ### Docker Compose
 
-O deploy mais simples e usar `docker-compose.yml`, ajustando as variaveis de ambiente para o dominio real:
+The simplest deployment path is using `docker-compose.yml` and adjusting the environment variables for your real domain:
 
 ```bash
 docker compose up -d --build
@@ -229,7 +229,7 @@ docker compose up -d --build
 
 ### Easypanel
 
-Use `.env.easypanel.example` como base e configure pelo menos:
+Use `.env.easypanel.example` as a base and configure at least:
 
 - `DATABASE_URL`
 - `WHATSMEOW_DATABASE_URL`
@@ -237,13 +237,13 @@ Use `.env.easypanel.example` como base e configure pelo menos:
 - `AUTH_SEED_EMAIL`
 - `AUTH_SEED_PASSWORD`
 - `NEXT_PUBLIC_API_URL`
-- `CORS_ALLOWED_ORIGINS` ou `APP_ORIGIN`
-- `AUTH_COOKIE_SECURE=true` em HTTPS
-- `AUTH_COOKIE_SAME_SITE=none` quando frontend e API estiverem em dominios diferentes
+- `CORS_ALLOWED_ORIGINS` or `APP_ORIGIN`
+- `AUTH_COOKIE_SECURE=true` when using HTTPS
+- `AUTH_COOKIE_SAME_SITE=none` when frontend and API are hosted on different domains
 
-## Desenvolvimento
+## Development
 
-Fluxo recomendado antes de abrir PR:
+Recommended checks before opening a pull request:
 
 ```bash
 npm run lint:web
@@ -252,14 +252,14 @@ npm run build:web
 npm run build:server
 ```
 
-## Seguranca
+## Security
 
-- Nao versione arquivos `.env` reais.
-- Troque a senha seed em qualquer ambiente compartilhado ou de producao.
-- Configure CORS explicitamente em producao.
-- Use cookies seguros (`AUTH_COOKIE_SECURE=true`) em HTTPS.
-- Proteja tokens do Instagram, credenciais Cloudinary e DSNs de banco/Redis.
+- Do not commit real `.env` files.
+- Change the seed password in any shared or production environment.
+- Configure CORS explicitly in production.
+- Use secure cookies (`AUTH_COOKIE_SECURE=true`) over HTTPS.
+- Protect Instagram tokens, Cloudinary credentials, database DSNs, and Redis URLs.
 
-## Licenca
+## License
 
-Este projeto esta licenciado sob a licenca MIT. Consulte o arquivo [`LICENSE`](LICENSE) para mais detalhes.
+This project is licensed under the MIT License. See [`LICENSE`](LICENSE) for more details.
