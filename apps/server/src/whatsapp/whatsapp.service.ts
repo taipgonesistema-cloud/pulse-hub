@@ -64,9 +64,9 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
 
       void this.connectSession(session.id).catch((error: unknown) => {
         const message =
-          error instanceof Error ? error.message : 'Falha ao restaurar sessao.';
+          error instanceof Error ? error.message : 'Failed to restore session.';
         this.logger.warn(
-          `Nao foi possivel restaurar ${session.id}: ${message}`,
+          `Could not restore ${session.id}: ${message}`,
         );
       });
     }
@@ -162,9 +162,9 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
         );
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : 'Falha ao marcar como lida.';
+          error instanceof Error ? error.message : 'Failed to mark as read.';
         this.logger.warn(
-          `Nao foi possivel marcar como lida ${conversationId}: ${message}`,
+          `Could not mark as read ${conversationId}: ${message}`,
         );
       }
     }
@@ -327,7 +327,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     const body = payload.body.trim();
 
     if (!body) {
-      throw new BadRequestException('Mensagem vazia.');
+      throw new BadRequestException('Empty message.');
     }
 
     const session = await this.getSessionOrFail(sessionId);
@@ -337,7 +337,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
         !this.engine.hasSessionClient(sessionId) ||
         session.status !== 'active'
       ) {
-        throw new BadRequestException('Sessao ainda nao esta conectada.');
+        throw new BadRequestException('Session is not connected yet.');
       }
 
       await this.engine.sendMessage(
@@ -564,9 +564,9 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
       return updatedConversation;
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Falha ao carregar mensagens.';
+        error instanceof Error ? error.message : 'Failed to load messages.';
       this.logger.warn(
-        `Nao foi possivel carregar mensagens da conversa ${conversationId}: ${message}`,
+        `Could not load messages from conversation ${conversationId}: ${message}`,
       );
       return conversation;
     }
@@ -660,7 +660,7 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     const session = await this.store.getSession(sessionId);
 
     if (!session) {
-      throw new NotFoundException('Sessao nao encontrada.');
+      throw new NotFoundException('Session not found.');
     }
 
     return session;

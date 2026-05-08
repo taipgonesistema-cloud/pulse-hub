@@ -100,14 +100,14 @@ import {
 import { ThemeToggle } from '@/components/theme-toggle';
 
 const statusLabel: Record<SessionRecord['status'], string> = {
-  demo: 'Teste',
-  idle: 'Pronta',
-  initializing: 'Iniciando',
-  qr_ready: 'QR pronto',
+  demo: 'Test',
+  idle: 'Ready',
+  initializing: 'Starting',
+  qr_ready: 'QR ready',
   active: 'Online',
   syncing: 'Sync',
   disconnected: 'Offline',
-  error: 'Erro',
+  error: 'Error',
 };
 
 const statusTone: Record<SessionRecord['status'], string> = {
@@ -133,19 +133,19 @@ const CONVERSATION_PAGE_SIZE = 80;
 const contactsKanbanStages = [
   {
     id: 'new' as const,
-    label: 'Novos Leads',
+    label: 'New Leads',
     accent: 'bg-sky-400',
     surface: 'from-sky-500/12 to-transparent',
   },
   {
     id: 'qualified' as const,
-    label: 'Qualificados',
+    label: 'Qualified',
     accent: 'bg-violet-400',
     surface: 'from-violet-500/12 to-transparent',
   },
   {
     id: 'active' as const,
-    label: 'Em Atendimento',
+    label: 'In Progress',
     accent: 'bg-emerald-400',
     surface: 'from-emerald-500/12 to-transparent',
   },
@@ -157,7 +157,7 @@ const contactsKanbanStages = [
   },
   {
     id: 'won' as const,
-    label: 'Fechados',
+    label: 'Closed',
     accent: 'bg-pink-400',
     surface: 'from-pink-500/12 to-transparent',
   },
@@ -166,26 +166,26 @@ const contactsKanbanStages = [
 const contactsBoards = [
   {
     id: 'contacts' as const,
-    label: 'Contatos',
-    description: 'Toda a base sincronizada',
+    label: 'Contacts',
+    description: 'Entire synced base',
     icon: LayoutGrid,
   },
   {
     id: 'unread' as const,
-    label: 'Nao lidos',
-    description: 'Com novas mensagens',
+    label: 'Unread',
+    description: 'With new messages',
     icon: Bell,
   },
   {
     id: 'verified' as const,
-    label: 'Verificados',
-    description: 'Perfis prioritarios',
+    label: 'Verified',
+    description: 'Priority profiles',
     icon: BadgeCheck,
   },
   {
     id: 'groups' as const,
-    label: 'Grupos',
-    description: 'Fluxos coletivos',
+    label: 'Groups',
+    description: 'Group flows',
     icon: ContactRound,
   },
 ];
@@ -198,10 +198,10 @@ const navigationItems: Array<{
   icon: typeof Home;
 }> = [
   { id: 'dashboard', label: 'Dashboard', icon: Home },
-  { id: 'conversations', label: 'Conversas', icon: MessageCircle },
-  { id: 'contacts', label: 'Contatos', icon: ContactRound },
+  { id: 'conversations', label: 'Conversations', icon: MessageCircle },
+  { id: 'contacts', label: 'Contacts', icon: ContactRound },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-  { id: 'settings', label: 'Configuracoes', icon: Settings },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 function canAccessWorkspaceView(role: AuthUser['role'] | undefined, view: WorkspaceView) {
@@ -633,11 +633,11 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const selectedConversationScopeSummary = useMemo(() => {
     if (conversationSessionScope === 'selected') {
-      return selectedSession ? `Sessao atual: ${selectedSession.name}` : 'Sessao atual';
+      return selectedSession ? `Current session: ${selectedSession.name}` : 'Current session';
     }
 
     if (conversationSessionFilterIds.length === 0) {
-      return 'Todas as sessoes';
+      return 'All sessions';
     }
 
     const names = overview.sessions
@@ -645,13 +645,13 @@ export function DashboardClient({ initialOverview }: Props) {
       .map((session) => session.name);
 
     if (names.length === 0) {
-      return 'Todas as sessoes';
+      return 'All sessions';
     }
     if (names.length === 1) {
       return names[0];
     }
 
-    return `${names.length} sessoes selecionadas`;
+    return `${names.length} selected sessions`;
   }, [conversationSessionFilterIds, conversationSessionScope, overview.sessions, selectedSession]);
 
   const isCreatingSession = pendingSessionAction?.kind === 'create';
@@ -662,9 +662,9 @@ export function DashboardClient({ initialOverview }: Props) {
   const isDeletingSelectedSession = pendingSessionAction?.kind === 'delete'
     && pendingSessionAction.sessionId === selectedSession?.id;
   const pendingSelectedSessionActionLabel =
-    isConnectingSelectedSession ? 'Conectando sessao e preparando autenticacao...' :
-      isDisconnectingSelectedSession ? 'Desconectando sessao...' :
-        isDeletingSelectedSession ? 'Removendo sessao e limpando dados vinculados...' : '';
+    isConnectingSelectedSession ? 'Connecting session and preparing authentication...' :
+      isDisconnectingSelectedSession ? 'Disconnecting session...' :
+        isDeletingSelectedSession ? 'Removing session and linked data...' : '';
 
   const conversationSearchTerm = globalSearch.trim().toLowerCase();
 
@@ -929,13 +929,13 @@ export function DashboardClient({ initialOverview }: Props) {
       },
       {
         id: 'direct' as const,
-        label: 'Conversas',
+        label: 'Conversations',
         count: allSessionConversations.filter((conversation) => !isGroupConversation(conversation))
           .length,
       },
       {
         id: 'groups' as const,
-        label: 'Grupos',
+        label: 'Groups',
         count: allSessionConversations.filter((conversation) => isGroupConversation(conversation))
           .length,
       },
@@ -958,22 +958,22 @@ export function DashboardClient({ initialOverview }: Props) {
       return [
       {
         id: 'all' as const,
-        label: 'Todos',
+        label: 'Everyone',
         count: contacts.length,
       },
       {
         id: 'direct' as const,
-        label: 'Conversas',
+        label: 'Conversations',
         count: contacts.filter((contact) => !isGroupConversation(contact)).length,
       },
       {
         id: 'groups' as const,
-        label: 'Grupos',
+        label: 'Groups',
         count: contacts.filter((contact) => isGroupConversation(contact)).length,
       },
       {
         id: 'unread' as const,
-        label: 'Nao lidos',
+        label: 'Unread',
         count: contacts.filter((contact) => contact.unread > 0).length,
       },
       ];
@@ -1126,7 +1126,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const queueLabel = useMemo(() => {
     if (!isConversationsView) {
-      return 'Nenhuma sessao selecionada';
+      return 'No session selected';
     }
 
     if (conversationSessionScope === 'all') {
@@ -1134,7 +1134,7 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     if (!selectedSession) {
-      return 'Nenhuma sessao selecionada';
+      return 'No session selected';
     }
 
     return `Fila ${selectedSession.channelName}`;
@@ -1153,7 +1153,7 @@ export function DashboardClient({ initialOverview }: Props) {
       if (response.status === 401) {
         clearStoredAuthSession();
         router.replace('/login');
-        throw new Error('Sua sessao expirou. Entre novamente.');
+        throw new Error('Your session expired. Sign in again.');
       }
       return response;
     },
@@ -1244,8 +1244,8 @@ export function DashboardClient({ initialOverview }: Props) {
     );
 
     const sessionName = overviewRef.current.sessions.find((session) => session.id === payload.sessionId)?.name;
-    const title = matchedConversation?.contact || sessionName || 'Nova mensagem';
-    const body = payload.text?.trim() || `Nova mensagem recebida${sessionName ? ` em ${sessionName}` : ''}.`;
+    const title = matchedConversation?.contact || sessionName || 'New message';
+    const body = payload.text?.trim() || `New message received${sessionName ? ` em ${sessionName}` : ''}.`;
 
     try {
       const notification = new Notification(title, {
@@ -1268,7 +1268,7 @@ export function DashboardClient({ initialOverview }: Props) {
         pushToast({
           tone: 'error',
           title: 'Notificacoes indisponiveis',
-          description: 'Este navegador nao suporta notificacoes do sistema.',
+          description: 'This browser does not support system notifications.',
         });
         setNotificationPermission('unsupported');
         return;
@@ -1279,7 +1279,7 @@ export function DashboardClient({ initialOverview }: Props) {
         pushToast({
           tone: 'info',
           title: 'Permissao bloqueada',
-          description: 'Libere as notificacoes do site no navegador para ativar esse alerta.',
+          description: 'Allow site notifications in the browser to enable this alert.',
         });
         return;
       }
@@ -1291,7 +1291,7 @@ export function DashboardClient({ initialOverview }: Props) {
           pushToast({
             tone: 'info',
             title: 'Permissao nao concedida',
-            description: 'As notificacoes do navegador continuam desligadas.',
+            description: 'Browser notifications remain disabled.',
           });
           return;
         }
@@ -1300,7 +1300,7 @@ export function DashboardClient({ initialOverview }: Props) {
       setNotificationsEnabled(true);
       try {
         const previewNotification = new Notification('ether command', {
-          body: 'Notificacoes ativadas. Voce passara a receber alertas de novas mensagens.',
+          body: 'Notifications enabled. You will receive new message alerts.',
           silent: true,
           tag: 'ether-command-notifications-enabled',
         });
@@ -1592,7 +1592,7 @@ export function DashboardClient({ initialOverview }: Props) {
     });
 
     if (!response.ok) {
-      throw new Error('Nao foi possivel atualizar a dashboard.');
+      throw new Error('Could not update the dashboard.');
     }
 
     const data = (await response.json()) as DashboardOverview;
@@ -1667,7 +1667,7 @@ export function DashboardClient({ initialOverview }: Props) {
       });
 
       if (!response.ok) {
-        throw new Error('Nao foi possivel carregar conversas paginadas.');
+        throw new Error('Could not load paginated conversations.');
       }
 
       const data = (await response.json()) as ConversationPage;
@@ -1731,7 +1731,7 @@ export function DashboardClient({ initialOverview }: Props) {
     });
 
     if (!response.ok) {
-      throw new Error('Nao foi possivel carregar o kanban de contatos.');
+      throw new Error('Could not load the contact kanban.');
     }
 
     const records = (await response.json()) as ContactKanbanStageRecord[];
@@ -1750,7 +1750,7 @@ export function DashboardClient({ initialOverview }: Props) {
     });
 
     if (!response.ok) {
-      throw new Error('Nao foi possivel carregar os boards do CRM.');
+      throw new Error('Could not load CRM boards.');
     }
 
     const records = (await response.json()) as ContactKanbanBoardRecord[];
@@ -1765,7 +1765,7 @@ export function DashboardClient({ initialOverview }: Props) {
       });
 
       if (!response.ok) {
-        throw new Error('Nao foi possivel carregar as etiquetas de contatos.');
+        throw new Error('Could not load contact labels.');
       }
 
       const records = (await response.json()) as ContactLabelRecord[];
@@ -1781,7 +1781,7 @@ export function DashboardClient({ initialOverview }: Props) {
     });
 
     if (!response.ok) {
-      throw new Error('Nao foi possivel carregar os dados do CRM.');
+      throw new Error('Could not load CRM data.');
     }
 
     const records = (await response.json()) as ContactCRMProfileRecord[];
@@ -2081,7 +2081,7 @@ export function DashboardClient({ initialOverview }: Props) {
     const response = await authenticatedFetch(url.toString(), { cache: 'no-store' });
 
     if (!response.ok) {
-      throw new Error('Nao foi possivel carregar as mensagens.');
+      throw new Error('Could not load messages.');
     }
 
     const records = (await response.json()) as MessageRecord[];
@@ -3294,7 +3294,7 @@ export function DashboardClient({ initialOverview }: Props) {
         await revokeUserSession(userId, sessionId);
         const sessions = await listUserSessions(userId);
         setWorkspaceUserSessionsMap((current) => ({ ...current, [userId]: sessions }));
-      }, { successMessage: 'Sessao revogada' });
+      }, { successMessage: 'Session revoked' });
 
       if (completed) {
         await loadWorkspaceUsers().catch(() => undefined);
@@ -3354,12 +3354,12 @@ export function DashboardClient({ initialOverview }: Props) {
             sessionId: contact.sessionId,
             conversationId: contact.id,
             stage: nextStage,
-            updatedBy: authUser?.name || authUser?.email || 'Operador',
+            updatedBy: authUser?.name || authUser?.email || 'Operator',
           }),
         });
 
         if (!response.ok) {
-          throw new Error('Nao foi possivel salvar a etapa do contato.');
+          throw new Error('Could not save the contact stage.');
         }
       });
 
@@ -3422,7 +3422,7 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!label) {
       pushToast({
         tone: 'error',
-        title: 'Nome do board obrigatorio',
+        title: 'Board name required',
         description: 'Defina um nome curto para criar o board.',
       });
       return;
@@ -3436,8 +3436,8 @@ export function DashboardClient({ initialOverview }: Props) {
       contactsFilter,
       contactsAudienceFilter,
       contactsChannelFilter,
-      createdBy: authUser?.name || authUser?.email || 'Operador',
-      updatedBy: authUser?.name || authUser?.email || 'Operador',
+      createdBy: authUser?.name || authUser?.email || 'Operator',
+      updatedBy: authUser?.name || authUser?.email || 'Operator',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -3461,7 +3461,7 @@ export function DashboardClient({ initialOverview }: Props) {
       });
 
       if (!response.ok) {
-        throw new Error('Nao foi possivel criar o board do CRM.');
+        throw new Error('Could not create the CRM board.');
       }
 
       await loadContactBoards();
@@ -3511,7 +3511,7 @@ export function DashboardClient({ initialOverview }: Props) {
         });
 
         if (!response.ok) {
-          throw new Error('Nao foi possivel remover o board do CRM.');
+          throw new Error('Could not remove the CRM board.');
         }
 
         setCustomContactsBoards(removedBoards);
@@ -3551,12 +3551,12 @@ export function DashboardClient({ initialOverview }: Props) {
           name,
           phone,
           stage: createContactStage,
-          updatedBy: authUser?.name || authUser?.email || 'Operador',
+          updatedBy: authUser?.name || authUser?.email || 'Operator',
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Nao foi possivel criar o contato no CRM.');
+        throw new Error('Could not create the contact in CRM.');
       }
 
       await loadOverview();
@@ -3597,7 +3597,7 @@ export function DashboardClient({ initialOverview }: Props) {
         priority: patch.priority ?? previousProfile?.priority ?? '',
         notes: patch.notes ?? previousProfile?.notes ?? '',
         tags: patch.tags ?? previousProfile?.tags ?? [],
-        updatedBy: authUser?.name || authUser?.email || 'Operador',
+        updatedBy: authUser?.name || authUser?.email || 'Operator',
         updatedAt: new Date().toISOString(),
       };
 
@@ -3624,7 +3624,7 @@ export function DashboardClient({ initialOverview }: Props) {
         });
 
         if (!response.ok) {
-          throw new Error('Nao foi possivel salvar os dados do CRM.');
+          throw new Error('Could not save CRM data.');
         }
       }, { successMessage: 'CRM atualizado' });
 
@@ -3669,14 +3669,14 @@ export function DashboardClient({ initialOverview }: Props) {
       name: contactLabelForm.name.trim(),
       emoji: contactLabelForm.emoji.trim(),
       color: contactLabelForm.color,
-      updatedBy: authUser?.name || authUser?.email || 'Operador',
+      updatedBy: authUser?.name || authUser?.email || 'Operator',
     };
 
     if (!payload.name) {
       pushToast({
         tone: 'error',
-        title: 'Nome obrigatorio',
-        description: 'Defina um nome para a etiqueta antes de salvar.',
+        title: 'Name required',
+        description: 'Set a label name before saving.',
       });
       return;
     }
@@ -3694,7 +3694,7 @@ export function DashboardClient({ initialOverview }: Props) {
       });
 
       if (!response.ok) {
-        throw new Error('Nao foi possivel salvar a etiqueta.');
+        throw new Error('Could not save the label.');
       }
     }, { successMessage: contactLabelForm.id ? 'Etiqueta atualizada' : 'Etiqueta criada' });
 
@@ -3722,7 +3722,7 @@ export function DashboardClient({ initialOverview }: Props) {
       return;
     }
 
-    const confirmed = window.confirm(`Remover a etiqueta ${label.emoji ? `${label.emoji} ` : ''}${label.name}?`);
+    const confirmed = window.confirm(`Remove label ${label.emoji ? `${label.emoji} ` : ''}${label.name}?`);
     if (!confirmed) {
       return;
     }
@@ -3733,7 +3733,7 @@ export function DashboardClient({ initialOverview }: Props) {
       });
 
       if (!response.ok) {
-        throw new Error('Nao foi possivel remover a etiqueta.');
+        throw new Error('Could not remove the label.');
       }
     }, { successMessage: 'Etiqueta removida' });
 
@@ -3772,8 +3772,8 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!payload.name || !payload.email || !payload.password) {
       pushToast({
         tone: 'error',
-        title: 'Dados do usuario incompletos',
-        description: 'Preencha nome, email e senha para criar o usuario.',
+        title: 'Incomplete user data',
+        description: 'Fill in name, email, and password to create the user.',
       });
       return;
     }
@@ -3782,7 +3782,7 @@ export function DashboardClient({ initialOverview }: Props) {
       const user = await createUser(payload);
       setWorkspaceUsers((current) => [user, ...current.filter((item) => item.id !== user.id)]);
       setNewUserForm({ name: '', email: '', password: '', role: 'attendant' });
-    }, { successMessage: 'Usuario criado' });
+    }, { successMessage: 'User created' });
 
     if (created) {
       await loadWorkspaceUsers().catch(() => undefined);
@@ -3814,8 +3814,8 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!payload.name) {
       pushToast({
         tone: 'error',
-        title: 'Nome obrigatorio',
-        description: 'Defina o nome exibido do usuario antes de salvar.',
+        title: 'Name required',
+        description: "Set the user's display name before saving.",
       });
       return;
     }
@@ -3833,7 +3833,7 @@ export function DashboardClient({ initialOverview }: Props) {
         role: 'attendant',
         isActive: true,
       });
-    }, { successMessage: 'Usuario atualizado' });
+    }, { successMessage: 'User updated' });
 
     if (saved) {
       await loadWorkspaceUsers().catch(() => undefined);
@@ -3888,8 +3888,8 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!payload.name || !payload.shortcut || !payload.content) {
       pushToast({
         tone: 'error',
-        title: 'Campos obrigatorios',
-        description: 'Nome, atalho e conteudo devem ser preenchidos.',
+        title: 'Required fields',
+        description: 'Name, atalho e conteudo devem ser preenchidos.',
       });
       return;
     }
@@ -3897,8 +3897,8 @@ export function DashboardClient({ initialOverview }: Props) {
     if (payload.visibilityScope === 'user' && !payload.visibilityUserId) {
       pushToast({
         tone: 'error',
-        title: 'Selecione o usuario',
-        description: 'Respostas com visibilidade por usuario precisam de um destinatario definido.',
+        title: 'Select the user',
+        description: 'Replies with per-user visibility need a defined recipient.',
       });
       return;
     }
@@ -4027,8 +4027,8 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!payload.name) {
       pushToast({
         tone: 'error',
-        title: 'Nome obrigatorio',
-        description: 'Defina um nome operacional para a nova sessao.',
+        title: 'Name required',
+        description: 'Set an operational name for the new session.',
       });
       return;
     }
@@ -4041,7 +4041,7 @@ export function DashboardClient({ initialOverview }: Props) {
       });
 
       if (!response.ok) {
-        throw new Error('Nao foi possivel criar a sessao.');
+        throw new Error('Could not create the session.');
       }
 
       const createdSession = (await response.json()) as SessionRecord;
@@ -4050,7 +4050,7 @@ export function DashboardClient({ initialOverview }: Props) {
       await loadOverview();
       setSelectedSessionId(createdSession.id);
       navigateToView('settings');
-    }, { successMessage: 'Sessao criada' });
+    }, { successMessage: 'Session created' });
   };
 
   const connectSession = (sessionId: string) => {
@@ -4065,7 +4065,7 @@ export function DashboardClient({ initialOverview }: Props) {
       );
 
       if (!response.ok) {
-        throw new Error('Nao foi possivel iniciar a sessao.');
+        throw new Error('Could not start the session.');
       }
 
       await loadOverview();
@@ -4084,7 +4084,7 @@ export function DashboardClient({ initialOverview }: Props) {
       );
 
       if (!response.ok) {
-        throw new Error('Nao foi possivel desconectar a sessao.');
+        throw new Error('Could not disconnect the session.');
       }
 
       await loadOverview();
@@ -4103,7 +4103,7 @@ export function DashboardClient({ initialOverview }: Props) {
       );
 
       if (!response.ok) {
-        throw new Error('Nao foi possivel remover a sessao.');
+        throw new Error('Could not remove the session.');
       }
 
       const remainingSessions = overview.sessions.filter((item) => item.id !== session.id);
@@ -4122,7 +4122,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
       setSessionToDelete(null);
       await loadOverview();
-    }, { successMessage: 'Sessao removida' });
+    }, { successMessage: 'Session removed' });
   };
 
   const sendMessage = useCallback((text: string) => {
@@ -4138,12 +4138,12 @@ export function DashboardClient({ initialOverview }: Props) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ body: payload, author: 'Operador', replyToMessageId }),
+          body: JSON.stringify({ body: payload, author: 'Operator', replyToMessageId }),
         },
       );
 
       if (!response.ok) {
-        throw new Error('Nao foi possivel enviar a mensagem.');
+        throw new Error('Could not send the message.');
       }
 
       const createdMessage = (await response.json()) as MessageRecord;
@@ -4184,7 +4184,7 @@ export function DashboardClient({ initialOverview }: Props) {
         );
 
         if (!response.ok) {
-          throw new Error('Nao foi possivel enviar a midia.');
+          throw new Error('Could not send media.');
         }
 
         const createdMessage = (await response.json()) as MessageRecord;
@@ -4215,13 +4215,13 @@ export function DashboardClient({ initialOverview }: Props) {
             body: JSON.stringify({
               messageId: message.id,
               emoji: emoji.trim(),
-              author: 'Operador',
+              author: 'Operator',
             }),
           },
         );
 
         if (!response.ok) {
-          throw new Error('Nao foi possivel reagir a mensagem.');
+          throw new Error('Could not react to the message.');
         }
 
         void loadMessages(selectedSession.id, selectedConversation.id, {
@@ -4240,7 +4240,7 @@ export function DashboardClient({ initialOverview }: Props) {
           { label: 'Autenticacao', ready: false },
           { label: 'Workspace', ready: false },
         ]}
-        subtitle="Validando credenciais e restaurando sua sessao de acesso."
+        subtitle="Validating credentials and restoring your access session."
         title="Entrando no workspace"
       />
     );
@@ -4257,7 +4257,7 @@ export function DashboardClient({ initialOverview }: Props) {
           { label: 'Equipe', ready: hasLoadedInitialUsers },
           { label: 'Quick replies', ready: hasLoadedInitialQuickReplies },
         ]}
-        subtitle={`Carregando conversas, contatos e dados operacionais${authUser?.name ? ` para ${authUser.name}` : ''}.`}
+        subtitle={`Loading conversations, contacts, and operational data${authUser?.name ? ` para ${authUser.name}` : ''}.`}
         title="Preparando seu workspace"
       />
     );
@@ -4310,7 +4310,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       {overview.metrics.waitingConversations.toLocaleString('pt-BR')}
                     </p>
                     <p className="mt-2 text-xl font-semibold text-[var(--primary)] md:text-2xl">
-                      {dashboardSnapshot.activeSessions.toLocaleString('pt-BR')} sessoes online · {dashboardSnapshot.onlineUsers.toLocaleString('pt-BR')} operadores ativos
+                      {dashboardSnapshot.activeSessions.toLocaleString('pt-BR')} online sessions · {dashboardSnapshot.onlineUsers.toLocaleString('pt-BR')} active operators
                     </p>
                   </div>
                   <LayoutGrid className="h-9 w-9 text-zinc-700" strokeWidth={1.8} />
@@ -4409,7 +4409,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 ))
               ) : (
                 <WhatsAppOnboardingCard
-                  actionLabel={canAccessSettings ? 'Conectar WhatsApp' : 'Abrir conversas'}
+                  actionLabel={canAccessSettings ? 'Connect WhatsApp' : 'Open conversations'}
                   onAction={() => navigateToView(canAccessSettings ? 'settings' : 'conversations')}
                   secondaryActionLabel="Ver conversas"
                   onSecondaryAction={() => navigateToView('conversations')}
@@ -4509,7 +4509,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     </span>
                     {board.isCustom && canManageBoards ? (
                       <button
-                        aria-label={`Remover board ${board.label}`}
+                        aria-label={`Remove board ${board.label}`}
                         className="grid h-7 w-7 place-items-center rounded-full bg-white/5 text-zinc-500 transition hover:bg-white/10 hover:text-white"
                         onClick={() => {
                           void removeContactsBoard(board.id);
@@ -4542,7 +4542,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
                   CRM Kanban
                 </p>
-                <h3 className="mt-2 font-headline text-3xl font-bold text-white">Pipeline de contatos</h3>
+                <h3 className="mt-2 font-headline text-3xl font-bold text-white">Contact pipeline</h3>
                 <p className="mt-2 text-sm text-zinc-400">
                   Base filtrada em tempo real com arraste entre etapas e acesso rapido para conversas.
                 </p>
@@ -4567,7 +4567,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   type="button"
                 >
                   <BadgeCheck className="h-4 w-4" strokeWidth={2.1} />
-                  {contactsAudienceFilter === 'verified' ? 'So verificados' : 'Todos os perfis'}
+                  {contactsAudienceFilter === 'verified' ? 'So verificados' : 'Everyone os perfis'}
                 </button>
                 <button
                   className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black shadow-[0_0_18px_rgba(127,175,255,0.26)] transition hover:scale-[1.01]"
@@ -4664,7 +4664,7 @@ export function DashboardClient({ initialOverview }: Props) {
             ) : filteredContacts.length === 0 ? (
               <EmptyStateCard
                 actionLabel="Limpar filtros"
-                description="Ajuste busca, canais ou boards para repovoar o pipeline e voltar a arrastar os contatos entre as etapas."
+                description="Adjust search, channels, or boards to repopulate the pipeline and drag contacts between stages again."
                 onAction={resetContactsView}
                 title="Nenhum contato disponivel no board"
               />
@@ -4777,7 +4777,7 @@ export function DashboardClient({ initialOverview }: Props) {
           <AnalyticsLoadingState />
         ) : analyticsModel && overview.conversations.length === 0 ? (
           <EmptyStateCard
-            actionLabel="Abrir conversas"
+            actionLabel="Open conversations"
             description="Quando a operacao receber conversas reais, esta area passa a exibir volume, CSAT e horarios de pico automaticamente."
             onAction={() => navigateToView('conversations')}
             title="Analytics aguardando sinal operacional"
@@ -4936,7 +4936,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     {analyticsModel.resolvedTickets.length === 0 ? (
                       <tr>
                         <td className="px-6 py-6 text-sm text-zinc-500" colSpan={6}>
-                          Nenhuma conversa resolvida apareceu ainda no pipeline atual.
+                          No resolved conversation has appeared in the current pipeline yet.
                         </td>
                       </tr>
                     ) : analyticsModel.resolvedTickets.map((ticket) => (
@@ -4976,46 +4976,46 @@ export function DashboardClient({ initialOverview }: Props) {
   const renderHelpView = () => {
     const guideCards = [
       {
-        title: 'Conectar WhatsApp',
-        description: 'Abra Configuracoes, crie ou selecione uma sessao, gere o QR e acompanhe o status ate ficar online.',
+        title: 'Connect WhatsApp',
+        description: 'Open Settings, create or select a session, generate the QR, and track status until it is online.',
         icon: QrCode,
         tone: 'from-sky-400/22 to-blue-500/8 text-sky-200',
       },
       {
-        title: 'Atender conversas',
-        description: 'Use Conversas para filtrar a fila, abrir uma timeline, responder, anexar midias e aplicar etiquetas no contato.',
+        title: 'Handle conversations',
+        description: 'Use Conversations to filter the queue, open a timeline, reply, attach media, and apply contact labels.',
         icon: MessageCircle,
         tone: 'from-emerald-400/22 to-emerald-500/8 text-emerald-200',
       },
       {
-        title: 'Organizar contatos',
-        description: 'No CRM, arraste cards entre etapas, salve responsavel, prioridade, observacoes e etiquetas do atendimento.',
+        title: 'Organize contacts',
+        description: 'In the CRM, drag cards between stages, save owner, priority, notes, and support labels.',
         icon: LayoutGrid,
         tone: 'from-violet-400/22 to-pink-500/8 text-violet-100',
       },
       {
-        title: 'Publicar no Instagram',
-        description: 'Entre em Configuracoes > Instagram, escolha Feed ou Story, envie a midia, revise o preview e publique.',
+        title: 'Publish to Instagram',
+        description: 'Go to Settings > Instagram, choose Feed or Story, upload media, review the preview, and publish.',
         icon: Camera,
         tone: 'from-pink-400/24 to-rose-500/10 text-pink-100',
       },
     ];
     const quickQuestions = [
       {
-        question: 'Nao aparece QR code?',
-        answer: 'Clique em Gerar QR / conectar na sessao. Se continuar vazio, atualize o painel e confira se a sessao esta desconectada.',
+        question: 'QR code not showing?',
+        answer: 'Click Generate QR / connect on the session. If it remains empty, refresh the panel and check whether the session is disconnected.',
       },
       {
-        question: 'Mensagem nao chegou na timeline?',
-        answer: 'Use Atualizar na conversa. A timeline tambem sincroniza em tempo real quando a sessao esta online.',
+        question: 'Message did not reach the timeline?',
+        answer: 'Use Refresh in the conversation. The timeline also syncs in realtime when the session is online.',
       },
       {
-        question: 'Como ativar alertas?',
-        answer: 'Use o sino no topo para notificacoes do navegador e o botao de som ao lado para alerta sonoro.',
+        question: 'How do I enable alerts?',
+        answer: 'Use the bell at the top for browser notifications and the sound button next to it for audio alerts.',
       },
       {
-        question: 'Onde mudo permissao de usuario?',
-        answer: 'Administradores acessam Configuracoes > Usuarios para alterar role, status e sessoes ativas.',
+        question: 'Where do I change user permissions?',
+        answer: 'Admins can open Settings > Users to change role, status, and active sessions.',
       },
     ];
 
@@ -5028,13 +5028,13 @@ export function DashboardClient({ initialOverview }: Props) {
             <div className="relative max-w-3xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                 <CircleHelp className="h-3.5 w-3.5 text-[var(--primary)]" strokeWidth={2.1} />
-                Guias rapidos
+                Quick guides
               </div>
               <h2 className="font-headline mt-4 text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">
-                Ajuda e duvidas do workspace
+                Workspace help and questions
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted)]">
-                Um painel curto para lembrar os fluxos principais e resolver duvidas comuns sem sair do dashboard.
+                A short panel to remember key flows and solve common questions without leaving the dashboard.
               </p>
             </div>
           </div>
@@ -5044,10 +5044,10 @@ export function DashboardClient({ initialOverview }: Props) {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                    Guias essenciais
+                    Essential guides
                   </p>
                   <p className="mt-2 text-sm text-[var(--muted)]">
-                    Os caminhos mais usados no dia a dia da operacao.
+                    The most used paths in daily operations.
                   </p>
                 </div>
                 <Sparkles className="h-5 w-5 text-[var(--primary)]" strokeWidth={2.1} />
@@ -5072,7 +5072,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
             <div className="glass-panel rounded-[30px] p-6">
               <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                Duvidas rapidas
+                Quick questions
               </p>
               <div className="mt-5 space-y-3">
                 {quickQuestions.map((item) => (
@@ -5084,9 +5084,9 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
 
               <div className="mt-5 rounded-[24px] border border-[var(--primary)]/18 bg-[var(--primary)]/10 p-4">
-                <p className="text-sm font-semibold text-white">Atalho util</p>
+                <p className="text-sm font-semibold text-white">Useful shortcut</p>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                  Use <span className="font-semibold text-[var(--primary)]">Alt + numero</span> para alternar entre as abas principais da barra lateral.
+                  Use <span className="font-semibold text-[var(--primary)]">Alt + number</span> para alternar entre as abas principais da barra lateral.
                 </p>
               </div>
             </div>
@@ -5098,32 +5098,32 @@ export function DashboardClient({ initialOverview }: Props) {
 
   const renderSettingsView = () => {
     const settingsHeading = settingsSection === 'users'
-      ? 'Gerenciar usuarios do workspace'
+      ? 'Manage workspace users'
       : settingsSection === 'labels'
-        ? 'Etiquetas visuais dos contatos'
+        ? 'Visual contact labels'
         : settingsSection === 'quickReplies'
-          ? 'Respostas rapidas'
+          ? 'Quick replies'
           : settingsSection === 'instagram'
-            ? 'Estudio Instagram'
+            ? 'Instagram studio'
             : settingsSection === 'audit'
               ? 'Audit log'
-              : 'Conectar e gerenciar sessoes';
+              : 'Connect and manage sessions';
     const settingsDescription = settingsSection === 'users'
-      ? 'Controle acessos por role sem derrubar a sessao compartilhada do WhatsApp.'
+      ? 'Control access by role without dropping the shared WhatsApp session.'
       : settingsSection === 'labels'
-        ? 'Crie etiquetas com nome, emoji e cor para aplicar visualmente aos contatos do CRM.'
+        ? 'Create labels with name, emoji, and color to visually apply to CRM contacts.'
         : settingsSection === 'quickReplies'
-          ? 'Cadastre atalhos reutilizaveis para acelerar o atendimento e acione autocomplete no chat ao digitar /.'
+          ? 'Create reusable shortcuts to speed up support and trigger autocomplete in chat by typing /.'
           : settingsSection === 'instagram'
-            ? 'Prepare feed e stories em um espaco limpo, sem detalhes internos aparecendo para a operacao.'
+            ? 'Prepare feed and stories in a clean space without internal details showing to operations.'
             : settingsSection === 'audit'
-              ? 'Acompanhe quem executou mudancas sensiveis no workspace, em que recurso e quando isso aconteceu.'
-              : 'Crie uma sessao operacional, gere QR code, reconecte numeros e acompanhe o estado da autenticacao sem sair do painel.';
+              ? 'Track who performed sensitive workspace changes, on which resource, and when.'
+              : 'Create an operational session, generate QR code, reconnect numbers, and track authentication status without leaving the panel.';
     const settingsTabs = [
       {
         id: 'sessions' as const,
-        label: 'Sessoes',
-        description: 'WhatsApp e canais',
+        label: 'Sessions',
+        description: 'WhatsApp and channels',
         icon: Wifi,
         enabled: true,
         accent: 'from-sky-400/24 to-blue-500/8 text-sky-200',
@@ -5131,8 +5131,8 @@ export function DashboardClient({ initialOverview }: Props) {
       },
       {
         id: 'users' as const,
-        label: 'Usuarios',
-        description: 'Acesso e roles',
+        label: 'Users',
+        description: 'Access and roles',
         icon: ContactRound,
         enabled: isAdminUser,
         accent: 'from-emerald-400/24 to-emerald-500/8 text-emerald-200',
@@ -5140,7 +5140,7 @@ export function DashboardClient({ initialOverview }: Props) {
       },
       {
         id: 'labels' as const,
-        label: 'Etiquetas',
+        label: 'Labels',
         description: 'CRM visual',
         icon: BadgeCheck,
         enabled: canManageContactLabels,
@@ -5149,8 +5149,8 @@ export function DashboardClient({ initialOverview }: Props) {
       },
       {
         id: 'quickReplies' as const,
-        label: 'Atalhos',
-        description: 'Respostas rapidas',
+        label: 'Shortcuts',
+        description: 'Quick replies',
         icon: MessageSquarePlus,
         enabled: canManageQuickReplies,
         accent: 'from-violet-400/24 to-pink-500/8 text-violet-100',
@@ -5168,7 +5168,7 @@ export function DashboardClient({ initialOverview }: Props) {
       {
         id: 'audit' as const,
         label: 'Auditoria',
-        description: 'Eventos sensiveis',
+        description: 'Events sensiveis',
         icon: BarChart3,
         enabled: canViewAuditLogs,
         accent: 'from-zinc-200/18 to-white/5 text-zinc-200',
@@ -5269,7 +5269,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     </div>
                     {!isLoadingInstagramStatus && instagramStatus && !instagramStatus.configured ? (
                       <div className="mt-5 rounded-[24px] border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100">
-                        Publicacao indisponivel no momento. Revise a configuracao do publicador antes de usar esta area.
+                        Publishing is currently unavailable. Review publisher configuration before using this area.
                       </div>
                     ) : null}
                   </div>
@@ -5299,8 +5299,8 @@ export function DashboardClient({ initialOverview }: Props) {
                       </div>
                     ) : (
                       <EmptyStateCard
-                        description="Assim que voce publicar um feed ou story daqui, o ultimo resultado aparece nesta area com um resumo simples."
-                        title="Nenhuma publicacao nesta sessao"
+                        description="Assim que you publicar um feed ou story daqui, o ultimo resultado aparece nesta area com um resumo simples."
+                        title="No publication in this session"
                       />
                     )}
                   </div>
@@ -5394,7 +5394,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
                   {!isLoadingInstagramStatus && instagramStatus && !instagramStatus.configured ? (
                     <div className="rounded-[24px] border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                      Publicacao indisponivel no momento. Revise a configuracao do publicador antes de tentar enviar conteudo.
+                      Publishing is currently unavailable. Review publisher configuration before trying to send content.
                     </div>
                   ) : null}
 
@@ -5431,7 +5431,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       }}
                       type="button"
                     >
-                      Limpar formulario
+                      Clear form
                     </button>
                   </div>
                 </div>
@@ -5440,7 +5440,7 @@ export function DashboardClient({ initialOverview }: Props) {
           ) : (
             <EmptyStateCard
               description="Apenas administradores e supervisores podem publicar no Instagram pelo dashboard."
-              title="Acesso restrito"
+              title="Restricted access"
             />
           )
         ) : settingsSection === 'labels' ? (
@@ -5451,10 +5451,10 @@ export function DashboardClient({ initialOverview }: Props) {
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                        Designer de etiquetas
+                        Label designer
                       </p>
                       <p className="mt-2 text-sm text-[var(--muted)]">
-                        Defina um nome curto, um emoji de contexto e uma cor forte para identificar contatos rapidamente.
+                        Set a short name, context emoji, and strong color to identify contacts quickly.
                       </p>
                     </div>
                     <div
@@ -5463,7 +5463,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     >
                       <span className="inline-flex items-center gap-2">
                         <span>{contactLabelForm.emoji || '🏷️'}</span>
-                        <span>{contactLabelForm.name.trim() || 'Nova etiqueta'}</span>
+                        <span>{contactLabelForm.name.trim() || 'New label'}</span>
                       </span>
                     </div>
                   </div>
@@ -5471,7 +5471,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   <div className="mt-5 space-y-4">
                     <Field
                       onChange={(value) => setContactLabelForm((current) => ({ ...current, name: value }))}
-                      placeholder="Nome da etiqueta"
+                      placeholder="Label name"
                       value={contactLabelForm.name}
                     />
                     <div className="grid gap-4 md:grid-cols-[0.72fr_0.28fr]">
@@ -5497,14 +5497,14 @@ export function DashboardClient({ initialOverview }: Props) {
                         onClick={() => void saveContactLabel()}
                         type="button"
                       >
-                        {contactLabelForm.id ? 'Salvar etiqueta' : 'Criar etiqueta'}
+                        {contactLabelForm.id ? 'Save label' : 'Create label'}
                       </button>
                       <button
                         className="rounded-full bg-white/5 px-5 py-3 text-sm text-[var(--muted)] hover:text-white"
                         onClick={resetContactLabelForm}
                         type="button"
                       >
-                        Limpar formulario
+                        Clear form
                       </button>
                     </div>
                   </div>
@@ -5515,14 +5515,14 @@ export function DashboardClient({ initialOverview }: Props) {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                      Biblioteca de etiquetas
+                      Label library
                     </p>
                     <p className="mt-2 text-sm text-[var(--muted)]">
-                      Essas etiquetas podem ser aplicadas diretamente aos contatos no painel de CRM.
+                      These labels can be applied directly to contacts in the CRM panel.
                     </p>
                   </div>
                   <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
-                    {contactLabels.length} etiquetas
+                    {contactLabels.length} labels
                   </span>
                 </div>
 
@@ -5530,8 +5530,8 @@ export function DashboardClient({ initialOverview }: Props) {
                   {isLoadingContactLabels ? <StackSkeleton rows={4} /> : null}
                   {!isLoadingContactLabels && contactLabels.length === 0 ? (
                     <EmptyStateCard
-                      description="Crie a primeira etiqueta para destacar perfis VIP, campanhas, tipos de cliente ou status operacionais do CRM."
-                      title="Nenhuma etiqueta criada ainda"
+                      description="Create the first label to highlight VIP profiles, campaigns, customer types, or operational CRM statuses."
+                      title="No labels created yet"
                     />
                   ) : null}
                   {!isLoadingContactLabels ? contactLabels.map((label) => (
@@ -5562,7 +5562,7 @@ export function DashboardClient({ initialOverview }: Props) {
                             })}
                             type="button"
                           >
-                            Editar
+                            Edit
                           </button>
                           <button
                             className="rounded-full bg-rose-500/10 px-3 py-1.5 text-[11px] font-semibold text-rose-100 transition hover:bg-rose-500/15"
@@ -5571,7 +5571,7 @@ export function DashboardClient({ initialOverview }: Props) {
                             }}
                             type="button"
                           >
-                            Excluir
+                            Delete
                           </button>
                         </div>
                       </div>
@@ -5582,8 +5582,8 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
           ) : (
             <EmptyStateCard
-              description="Apenas administradores e supervisores podem criar e editar etiquetas de contatos."
-              title="Acesso restrito"
+              description="Only admins and supervisors can create and edit contact labels."
+              title="Restricted access"
             />
           )
         ) : settingsSection === 'audit' ? (
@@ -5591,12 +5591,12 @@ export function DashboardClient({ initialOverview }: Props) {
             <div className="grid gap-5 xl:grid-cols-[0.82fr_1.18fr]">
               <div className="glass-panel rounded-[30px] p-6">
                 <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                  Resumo
+                  Summary
                 </p>
                 <div className="mt-5 grid gap-4 md:grid-cols-3 xl:grid-cols-1">
-                  <MetricCard label="Eventos" value={auditLogs.length} detail="Ultimos registros carregados" tone="primary" compact />
-                  <MetricCard label="Atores" value={new Set(auditLogs.map((item) => item.actorUserId || item.actorName || item.id)).size} detail="Usuarios distintos nesta lista" tone="secondary" compact />
-                  <MetricCard label="Recursos" value={new Set(auditLogs.map((item) => item.resourceType)).size} detail="Tipos de recurso rastreados" tone="tertiary" compact />
+                  <MetricCard label="Events" value={auditLogs.length} detail="Latest loaded records" tone="primary" compact />
+                  <MetricCard label="Actors" value={new Set(auditLogs.map((item) => item.actorUserId || item.actorName || item.id)).size} detail="Users distintos nesta lista" tone="secondary" compact />
+                  <MetricCard label="Resources" value={new Set(auditLogs.map((item) => item.resourceType)).size} detail="Tracked resource types" tone="tertiary" compact />
                 </div>
               </div>
 
@@ -5604,10 +5604,10 @@ export function DashboardClient({ initialOverview }: Props) {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                      Eventos recentes
+                      Events recentes
                     </p>
                     <p className="mt-2 text-sm text-[var(--muted)]">
-                      Usuario, acao, recurso e contexto operacional das ultimas mudancas sensiveis.
+                      User, action, resource, and operational context of the latest sensitive changes.
                     </p>
                   </div>
                   <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
@@ -5619,8 +5619,8 @@ export function DashboardClient({ initialOverview }: Props) {
                   {isLoadingAuditLogs ? <StackSkeleton rows={4} /> : null}
                   {!isLoadingAuditLogs && auditLogs.length === 0 ? (
                     <EmptyStateCard
-                      description="Assim que uma acao sensivel acontecer, ela passa a aparecer aqui com usuario, recurso e horario."
-                      title="Nenhum evento auditado ainda"
+                      description="As soon as a sensitive action happens, it appears here with user, resource, and time."
+                      title="No audited event yet"
                     />
                   ) : null}
                   {!isLoadingAuditLogs ? auditLogs.map((entry) => (
@@ -5629,7 +5629,7 @@ export function DashboardClient({ initialOverview }: Props) {
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-white">{entry.summary}</p>
                           <p className="mt-1 text-xs text-[var(--muted)]">
-                            {entry.actorName || 'Usuario desconhecido'} · {entry.actorRole ? formatRoleLabel(entry.actorRole) : 'Sem role'}
+                            {entry.actorName || 'Unknown user'} · {entry.actorRole ? formatRoleLabel(entry.actorRole) : 'No role'}
                           </p>
                         </div>
                         <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
@@ -5660,8 +5660,8 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
           ) : (
             <EmptyStateCard
-              description="Apenas administradores e supervisores podem consultar o historico de auditoria."
-              title="Acesso restrito"
+              description="Only admins and supervisors can view the audit history."
+              title="Restricted access"
             />
           )
         ) : settingsSection === 'quickReplies' ? (
@@ -5682,8 +5682,8 @@ export function DashboardClient({ initialOverview }: Props) {
             />
           ) : (
             <EmptyStateCard
-              description="Apenas administradores e supervisores podem gerenciar respostas rapidas."
-              title="Acesso restrito"
+              description="Only admins and supervisors can manage quick replies."
+              title="Restricted access"
             />
           )
         ) : settingsSection === 'users' ? (
@@ -5697,17 +5697,17 @@ export function DashboardClient({ initialOverview }: Props) {
                   <div className="mt-5 space-y-3">
                     <Field
                       onChange={(value) => setNewUserForm((current) => ({ ...current, name: value }))}
-                      placeholder="Nome exibido"
+                      placeholder="Name exibido"
                       value={newUserForm.name}
                     />
                     <Field
                       onChange={(value) => setNewUserForm((current) => ({ ...current, email: value }))}
-                      placeholder="Email de acesso"
+                      placeholder="Access email"
                       value={newUserForm.email}
                     />
                     <Field
                       onChange={(value) => setNewUserForm((current) => ({ ...current, password: value }))}
-                      placeholder="Senha inicial"
+                      placeholder="Initial password"
                       type="password"
                       value={newUserForm.password}
                     />
@@ -5720,7 +5720,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       onClick={() => void submitNewUser()}
                       type="button"
                     >
-                      Criar usuario
+                      Create user
                     </button>
                   </div>
                 </div>
@@ -5733,7 +5733,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       Workspace users
                     </p>
                     <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
-                      {workspaceUsers.length} usuarios
+                      {workspaceUsers.length} users
                     </span>
                   </div>
 
@@ -5741,8 +5741,8 @@ export function DashboardClient({ initialOverview }: Props) {
                     {isLoadingUsers ? <StackSkeleton rows={4} /> : null}
                     {!isLoadingUsers && workspaceUsers.length === 0 ? (
                       <EmptyStateCard
-                        description="O primeiro administrador ja pode criar supervisores e atendentes aqui."
-                        title="Nenhum usuario adicional ainda"
+                        description="The first admin can create supervisors and attendants here."
+                        title="No additional user yet"
                       />
                     ) : null}
 
@@ -5761,7 +5761,7 @@ export function DashboardClient({ initialOverview }: Props) {
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                               <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${user.isActive ? 'bg-[var(--secondary)]/14 text-[var(--secondary)]' : 'bg-rose-500/14 text-rose-300'}`}>
-                                {user.isActive ? 'ativo' : 'inativo'}
+                                {user.isActive ? 'active' : 'inactive'}
                               </span>
                               <span className="rounded-full bg-[var(--primary)]/12 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--primary)]">
                                 {formatRoleLabel(user.role)}
@@ -5770,19 +5770,19 @@ export function DashboardClient({ initialOverview }: Props) {
                           </div>
 
                           <p className="mt-3 text-xs text-[var(--muted)]">
-                            Ultimo login: {user.lastLoginAt ? formatTimestamp(user.lastLoginAt) : 'ainda sem login'}
+                            Last login: {user.lastLoginAt ? formatTimestamp(user.lastLoginAt) : 'no login yet'}
                           </p>
 
                           <div className="app-panel-contrast mt-4 rounded-[20px] border border-white/8 px-3 py-3">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div>
                                 <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">
-                                  Sessoes ativas
+                                  Active sessions
                                 </p>
                                 <p className="mt-1 text-sm text-zinc-300">
                                   {userSessions.length > 0
-                                    ? `${userSessions.length} sessoes carregadas`
-                                    : 'Carregue as sessoes deste usuario para revisar acessos ativos.'}
+                                    ? `${userSessions.length} loaded sessions`
+                                    : 'Load this user sessions to review active access.'}
                                 </p>
                               </div>
                               <button
@@ -5790,7 +5790,7 @@ export function DashboardClient({ initialOverview }: Props) {
                                 onClick={() => toggleUserSessions(user.id)}
                                 type="button"
                               >
-                                {sessionsExpanded ? 'Ocultar sessoes' : 'Ver sessoes'}
+                                {sessionsExpanded ? 'Hide sessions' : 'View sessions'}
                               </button>
                             </div>
 
@@ -5799,7 +5799,7 @@ export function DashboardClient({ initialOverview }: Props) {
                                 {isLoadingSessions ? <StackSkeleton rows={2} /> : null}
                                 {!isLoadingSessions && userSessions.length === 0 ? (
                                   <div className="rounded-[18px] border border-dashed border-white/8 px-3 py-4 text-sm text-zinc-500">
-                                    Nenhuma sessao ativa encontrada para este usuario.
+                                    No active session found for this user.
                                   </div>
                                 ) : null}
                                 {!isLoadingSessions ? userSessions.map((session) => (
@@ -5810,7 +5810,7 @@ export function DashboardClient({ initialOverview }: Props) {
                                           {formatSessionUserAgent(session.userAgent)}
                                         </p>
                                         <p className="mt-1 truncate text-xs text-zinc-500">
-                                          {session.remoteAddr || 'IP indisponivel'}
+                                          {session.remoteAddr || 'IP unavailable'}
                                         </p>
                                       </div>
                                       <button
@@ -5820,15 +5820,15 @@ export function DashboardClient({ initialOverview }: Props) {
                                         }}
                                         type="button"
                                       >
-                                        Revogar
+                                        Revoke
                                       </button>
                                     </div>
                                     <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-500">
                                       <span className="rounded-full bg-white/5 px-2.5 py-1">
-                                        Ultima atividade {formatTimestamp(session.lastSeenAt)}
+                                        Last activity {formatTimestamp(session.lastSeenAt)}
                                       </span>
                                       <span className="rounded-full bg-white/5 px-2.5 py-1">
-                                        Expira {formatTimestamp(session.expiresAt)}
+                                        Expires {formatTimestamp(session.expiresAt)}
                                       </span>
                                     </div>
                                   </div>
@@ -5841,12 +5841,12 @@ export function DashboardClient({ initialOverview }: Props) {
                             <div className="mt-4 space-y-3">
                               <Field
                                 onChange={(value) => setEditingUserForm((current) => ({ ...current, name: value }))}
-                                placeholder="Nome"
+                                placeholder="Name"
                                 value={editingUserForm.name}
                               />
                               <Field
                                 onChange={(value) => setEditingUserForm((current) => ({ ...current, password: value }))}
-                                placeholder="Nova senha (opcional)"
+                                placeholder="New password (optional)"
                                 type="password"
                                 value={editingUserForm.password}
                               />
@@ -5861,7 +5861,7 @@ export function DashboardClient({ initialOverview }: Props) {
                                     onChange={(event) => setEditingUserForm((current) => ({ ...current, isActive: event.target.checked }))}
                                     type="checkbox"
                                   />
-                                  Ativo
+                                  Active
                                 </label>
                               </div>
                               <div className="flex flex-wrap gap-3">
@@ -5870,14 +5870,14 @@ export function DashboardClient({ initialOverview }: Props) {
                                   onClick={() => void submitUserUpdate()}
                                   type="button"
                                 >
-                                  Salvar usuario
+                                  Save user
                                 </button>
                                 <button
                                   className="rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
                                   onClick={() => setEditingUserId(null)}
                                   type="button"
                                 >
-                                  Cancelar
+                                  Cancel
                                 </button>
                               </div>
                             </div>
@@ -5888,7 +5888,7 @@ export function DashboardClient({ initialOverview }: Props) {
                                 onClick={() => startEditingUser(user)}
                                 type="button"
                               >
-                                Editar usuario
+                                Edit user
                               </button>
                             </div>
                           )}
@@ -5901,8 +5901,8 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
           ) : (
             <EmptyStateCard
-              description="Apenas administradores podem gerenciar usuarios do workspace."
-              title="Acesso restrito"
+              description="Only admins can manage workspace users."
+              title="Restricted access"
             />
           )
         ) : (
@@ -5910,12 +5910,12 @@ export function DashboardClient({ initialOverview }: Props) {
             <div className="space-y-6">
               {overview.sessions.length === 0 ? (
                 <WhatsAppOnboardingCard
-                  actionLabel="Criar primeira sessao"
-                  description="Comece criando uma sessao operacional. Depois gere o QR, escaneie no WhatsApp e as conversas entram em tempo real."
+                  actionLabel="Create first session"
+                  description="Start by creating an operational session. Then generate the QR, scan it in WhatsApp, and conversations arrive in realtime."
                   onAction={() => {
                     document.getElementById('session-name-input')?.focus();
                   }}
-                  title="Configure o WhatsApp em poucos passos"
+                  title="Configure WhatsApp in a few steps"
                 />
               ) : null}
 
@@ -5929,11 +5929,11 @@ export function DashboardClient({ initialOverview }: Props) {
                     onChange={(value) =>
                       setSessionForm((current) => ({ ...current, name: value }))
                     }
-                    placeholder="Nome operacional"
+                    placeholder="Operational name"
                     value={sessionForm.name}
                   />
                   <div className="rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-[var(--muted)]">
-                    O numero do WhatsApp sera preenchido automaticamente apos autenticar a sessao.
+                    The WhatsApp number will be filled automatically after authenticating the session.
                   </div>
                   <button
                     className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-3 text-sm font-semibold text-black disabled:cursor-wait disabled:opacity-75"
@@ -5944,9 +5944,9 @@ export function DashboardClient({ initialOverview }: Props) {
                     {isCreatingSession ? (
                       <>
                         <RefreshCw className="h-4 w-4 animate-spin" strokeWidth={2.1} />
-                        Criando sessao...
+                        Creating session...
                       </>
-                    ) : 'Criar sessao'}
+                    ) : 'Create session'}
                   </button>
                 </div>
               </div>
@@ -5983,7 +5983,7 @@ export function DashboardClient({ initialOverview }: Props) {
                           {pendingSessionAction?.sessionId === session.id ? (
                             <span className="inline-flex items-center gap-2 rounded-full bg-white/8 px-3 py-1 text-xs text-white">
                               <RefreshCw className="h-3.5 w-3.5 animate-spin" strokeWidth={2.2} />
-                              Processando
+                              Processing
                             </span>
                           ) : (
                             <span className={`rounded-full px-3 py-1 text-xs ${statusTone[session.status]}`}>
@@ -5995,8 +5995,8 @@ export function DashboardClient({ initialOverview }: Props) {
                     })
                   ) : (
                     <EmptyStateCard
-                      description="Defina um nome operacional para provisionar o primeiro numero deste workspace. O telefone entra automaticamente depois da autenticacao."
-                      title="Nenhuma sessao criada ainda"
+                      description="Set an operational name to provision the first number in this workspace. The phone is added automatically after authentication."
+                      title="No session created yet"
                     />
                   )}
                 </div>
@@ -6025,9 +6025,9 @@ export function DashboardClient({ initialOverview }: Props) {
                     </div>
 
                     <div className="mt-6 grid gap-4 md:grid-cols-3">
-                      <MetricCard label="Unread" value={selectedSession.unread} detail="Mensagens pendentes" tone="primary" compact />
-                      <MetricCard label="Waiting" value={selectedSession.waiting} detail="Conversas na fila" tone="tertiary" compact />
-                      <MetricCard label="Attendants" value={selectedSession.attendants} detail="Atendentes vinculados" tone="secondary" compact />
+                      <MetricCard label="Unread" value={selectedSession.unread} detail="Pending messages" tone="primary" compact />
+                      <MetricCard label="Waiting" value={selectedSession.waiting} detail="Conversations na fila" tone="tertiary" compact />
+                      <MetricCard label="Attendants" value={selectedSession.attendants} detail="Linked attendants" tone="secondary" compact />
                     </div>
 
                     <div className="mt-6 flex flex-wrap gap-3">
@@ -6042,7 +6042,7 @@ export function DashboardClient({ initialOverview }: Props) {
                         ) : (
                           <QrCode className="h-4 w-4" strokeWidth={2.1} />
                         )}
-                        {isConnectingSelectedSession ? 'Conectando...' : 'Gerar QR / conectar'}
+                        {isConnectingSelectedSession ? 'Connecting...' : 'Generate QR / connect'}
                       </button>
                       <button
                         className="inline-flex items-center gap-2 rounded-full bg-white/5 px-4 py-2 text-sm text-[var(--muted)] hover:text-white disabled:cursor-wait disabled:opacity-60"
@@ -6055,7 +6055,7 @@ export function DashboardClient({ initialOverview }: Props) {
                         ) : (
                           <Wifi className="h-4 w-4" strokeWidth={2.1} />
                         )}
-                        {isDisconnectingSelectedSession ? 'Desconectando...' : 'Desconectar'}
+                        {isDisconnectingSelectedSession ? 'Disconnecting...' : 'Disconnect'}
                       </button>
                       <button
                         className="inline-flex items-center gap-2 rounded-full border border-rose-500/20 bg-rose-500/10 px-4 py-2 text-sm text-rose-100 hover:bg-rose-500/15 disabled:cursor-wait disabled:opacity-60"
@@ -6064,7 +6064,7 @@ export function DashboardClient({ initialOverview }: Props) {
                         type="button"
                       >
                         <Trash2 className="h-4 w-4" strokeWidth={2.1} />
-                        Remover sessao
+                        Remove session
                       </button>
                     </div>
 
@@ -6092,9 +6092,9 @@ export function DashboardClient({ initialOverview }: Props) {
                           <div className="relative grid h-20 w-20 place-items-center rounded-[28px] border border-[var(--primary)]/25 bg-[var(--primary)]/10 text-[var(--primary)] shadow-[0_0_34px_rgba(127,175,255,0.16)]">
                             <RefreshCw className="h-8 w-8 animate-spin" strokeWidth={2.1} />
                           </div>
-                          <p className="mt-5 font-headline text-2xl font-semibold text-white">Gerando QR code</p>
+                          <p className="mt-5 font-headline text-2xl font-semibold text-white">Generating QR code</p>
                           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                            Estamos preparando a autenticacao da sessao. O QR aparece aqui automaticamente assim que estiver pronto.
+                            We are preparing session authentication. The QR appears here automatically as soon as it is ready.
                           </p>
                           <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-high)]">
                             <div className="h-full w-1/2 animate-pulse rounded-full bg-[var(--primary)]" />
@@ -6104,7 +6104,7 @@ export function DashboardClient({ initialOverview }: Props) {
                         <div className="space-y-4 text-center">
                           <div className="mx-auto w-fit rounded-[28px] bg-white p-4 shadow-[0_24px_60px_-32px_rgba(0,0,0,0.8)]">
                             <Image
-                              alt={`QR code da sessao ${selectedSession.name}`}
+                              alt={`Session QR code ${selectedSession.name}`}
                               className="mx-auto rounded-[20px]"
                               height={260}
                               src={selectedSession.qrCodeDataUrl}
@@ -6113,18 +6113,18 @@ export function DashboardClient({ initialOverview }: Props) {
                             />
                           </div>
                           <div className="mx-auto max-w-md rounded-[22px] border border-[var(--primary)]/20 bg-[var(--primary)]/10 px-4 py-3 text-left">
-                            <p className="text-sm font-semibold text-white">Escaneie pelo WhatsApp</p>
+                            <p className="text-sm font-semibold text-white">Scan with WhatsApp</p>
                             <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
-                              Abra WhatsApp &gt; Aparelhos conectados &gt; Conectar aparelho. Assim que ficar online, as conversas aparecem automaticamente.
+                              Open WhatsApp &gt; Linked devices &gt; Link a device. Once online, conversations appear automatically.
                             </p>
                           </div>
                         </div>
                       ) : (
                         <EmptyStateCard
-                          actionLabel="Gerar QR / conectar"
-                          description="Gere o QR, escaneie pelo WhatsApp e aguarde o status mudar para Online. Se ja houver login salvo, a conexao pode voltar sem novo codigo."
+                          actionLabel="Generate QR / connect"
+                          description="Generate the QR, scan it with WhatsApp, and wait for the status to change to Online. If a login is already saved, the connection may return without a new code."
                           onAction={() => connectSession(selectedSession.id)}
-                          title="QR aguardando conexao"
+                          title="QR waiting for connection"
                         />
                       )}
                     </div>
@@ -6132,8 +6132,8 @@ export function DashboardClient({ initialOverview }: Props) {
                 </>
               ) : (
                 <EmptyStateCard
-                  description="Escolha uma sessao existente ou crie uma nova para abrir os controles, gerar QR e acompanhar a autenticacao."
-                  title="Selecione uma sessao para continuar"
+                  description="Choose an existing session or create a new one to open controls, generate QR, and track authentication."
+                  title="Select a session to continue"
                 />
               )}
             </div>
@@ -6149,7 +6149,7 @@ export function DashboardClient({ initialOverview }: Props) {
       <section className={`${isMobileConversationOpen ? 'hidden xl:block' : 'block'} min-h-0 overflow-hidden border-r border-white/5 bg-[var(--surface-low)]/35 px-3 py-4`}>
         <div className="mb-4 flex items-center justify-between px-1">
           <div>
-            <h2 className="font-headline text-xl font-bold text-white">Conversas</h2>
+            <h2 className="font-headline text-xl font-bold text-white">Conversations</h2>
             <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-[var(--muted)]">
               {queueLabel}
             </p>
@@ -6203,7 +6203,7 @@ export function DashboardClient({ initialOverview }: Props) {
             <div className="mt-4 space-y-4 border-t border-white/6 pt-4">
               <div>
                 <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                  Escopo das sessoes
+                  Session scope
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2 px-1">
                   <button
@@ -6218,7 +6218,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     }}
                     type="button"
                   >
-                    Sessao atual
+                    Current session
                   </button>
                   <button
                     className={`rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all ${
@@ -6229,7 +6229,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     onClick={() => setConversationSessionScope('all')}
                     type="button"
                   >
-                    Todas as sessoes
+                    All sessions
                   </button>
                 </div>
               </div>
@@ -6237,7 +6237,7 @@ export function DashboardClient({ initialOverview }: Props) {
               {conversationSessionScope === 'all' ? (
                 <div>
                   <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                    Filtrar por nome da sessao
+                    Filter by session name
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2 px-1">
                     <button
@@ -6401,7 +6401,7 @@ export function DashboardClient({ initialOverview }: Props) {
                         WhatsApp
                       </span>
                       <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--primary)]">
-                        {isGroupConversation(conversation) ? 'Grupo' : 'Conversa'}
+                        {isGroupConversation(conversation) ? 'Group' : 'Conversation'}
                       </span>
                       {conversationSessionScope === 'all' ? (
                         <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-sky-200">
@@ -6422,16 +6422,16 @@ export function DashboardClient({ initialOverview }: Props) {
 
           {(selectedSession || conversationSessionScope === 'all') && !shouldShowInitialSkeleton && visibleSessionConversations.length === 0 ? (
             <EmptyStateCard
-              actionLabel={conversationSearchTerm || conversationFilter !== 'all' || conversationSessionScope !== 'selected' || conversationSessionFilterIds.length > 0 ? 'Limpar busca e filtros' : 'Atualizar fila'}
+              actionLabel={conversationSearchTerm || conversationFilter !== 'all' || conversationSessionScope !== 'selected' || conversationSessionFilterIds.length > 0 ? 'Clear search and filters' : 'Refresh queue'}
               description={conversationSearchTerm
-                ? 'Nenhuma conversa combina com a busca atual. Limpe o termo ou ajuste os filtros para continuar navegando.'
+                ? 'No conversation matches the current search. Clear the term or adjust filters to keep browsing.'
                 : conversationSessionScope === 'all'
-                  ? 'Nenhuma conversa apareceu nas sessoes filtradas. Ajuste os nomes selecionados ou aguarde novas mensagens.'
-                  : 'A sessao atual ainda nao trouxe conversas para esta fila. Atualize a sincronizacao ou aguarde novas mensagens.'}
+                  ? 'No conversation appeared in the filtered sessions. Adjust selected names or wait for new messages.'
+                  : 'The current session has not brought conversations to this queue yet. Refresh sync or wait for new messages.'}
               onAction={conversationSearchTerm || conversationFilter !== 'all' || conversationSessionScope !== 'selected' || conversationSessionFilterIds.length > 0
                 ? resetConversationView
                 : () => runAction(loadOverview)}
-              title="Nenhuma conversa disponivel"
+              title="No conversation available"
             />
           ) : null}
         </div>
@@ -6443,7 +6443,7 @@ export function DashboardClient({ initialOverview }: Props) {
             <div className="app-panel-overlay flex items-start justify-between gap-3 border-b border-white/5 px-3 py-3 backdrop-blur-md md:px-4">
               <div className="flex min-w-0 items-center gap-3">
                 <button
-                  aria-label="Voltar para lista de conversas"
+                  aria-label="Back to conversation list"
                   className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-white/[0.04] text-[var(--muted)] transition hover:bg-white/[0.08] hover:text-white xl:hidden"
                   onClick={() => {
                     setReplyTargetMessage(null);
@@ -6489,7 +6489,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     ))}
                     {activeConversationLabels.length > 3 ? (
                       <span className="rounded-full bg-white/5 px-3 py-1 text-zinc-300">
-                        +{activeConversationLabels.length - 3} etiquetas
+                        +{activeConversationLabels.length - 3} labels
                       </span>
                     ) : null}
                   </div>
@@ -6504,7 +6504,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     type="button"
                   >
                     <BadgeCheck className="h-4 w-4" strokeWidth={2.1} />
-                    <span className="hidden sm:inline">Etiquetas {activeConversationLabels.length > 0 ? `(${activeConversationLabels.length})` : ''}</span>
+                    <span className="hidden sm:inline">Labels {activeConversationLabels.length > 0 ? `(${activeConversationLabels.length})` : ''}</span>
                   </button>
                 </div>
               ) : null}
@@ -6533,8 +6533,8 @@ export function DashboardClient({ initialOverview }: Props) {
                         type="button"
                       >
                         {isLoadingOlderMessages
-                          ? 'Carregando mensagens anteriores...'
-                          : `Carregar ${visibleMessageStartIndex > 0 ? Math.min(MESSAGE_PAGE_SIZE, visibleMessageStartIndex) : MESSAGE_PAGE_SIZE} mensagens anteriores`}
+                          ? 'Loading previous messages...'
+                          : `Load ${visibleMessageStartIndex > 0 ? Math.min(MESSAGE_PAGE_SIZE, visibleMessageStartIndex) : MESSAGE_PAGE_SIZE} previous messages`}
                       </button>
                     </div>
                   ) : null}
@@ -6571,7 +6571,7 @@ export function DashboardClient({ initialOverview }: Props) {
                         type="button"
                       >
                         <MessageCircle className="h-3.5 w-3.5" strokeWidth={2.1} />
-                        {newTimelineMessageCount} nova{newTimelineMessageCount === 1 ? '' : 's'} mensagem{newTimelineMessageCount === 1 ? '' : 'ens'}
+                        {newTimelineMessageCount} new{newTimelineMessageCount === 1 ? '' : 's'} message{newTimelineMessageCount === 1 ? '' : 'ens'}
                       </button>
                     </div>
                   ) : null}
@@ -6585,7 +6585,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       />
                       <div className="glass-panel rounded-[26px] rounded-tl-none px-5 py-4 text-sm text-[var(--muted)]">
                         <div className="flex items-center gap-3">
-                          <span>digitando</span>
+                          <span>typing</span>
                           <span className="flex gap-1">
                             <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)] [animation-delay:-0.2s]" />
                             <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--primary)] [animation-delay:-0.1s]" />
@@ -6598,8 +6598,8 @@ export function DashboardClient({ initialOverview }: Props) {
 
                   {timelineMessages.length === 0 && !isLoadingMessages ? (
                     <EmptyStateCard
-                      description="Quando esta conversa tiver historico sincronizado, a timeline completa aparece aqui com mensagens e midias."
-                      title="Timeline aguardando mensagens"
+                      description="Quando esta conversa tiver historico sincronizado, a timeline completa aparece aqui com messages e midias."
+                      title="Timeline aguardando messages"
                     />
                   ) : null}
                 </div>
@@ -6609,7 +6609,7 @@ export function DashboardClient({ initialOverview }: Props) {
             <div className="border-t border-white/5 bg-[var(--surface-low)]/45 px-3 py-2 backdrop-blur-xl md:px-4 md:py-3">
               <ConversationComposer
                 key={`${selectedSession.id}:${selectedConversation?.id ?? 'none'}:${authUser?.id ?? 'guest'}`}
-                defaultSignatureName={authUser?.name ?? 'Operador'}
+                defaultSignatureName={authUser?.name ?? 'Operator'}
                 draftStorageKey={`pulse-hub.composer-draft:${authUser?.id ?? 'guest'}:${selectedSession.id}:${selectedConversation?.id ?? 'none'}`}
                 disabled={!selectedConversation || isPending}
                 onCancelReply={() => setReplyTargetMessage(null)}
@@ -6628,10 +6628,10 @@ export function DashboardClient({ initialOverview }: Props) {
           <div className="grid flex-1 place-items-center p-6">
             <div className="space-y-4 text-center">
               <WhatsAppOnboardingCard
-                actionLabel={canAccessSettings ? 'Abrir configuracoes' : 'Voltar ao dashboard'}
-                description="Assim que a sessao WhatsApp estiver online, esta tela vira sua central de atendimento em tempo real."
+                actionLabel={canAccessSettings ? 'Open settings' : 'Back to dashboard'}
+                description="Once the WhatsApp session is online, this screen becomes your realtime support hub."
                 onAction={() => navigateToView(canAccessSettings ? 'settings' : 'dashboard')}
-                title="Conecte o WhatsApp para iniciar conversas"
+                title="Connect WhatsApp to start conversations"
               />
             </div>
           </div>
@@ -6680,9 +6680,9 @@ export function DashboardClient({ initialOverview }: Props) {
       ) : null}
       {showConversationLabelsModal && selectedConversation ? (
         <KanbanModal
-          description="Aplique etiquetas diretamente ao contato da conversa atual para destacar contexto, campanha ou prioridade visual."
+          description="Apply labels directly to the current conversation contact to highlight context, campaign, or visual priority."
           onClose={() => setShowConversationLabelsModal(false)}
-          title="Etiquetas do contato"
+          title="Contact labels"
         >
           <div className="space-y-4">
             <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
@@ -6693,7 +6693,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   <p className="mt-1 text-xs text-[var(--muted)]">{selectedConversation.participantId}</p>
                 </div>
                 <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
-                  {activeConversationLabels.length} etiqueta{activeConversationLabels.length === 1 ? '' : 's'}
+                  {activeConversationLabels.length} label{activeConversationLabels.length === 1 ? '' : 's'}
                 </span>
               </div>
 
@@ -6703,7 +6703,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   <input
                     className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
                     onChange={(event) => setConversationLabelSearch(event.target.value)}
-                    placeholder="Pesquisar etiquetas"
+                    placeholder="Search labels"
                     value={conversationLabelSearch}
                   />
                 </div>
@@ -6743,10 +6743,10 @@ export function DashboardClient({ initialOverview }: Props) {
                 );
               }) : (
                 <EmptyStateCard
-                  actionLabel={canManageContactLabels ? 'Abrir biblioteca de etiquetas' : undefined}
+                  actionLabel={canManageContactLabels ? 'Open label library' : undefined}
                   description={contactLabels.length === 0
-                    ? 'Nenhuma etiqueta foi criada ainda. Cadastre etiquetas na configuracao para aplicar aqui.'
-                    : 'Nenhuma etiqueta combina com a busca atual.'}
+                    ? 'No label has been created yet. Create labels in settings to apply them here.'
+                    : 'No label matches the current search.'}
                   onAction={canManageContactLabels
                     ? () => {
                       setShowConversationLabelsModal(false);
@@ -6754,7 +6754,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       navigateToView('settings');
                     }
                     : undefined}
-                  title="Nenhuma etiqueta disponivel"
+                  title="No label available"
                 />
               )}
             </div>
@@ -6765,7 +6765,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 onClick={() => setShowConversationLabelsModal(false)}
                 type="button"
               >
-                Fechar
+                Close
               </button>
               {canManageContactLabels ? (
                 <button
@@ -6777,7 +6777,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   }}
                   type="button"
                 >
-                  Gerenciar etiquetas
+                  Manage labels
                 </button>
               ) : null}
             </div>
@@ -6786,9 +6786,9 @@ export function DashboardClient({ initialOverview }: Props) {
       ) : null}
       {sessionToDelete ? (
         <KanbanModal
-          description="Remova a sessao do workspace e descarte o login salvo desse numero."
+          description="Remove the session from the workspace and discard the saved login for this number."
           onClose={() => setSessionToDelete(null)}
-          title="Remover sessao"
+          title="Remove session"
         >
           <div className="space-y-4">
             <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-50">
@@ -6797,7 +6797,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 {sessionToDelete.phoneNumber} · {sessionToDelete.channelName}
               </p>
               <p className="mt-3 text-rose-100/80">
-                Essa acao remove a sessao, limpa os dados operacionais vinculados e exige nova autenticacao se ela for criada outra vez.
+                This action removes the session, clears linked operational data, and requires new authentication if it is created again.
               </p>
             </div>
             <div className="flex justify-end gap-2">
@@ -6807,7 +6807,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 onClick={() => setSessionToDelete(null)}
                 type="button"
               >
-                Cancelar
+                Cancel
               </button>
               <button
                 className="inline-flex items-center gap-2 rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:cursor-wait disabled:opacity-75"
@@ -6822,7 +6822,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 ) : (
                   <Trash2 className="h-4 w-4" strokeWidth={2.1} />
                 )}
-                {isDeletingSelectedSession ? 'Removendo...' : 'Remover sessao'}
+                {isDeletingSelectedSession ? 'Removing...' : 'Remove session'}
               </button>
             </div>
           </div>
@@ -6830,25 +6830,25 @@ export function DashboardClient({ initialOverview }: Props) {
       ) : null}
       {showCreateBoardModal ? (
         <KanbanModal
-          description="Salve os filtros atuais como um novo board para acessar esse recorte do CRM com um clique."
+          description="Save the current filters as a new board to access this CRM slice in one click."
           onClose={() => setShowCreateBoardModal(false)}
-          title="Criar board"
+          title="Create board"
         >
           <div className="space-y-3">
             <input
               className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
               onChange={(event) => setNewBoardForm((current) => ({ ...current, label: event.target.value }))}
-              placeholder="Nome do board"
+              placeholder="Board name"
               value={newBoardForm.label}
             />
             <input
               className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
               onChange={(event) => setNewBoardForm((current) => ({ ...current, description: event.target.value }))}
-              placeholder="Descricao curta"
+              placeholder="Short description"
               value={newBoardForm.description}
             />
             <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-xs leading-6 text-zinc-400">
-              O board sera criado com os filtros atuais: fila <strong className="text-white">{contactsFilter}</strong>, audiencia <strong className="text-white">{contactsAudienceFilter}</strong> e canal <strong className="text-white">{contactsChannelFilter}</strong>.
+              The board will be created with the current filters: fila <strong className="text-white">{contactsFilter}</strong>, audiencia <strong className="text-white">{contactsAudienceFilter}</strong> e canal <strong className="text-white">{contactsChannelFilter}</strong>.
             </div>
             <div className="flex justify-end gap-2">
               <button
@@ -6856,7 +6856,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 onClick={() => setShowCreateBoardModal(false)}
                 type="button"
               >
-                Cancelar
+                Cancel
               </button>
               <button
                 className="rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
@@ -6865,7 +6865,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 }}
                 type="button"
               >
-                Criar board
+                Create board
               </button>
             </div>
           </div>
@@ -6873,21 +6873,21 @@ export function DashboardClient({ initialOverview }: Props) {
       ) : null}
       {showCreateContactModal ? (
         <KanbanModal
-          description="Adicione um contato manualmente ao pipeline para iniciar prospeccao, follow-up ou atendimento." 
+          description="Add a contact manually to the pipeline to start prospecting, follow-up, or support."
           onClose={() => setShowCreateContactModal(false)}
-          title="Adicionar contato"
+          title="Add contact"
         >
           <div className="space-y-3">
             <input
               className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
               onChange={(event) => setNewContactForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Nome do contato"
+              placeholder="Contact name"
               value={newContactForm.name}
             />
             <input
               className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
               onChange={(event) => setNewContactForm((current) => ({ ...current, phone: event.target.value }))}
-              placeholder="Telefone com DDD ou JID"
+              placeholder="Phone with area code or JID"
               value={newContactForm.phone}
             />
             <div className="grid grid-cols-2 gap-2">
@@ -6908,14 +6908,14 @@ export function DashboardClient({ initialOverview }: Props) {
                 onClick={() => setShowCreateContactModal(false)}
                 type="button"
               >
-                Cancelar
+                Cancel
               </button>
               <button
                 className="rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black"
                 onClick={() => void createManualContact()}
                 type="button"
               >
-                Adicionar contato
+                Add contact
               </button>
             </div>
           </div>
@@ -6953,19 +6953,19 @@ export function DashboardClient({ initialOverview }: Props) {
 
           <div className="mt-auto space-y-1 border-t border-white/5 pt-6">
             <button
-              aria-label="Acoes rapidas"
+              aria-label="Quick actions"
               className="mb-4 flex w-full items-center justify-center rounded-xl bg-[var(--primary-container)] px-3 py-3 text-[var(--on-primary-container)] transition-transform active:scale-95"
               onClick={() => navigateToView(selectedSession ? 'conversations' : canAccessSettings ? 'settings' : 'dashboard')}
-              title="Acoes rapidas"
+              title="Quick actions"
               type="button"
             >
               <MessageSquarePlus className="h-4 w-4" strokeWidth={2.2} />
             </button>
             <button
-              aria-label="Ajuda"
+              aria-label="Help"
               className={`relative flex w-full items-center justify-center rounded-xl px-3 py-3 transition-all ${currentView === 'help' ? 'bg-blue-600/10 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.22)]' : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'}`}
               onClick={() => navigateToView('help')}
-              title="Ajuda"
+              title="Help"
               type="button"
             >
               {currentView === 'help' ? (
@@ -6974,10 +6974,10 @@ export function DashboardClient({ initialOverview }: Props) {
               <CircleHelp className="h-5 w-5" strokeWidth={currentView === 'help' ? 2.4 : 2.1} />
             </button>
             <button
-              aria-label="Sair"
+              aria-label="Sign out"
               className="flex w-full items-center justify-center rounded-xl px-3 py-3 text-[var(--error-dim)] transition-all hover:bg-white/5"
               onClick={signOut}
-              title="Sair"
+              title="Sign out"
               type="button"
             >
               <LogOut className="h-5 w-5" strokeWidth={2.1} />
@@ -6997,7 +6997,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   ref={globalSearchInputRef}
                   className="w-80 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
                   onChange={(event) => setGlobalSearch(event.target.value)}
-                  placeholder="Buscar contatos, conversas ou responsaveis..."
+                  placeholder="Search contacts, conversations, or owners..."
                   value={globalSearch}
                 />
                 <span className="rounded-full border border-white/8 bg-black/20 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-400">
@@ -7008,25 +7008,25 @@ export function DashboardClient({ initialOverview }: Props) {
 
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <button
-                aria-label={notificationsEnabled ? 'Desativar notificacoes' : 'Ativar notificacoes'}
+                aria-label={notificationsEnabled ? 'Disable notifications' : 'Enable notifications'}
                 className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${notificationsEnabled ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-[var(--primary)]' : 'border-white/10 bg-white/5 text-[var(--muted)] hover:text-white'}`}
                 onClick={() => {
                   void toggleBrowserNotifications();
                 }}
                 title={notificationPermission === 'denied'
-                  ? 'Permissao de notificacao bloqueada no navegador'
+                  ? 'Notification permission blocked in the browser'
                   : notificationsEnabled
-                    ? 'Notificacoes do navegador ativas'
-                    : 'Ativar notificacoes do navegador'}
+                    ? 'Browser notifications active'
+                    : 'Enable notifications do navegador'}
                 type="button"
               >
                 {notificationsEnabled ? <Bell className="h-4 w-4" strokeWidth={2.1} /> : <BellOff className="h-4 w-4" strokeWidth={2.1} />}
               </button>
               <button
-                aria-label={soundEnabled ? 'Desativar som de notificacao' : 'Ativar som de notificacao'}
+                aria-label={soundEnabled ? 'Disable notification sound' : 'Enable notification sound'}
                 className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition ${soundEnabled ? 'border-[var(--secondary)]/30 bg-[var(--secondary)]/12 text-[var(--secondary)]' : 'border-white/10 bg-white/5 text-[var(--muted)] hover:text-white'}`}
                 onClick={toggleSoundNotifications}
-                title={soundEnabled ? 'Som de notificacao ativo' : 'Som de notificacao desativado'}
+                title={soundEnabled ? 'Notification sound active' : 'Notification sound disabled'}
                 type="button"
               >
                 {soundEnabled ? <Volume2 className="h-4 w-4" strokeWidth={2.1} /> : <VolumeX className="h-4 w-4" strokeWidth={2.1} />}
@@ -7047,15 +7047,15 @@ export function DashboardClient({ initialOverview }: Props) {
             <div className="px-4 pt-4 md:px-6">
               <WorkspaceStatusBanner
                 description={errorMessage}
-                title="Nao foi possivel concluir a ultima acao"
+                title="Could not complete the last action"
                 tone="error"
               />
             </div>
           ) : isPending ? (
             <div className="px-4 pt-4 md:px-6">
               <WorkspaceStatusBanner
-                description="Atualizando sessoes, conversas e indicadores sem interromper o fluxo da tela."
-                title="Sincronizando workspace"
+                description="Updating sessions, conversations, and indicators without interrupting the screen flow."
+                title="Syncing workspace"
                 tone="info"
               />
             </div>
@@ -7079,7 +7079,7 @@ export function DashboardClient({ initialOverview }: Props) {
         </div>
       </div>
       <nav className={`${activeView === 'conversations' && isMobileConversationOpen ? 'hidden' : 'flex'} app-mobile-nav fixed z-40 gap-1 overflow-x-auto rounded-[22px] border border-white/10 bg-[var(--surface-highest)]/95 p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.35)] backdrop-blur-2xl md:hidden`}>
-        {[...availableNavigationItems, { id: 'help' as const, label: 'Ajuda', icon: CircleHelp }].map(({ id, label, icon: Icon }, index) => {
+        {[...availableNavigationItems, { id: 'help' as const, label: 'Help', icon: CircleHelp }].map(({ id, label, icon: Icon }, index) => {
           const isActive = currentView === id;
 
           return (
@@ -7101,13 +7101,13 @@ export function DashboardClient({ initialOverview }: Props) {
           );
         })}
         <button
-          aria-label="Sair"
+          aria-label="Sign out"
           className="flex min-w-[3.75rem] shrink-0 flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-2 text-[9px] font-semibold text-[var(--error-dim)] transition hover:bg-white/6"
           onClick={signOut}
           type="button"
         >
           <LogOut className="h-4 w-4" strokeWidth={2.1} />
-          <span className="whitespace-nowrap">Sair</span>
+          <span className="whitespace-nowrap">Sign out</span>
         </button>
       </nav>
     </main>
@@ -7406,33 +7406,33 @@ function WorkspaceLoadingScreen({ targetView }: { targetView: WorkspaceView }) {
     { label: string; detail: string; icon: typeof Home }
   > = {
     dashboard: {
-      label: 'Visao geral',
-      detail: 'Carregando sinais da operacao e feed em tempo real...',
+      label: 'Overview',
+      detail: 'Loading operation signals and realtime feed...',
       icon: Home,
     },
     conversations: {
-      label: 'Conversas',
-      detail: 'Hidratando filas, timeline e estado do atendimento...',
+      label: 'Conversations',
+      detail: 'Hydrating queues, timeline, and support state...',
       icon: MessageCircle,
     },
     contacts: {
-      label: 'Contatos',
-      detail: 'Montando CRM, filtros e perfis dos contatos...',
+      label: 'Contacts',
+      detail: 'Preparing CRM, filters, and contact profiles...',
       icon: ContactRound,
     },
     analytics: {
       label: 'Analytics',
-      detail: 'Calculando estatisticas e organizando a leitura operacional...',
+      detail: 'Calculating stats and organizing operational insights...',
       icon: BarChart3,
     },
     help: {
-      label: 'Ajuda',
-      detail: 'Abrindo guias rapidos e respostas para duvidas comuns...',
+      label: 'Help',
+      detail: 'Opening quick guides and answers for common questions...',
       icon: CircleHelp,
     },
     settings: {
-      label: 'Configuracoes',
-      detail: 'Sincronizando sessoes, QR e configuracoes do workspace...',
+      label: 'Settings',
+      detail: 'Syncing sessions, QR, and workspace settings...',
       icon: Settings,
     },
   };
@@ -7452,7 +7452,7 @@ function WorkspaceLoadingScreen({ targetView }: { targetView: WorkspaceView }) {
             </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.28em] text-[var(--muted)]">
-                Carregando workspace
+                Loading workspace
               </p>
               <h2 className="font-headline mt-2 text-4xl font-extrabold text-white md:text-5xl">
                 {label}
@@ -7513,7 +7513,7 @@ function WorkspaceBootstrapScreen({
   const totalItems = items.length;
   const readyCount = items.filter((item) => item.ready).length;
   const completionPercent = totalItems > 0 ? Math.round((readyCount / totalItems) * 100) : 0;
-  const activeStage = items.find((item) => !item.ready)?.label ?? 'Finalizando';
+  const activeStage = items.find((item) => !item.ready)?.label ?? 'Finishing';
   const visibleProgress = Math.max(completionPercent, totalItems > 0 ? 8 : 0);
 
   return (
@@ -7665,7 +7665,7 @@ function EmptyStateCard({
 
 function WhatsAppOnboardingCard({
   title = 'Conecte o WhatsApp para ver atividade real',
-  description = 'Crie uma sessao, escaneie o QR e comece a receber mensagens no painel sem precisar atualizar a pagina.',
+  description = 'Create a session, scan the QR, and start receiving messages in the panel without refreshing the page.',
   actionLabel,
   onAction,
   secondaryActionLabel,
@@ -7679,9 +7679,9 @@ function WhatsAppOnboardingCard({
   onSecondaryAction?: () => void;
 }) {
   const steps = [
-    { label: '1', title: 'Crie a sessao', description: 'Use um nome simples para identificar o numero no workspace.' },
+    { label: '1', title: 'Create the session', description: 'Use a simple name to identify the number in the workspace.' },
     { label: '2', title: 'Escaneie o QR', description: 'Abra Aparelhos conectados no WhatsApp e leia o codigo.' },
-    { label: '3', title: 'Atenda em tempo real', description: 'As conversas aparecem aqui assim que chegarem novas mensagens.' },
+    { label: '3', title: 'Atenda em tempo real', description: 'As conversas aparecem aqui assim que chegarem news messages.' },
   ];
 
   return (
@@ -7922,7 +7922,7 @@ function VirtualizedKanbanColumn({
             <span className={`h-2.5 w-2.5 rounded-full ${column.accent}`} />
             <div>
               <p className="text-sm font-semibold text-white">{column.label}</p>
-              <p className="mt-1 text-[11px] text-zinc-500">{column.contacts.length} contatos</p>
+              <p className="mt-1 text-[11px] text-zinc-500">{column.contacts.length} contacts</p>
             </div>
           </div>
           <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-semibold text-zinc-300">
@@ -7971,7 +7971,7 @@ function VirtualizedKanbanColumn({
               type="button"
             >
               <Plus className="h-4 w-4" strokeWidth={2.1} />
-              Adicionar contato
+              Add contact
             </button>
           ) : null}
         </div>
@@ -8148,7 +8148,7 @@ function ContactKanbanDetailPanel({
           <AvatarBadge className="h-16 w-16 text-lg" label={contact.contact} src={contact.avatarUrl} />
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
-              Contato ativo
+              Contato active
             </p>
             <h3 className="mt-2 text-xl font-semibold text-white">{contact.contact}</h3>
             <p className="mt-1 text-sm text-zinc-400">{contact.owner} · {contact.channelName}</p>
@@ -8209,7 +8209,7 @@ function ContactKanbanDetailPanel({
         </div>
 
         <div className="mt-4 rounded-2xl bg-white/[0.03] p-3">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Ultima mensagem</p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Ultima message</p>
           <p className="mt-2 text-sm leading-6 text-zinc-300">{contact.preview || 'Sem texto recente sincronizado.'}</p>
           <div className="mt-3 flex items-center gap-2 text-xs">
             <span className={`h-2.5 w-2.5 rounded-full ${connectivity.dot}`} />
@@ -8235,7 +8235,7 @@ function ContactKanbanDetailPanel({
             }}
             type="button"
           >
-            Salvar
+            Save
           </button>
         </div>
 
@@ -8247,7 +8247,7 @@ function ContactKanbanDetailPanel({
             <input
               className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
               onChange={(event) => setDraftAssignee(event.target.value)}
-              placeholder="Nome do responsavel"
+              placeholder="Name do responsavel"
               value={draftAssignee}
             />
           </div>
@@ -8272,7 +8272,7 @@ function ContactKanbanDetailPanel({
 
           <div>
             <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
-              Etiquetas
+              Labels
             </label>
             <div className="space-y-3 rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
               <div className="flex flex-wrap gap-2">
@@ -8286,7 +8286,7 @@ function ContactKanbanDetailPanel({
                     <span>{label.name}</span>
                   </span>
                 )) : (
-                  <span className="text-sm text-zinc-500">Nenhuma etiqueta aplicada a este contato.</span>
+                  <span className="text-sm text-zinc-500">No label applied to this contact.</span>
                 )}
               </div>
 
@@ -8317,7 +8317,7 @@ function ContactKanbanDetailPanel({
                 </div>
               ) : (
                 <div className="rounded-2xl border border-dashed border-white/8 bg-black/10 px-4 py-3 text-sm text-zinc-500">
-                  Nenhuma etiqueta disponivel ainda.
+                  No label available ainda.
                 </div>
               )}
 
@@ -8327,7 +8327,7 @@ function ContactKanbanDetailPanel({
                   onClick={onOpenLabelsSettings}
                   type="button"
                 >
-                  Gerenciar etiquetas
+                  Manage labels
                 </button>
               ) : null}
             </div>
@@ -8340,7 +8340,7 @@ function ContactKanbanDetailPanel({
             <textarea
               className="min-h-28 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
               onChange={(event) => setDraftNotes(event.target.value)}
-              placeholder="Resumo do contexto, proxima acao, objeccoes, detalhes do atendimento..."
+              placeholder="Summary do contexto, proxima acao, objeccoes, detalhes do atendimento..."
               value={draftNotes}
             />
           </div>
@@ -8349,7 +8349,7 @@ function ContactKanbanDetailPanel({
 
       <div className="rounded-[26px] border border-white/6 bg-white/[0.03] p-5">
         <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
-          Acoes rapidas
+          Quick actions
         </p>
         <div className="mt-4 grid gap-2">
           <button
@@ -8496,7 +8496,7 @@ function ConversationComposer({
       signatureStorageKey,
       JSON.stringify({
         enabled: signatureEnabled,
-        name: signatureName.trim() || defaultSignatureName.trim() || 'Operador',
+        name: signatureName.trim() || defaultSignatureName.trim() || 'Operator',
       }),
     );
   }, [defaultSignatureName, signatureEnabled, signatureName, signatureStorageKey]);
@@ -8775,11 +8775,11 @@ function ConversationComposer({
                     {selectedAttachment.file.name}
                   </p>
                   <p className="mt-1 text-xs text-[var(--muted)]">
-                    {selectedAttachment.sticker ? 'Figurinha' : getAttachmentLabel(selectedAttachment.file)} · {formatFileSize(selectedAttachment.file.size)}
+                    {selectedAttachment.sticker ? 'Sticker' : getAttachmentLabel(selectedAttachment.file)} · {formatFileSize(selectedAttachment.file.size)}
                   </p>
                 </div>
                 <button
-                  aria-label="Remover anexo"
+                  aria-label="Remove attachment"
                   className="grid h-8 w-8 place-items-center rounded-full bg-white/5 text-[var(--muted)] transition hover:bg-white/10 hover:text-white"
                   disabled={composerBusy}
                   onClick={clearAttachment}
@@ -8790,10 +8790,10 @@ function ConversationComposer({
               </div>
               <p className="mt-3 text-xs leading-5 text-zinc-400">
                 {selectedAttachment.sticker
-                  ? 'Pronta para enviar como figurinha.'
+                  ? 'Ready to send as a sticker.'
                   : draft.trim()
-                    ? 'A mensagem digitada sera enviada como legenda do anexo.'
-                    : 'Adicione uma legenda opcional ou envie direto.'}
+                    ? 'A message digitada sera enviada como legenda do anexo.'
+                    : 'Add an optional caption or send directly.'}
               </p>
             </div>
           </div>
@@ -8809,14 +8809,14 @@ function ConversationComposer({
               type="button"
             >
               <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--primary)]">
-                Respondendo {replyToMessage.direction === 'outgoing' ? 'voce' : replyToMessage.author}
+                Replying to {replyToMessage.direction === 'outgoing' ? 'you' : replyToMessage.author}
               </p>
               <p className="mt-1 line-clamp-2 text-sm text-zinc-300">
                 {summarizeMessageForReply(replyToMessage)}
               </p>
             </button>
             <button
-              aria-label="Cancelar resposta"
+              aria-label="Cancel reply"
               className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/5 text-[var(--muted)] transition hover:bg-white/10 hover:text-white"
               disabled={composerBusy}
               onClick={onCancelReply}
@@ -8849,7 +8849,7 @@ function ConversationComposer({
 
       {isDragging ? (
         <div className="mb-3 rounded-[26px] border border-dashed border-[var(--primary)]/35 bg-[var(--primary)]/10 px-4 py-4 text-center text-sm text-[var(--primary)]">
-          Solte o arquivo aqui para anexar a conversa.
+          Drop the file here to attach it to the conversation.
         </div>
       ) : null}
 
@@ -8879,14 +8879,14 @@ function ConversationComposer({
         </button>
         <div className="min-w-0 flex-1">
           <p className="hidden text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)] md:block">
-            Assinatura do operador
+            Operator signature
           </p>
           <div className="md:mt-2">
             <input
               className="w-full min-w-0 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none transition focus:border-[var(--primary)]/40 md:py-2.5"
               disabled={composerBusy}
               onChange={(event) => setSignatureName(event.target.value)}
-              placeholder="Nome da assinatura"
+              placeholder="Name da assinatura"
               value={signatureName}
             />
           </div>
@@ -8896,7 +8896,7 @@ function ConversationComposer({
       <div className="flex items-center gap-2 rounded-[26px] bg-[var(--surface-high)] px-3 py-2.5 shadow-[0_18px_36px_-18px_rgba(0,0,0,0.9)] md:gap-3 md:rounded-[30px] md:py-3">
         <div className="relative">
           <button
-            aria-label="Abrir anexos"
+            aria-label="Open attachments"
             className="grid h-10 w-10 place-items-center rounded-full bg-white/5 text-[var(--muted)] md:h-11 md:w-11"
             disabled={composerBusy}
             onClick={() => {
@@ -8917,7 +8917,7 @@ function ConversationComposer({
                 }}
                 type="button"
               >
-                <span>Arquivo</span>
+                <span>File</span>
                 <Paperclip className="h-4 w-4" strokeWidth={2.1} />
               </button>
               <button
@@ -8928,14 +8928,14 @@ function ConversationComposer({
                 }}
                 type="button"
               >
-                <span>Figurinha</span>
+                <span>Sticker</span>
                 <Smile className="h-4 w-4" strokeWidth={2.1} />
               </button>
             </div>
           ) : null}
         </div>
         <button
-          aria-label="Abrir emojis"
+          aria-label="Open emojis"
           className={`grid h-10 w-10 place-items-center rounded-full text-[var(--muted)] transition md:h-11 md:w-11 ${showEmojiPicker ? 'bg-[var(--primary)]/12 text-[var(--primary)]' : 'bg-white/5'}`}
           disabled={composerBusy}
           onClick={() => {
@@ -9009,7 +9009,7 @@ function ConversationComposer({
             event.preventDefault();
             queueAttachment(file, { sticker: file.type === 'image/webp' });
           }}
-          placeholder={disabled ? 'Selecione uma conversa...' : selectedAttachment ? 'Adicione uma legenda opcional...' : 'Digite uma mensagem...'}
+          placeholder={disabled ? 'Select a conversation...' : selectedAttachment ? 'Add an optional caption...' : 'Digite uma message...'}
           rows={3}
           value={draft}
         />
@@ -9110,7 +9110,7 @@ const MessageBubble = memo(function MessageBubble({
           type="button"
         >
           <p className={`text-[11px] font-bold uppercase tracking-[0.16em] ${incoming ? 'text-[var(--secondary)]' : 'text-[var(--primary)]'}`}>
-            {replyAuthor || 'Mensagem citada'}
+            {replyAuthor || 'Quoted message'}
           </p>
           <p className="mt-1 text-sm leading-6 text-zinc-300">{replyPreview}</p>
         </button>
@@ -9169,7 +9169,7 @@ const MessageBubble = memo(function MessageBubble({
       ) : null}
 
       <button
-        aria-label="Reagir a mensagem"
+        aria-label="Reagir a message"
         className="grid h-8 w-8 place-items-center rounded-full border border-[var(--line)] bg-[var(--surface-highest)] text-[var(--muted)] shadow-[0_12px_22px_-16px_rgba(0,0,0,0.45)] transition hover:bg-[var(--surface-high)] hover:text-[var(--primary)] md:h-9 md:w-9"
         onClick={() => setShowReactionPicker((current) => !current)}
         type="button"
@@ -9177,7 +9177,7 @@ const MessageBubble = memo(function MessageBubble({
         <Heart className="h-3.5 w-3.5 md:h-4 md:w-4" strokeWidth={2.1} />
       </button>
       <button
-        aria-label="Responder mensagem"
+        aria-label="Responder message"
         className="grid h-8 w-8 place-items-center rounded-full border border-[var(--line)] bg-[var(--surface-highest)] text-[var(--muted)] shadow-[0_12px_22px_-16px_rgba(0,0,0,0.45)] transition hover:bg-[var(--surface-high)] hover:text-[var(--primary)] md:h-9 md:w-9"
         onClick={() => onReply(message)}
         type="button"
@@ -9277,7 +9277,7 @@ function MessageContent({ message }: { message: MessageRecord }) {
           </div>
           <div>
             <p className="text-base font-semibold text-white">{message.fileName || 'Documento'}</p>
-            <p className="text-sm text-[var(--muted)]">{message.mimeType || 'Arquivo anexado'}</p>
+            <p className="text-sm text-[var(--muted)]">{message.mimeType || 'File anexado'}</p>
             {message.body && message.body !== '[documento]' ? (
               <FormattedMessageText className="mt-2 text-sm leading-6 text-white/85" value={message.body} />
             ) : null}
@@ -9302,15 +9302,15 @@ function summarizeMessageForReply(message: MessageRecord) {
     case 'document':
       return body && body !== '[documento]' ? body : message.fileName || 'Documento';
     case 'sticker':
-      return 'Figurinha';
+      return 'Sticker';
     default:
-      return body || 'Mensagem';
+      return body || 'Message';
   }
 }
 
 function summarizeReplyRecord(reply?: MessageRecord['replyTo']) {
   if (!reply) {
-    return 'Mensagem';
+    return 'Message';
   }
 
   const body = reply.body?.trim() ?? '';
@@ -9325,9 +9325,9 @@ function summarizeReplyRecord(reply?: MessageRecord['replyTo']) {
     case 'document':
       return body && body !== '[documento]' ? body : 'Documento';
     case 'sticker':
-      return 'Figurinha';
+      return 'Sticker';
     default:
-      return body || 'Mensagem';
+      return body || 'Message';
   }
 }
 
@@ -9337,7 +9337,7 @@ function normalizeReplyAuthor(author?: string) {
     return '';
   }
 
-  return value.includes('@') ? 'Mensagem citada' : value;
+  return value.includes('@') ? 'Quoted message' : value;
 }
 
 function FormattedMessageText({
@@ -9517,7 +9517,7 @@ function ToastCard({
           ) : null}
         </div>
         <button
-          aria-label="Fechar notificacao"
+          aria-label="Close notification"
           className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-[var(--line)] bg-[var(--surface-high)] text-[var(--muted)] transition hover:text-[var(--foreground)]"
           onClick={() => onDismiss(toast.id)}
           type="button"
@@ -9594,7 +9594,7 @@ function formatAuditDetailValue(value: unknown) {
 function formatSessionUserAgent(userAgent?: string) {
   const value = userAgent?.trim();
   if (!value) {
-    return 'Sessao web';
+    return 'Web session';
   }
 
   if (value.includes('Windows')) {
@@ -9645,7 +9645,7 @@ function appendQuickReplyContent(current: string, content: string) {
 }
 
 function readComposerSignaturePreference(signatureStorageKey: string, defaultSignatureName: string) {
-  const fallbackName = defaultSignatureName.trim() || 'Operador';
+  const fallbackName = defaultSignatureName.trim() || 'Operator';
   if (typeof window === 'undefined') {
     return {
       enabled: true,
@@ -9699,7 +9699,7 @@ function formatRelativePulse(timestamp: string) {
   if (!Number.isFinite(parsed)) {
     return {
       primary: 'Sem registro',
-      secondary: 'Nenhuma atividade detectada',
+      secondary: 'No activity detected',
     };
   }
 
@@ -9716,7 +9716,7 @@ function formatRelativePulse(timestamp: string) {
   if (minutes < 60) {
     return {
       primary: `Ha ${minutes} min`,
-      secondary: 'Sessao ativa',
+      secondary: 'Active session',
     };
   }
 
@@ -10471,9 +10471,9 @@ function summarizeConversationPreview(message: MessageRecord) {
         ? message.body
         : message.fileName || 'Documento';
     case 'sticker':
-      return 'Figurinha';
+      return 'Sticker';
     default:
-      return message.body || 'Mensagem';
+      return message.body || 'Message';
   }
 }
 
@@ -10516,7 +10516,7 @@ function buildRealtimeMessageRecord(event: RealtimeSocketEvent) {
     mimeType: message.mimeType || undefined,
     fileName: message.fileName || undefined,
     timestamp: message.timestamp || event.occurredAt || new Date().toISOString(),
-    author: message.author || (message.fromMe ? 'Operador' : 'Contato'),
+    author: message.author || (message.fromMe ? 'Operator' : 'Contato'),
   } satisfies MessageRecord;
 }
 
@@ -10582,7 +10582,7 @@ function applyRealtimeMessageToOverview(
       avatarUrl: null,
       participantId: conversationId,
       owner: 'Sem responsavel',
-      status: 'Ativo',
+      status: 'Active',
       channelName: session?.channelName ?? 'WhatsApp',
       waitingTime: 'agora',
       unread,
@@ -10931,7 +10931,7 @@ function getAttachmentLabel(file: File) {
     return 'Audio';
   }
 
-  return 'Arquivo';
+  return 'File';
 }
 
 function formatFileSize(size: number) {

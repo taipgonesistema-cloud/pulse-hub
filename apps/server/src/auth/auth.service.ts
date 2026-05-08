@@ -65,7 +65,7 @@ export class AuthService implements OnModuleInit {
     const refreshedUser = await this.findByEmail(email);
 
     if (!refreshedUser) {
-      throw new NotFoundException('Usuario nao encontrado apos autenticacao.');
+      throw new NotFoundException('User not found after authentication.');
     }
 
     return {

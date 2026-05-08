@@ -68,7 +68,7 @@ export function LoginForm() {
       setSubmitState({
         kind: 'error',
         message:
-          error instanceof Error ? error.message : 'Falha ao autenticar usuario.',
+          error instanceof Error ? error.message : 'Failed to authenticate user.',
       });
     } finally {
       setIsSubmitting(false);
@@ -111,7 +111,7 @@ export function LoginForm() {
                 name="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="voce@empresa.com"
+                placeholder="you@empresa.com"
                 autoComplete="email"
               />
             </div>
@@ -150,7 +150,7 @@ export function LoginForm() {
         ) : null}
 
         <div className="border-t border-white/8 pt-4 text-center text-sm text-white/62">
-          Ao continuar, voce concorda com a nossa{' '}
+          Ao continuar, you concorda com a nossa{' '}
           <Link
             href="/politica-de-privacidade"
             className="font-medium text-[var(--primary)] underline-offset-4 transition hover:underline"

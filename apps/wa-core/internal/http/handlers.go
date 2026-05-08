@@ -172,10 +172,10 @@ func (a *API) cors(next http.Handler) http.Handler {
 			w.Header().Add("Vary", "Origin")
 			if !a.isAllowedOrigin(origin) {
 				if r.Method == http.MethodOptions {
-					respondJSON(w, http.StatusForbidden, map[string]any{"message": "Origem nao permitida."})
+					respondJSON(w, http.StatusForbidden, map[string]any{"message": "Origin not allowed."})
 					return
 				}
-				respondJSON(w, http.StatusForbidden, map[string]any{"message": "Origem nao permitida."})
+				respondJSON(w, http.StatusForbidden, map[string]any{"message": "Origin not allowed."})
 				return
 			}
 			w.Header().Set("Access-Control-Allow-Origin", origin)
@@ -612,7 +612,7 @@ func (a *API) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if session == nil {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Session not found."})
 		return
 	}
 
@@ -708,7 +708,7 @@ func (a *API) handleSessionQRCompat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if session == nil {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Session not found."})
 		return
 	}
 	compat, err := a.sessionToCompat(r.Context(), session)
@@ -746,7 +746,7 @@ func (a *API) handleConversations(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if session == nil {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Session not found."})
 		return
 	}
 
@@ -771,7 +771,7 @@ func (a *API) handleConversations(w http.ResponseWriter, r *http.Request) {
 func (a *API) handleConversationPage(w http.ResponseWriter, r *http.Request) {
 	sessionID := strings.TrimSpace(r.URL.Query().Get("sessionId"))
 	if sessionID == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "sessionId e obrigatorio."})
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "sessionId is required."})
 		return
 	}
 
@@ -781,7 +781,7 @@ func (a *API) handleConversationPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if session == nil {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Session not found."})
 		return
 	}
 
@@ -1041,7 +1041,7 @@ func (a *API) handleDeleteContactKanbanBoard(w http.ResponseWriter, r *http.Requ
 
 	boardID := strings.TrimSpace(chi.URLParam(r, "id"))
 	if boardID == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "id do board obrigatorio."})
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "board id is required."})
 		return
 	}
 
@@ -1153,7 +1153,7 @@ func (a *API) handleCreateContactLabel(w http.ResponseWriter, r *http.Request) {
 		Action:       "contact_label.create",
 		ResourceType: "contact_label",
 		ResourceID:   saved.ID,
-		Summary:      "Criou uma etiqueta para contatos.",
+		Summary:      "Created a contact label.",
 		Details: map[string]any{
 			"name":            saved.Name,
 			"emoji":           saved.Emoji,
@@ -1195,7 +1195,7 @@ func (a *API) handleUpdateContactLabel(w http.ResponseWriter, r *http.Request) {
 		Action:       "contact_label.update",
 		ResourceType: "contact_label",
 		ResourceID:   saved.ID,
-		Summary:      "Atualizou uma etiqueta de contatos.",
+		Summary:      "Updated a contact label.",
 		Details: map[string]any{
 			"name":            saved.Name,
 			"emoji":           saved.Emoji,
@@ -1215,7 +1215,7 @@ func (a *API) handleDeleteContactLabel(w http.ResponseWriter, r *http.Request) {
 
 	labelID := strings.TrimSpace(chi.URLParam(r, "id"))
 	if labelID == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "id da etiqueta obrigatorio."})
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "label id is required."})
 		return
 	}
 
@@ -1229,7 +1229,7 @@ func (a *API) handleDeleteContactLabel(w http.ResponseWriter, r *http.Request) {
 		Action:       "contact_label.delete",
 		ResourceType: "contact_label",
 		ResourceID:   labelID,
-		Summary:      "Removeu uma etiqueta de contatos.",
+		Summary:      "Removed a contact label.",
 		Details: map[string]any{
 			"performedByRole": auth.user.Role,
 		},
@@ -1363,14 +1363,14 @@ func (a *API) buildQuickReplyRecord(ctx context.Context, request models.SaveQuic
 	}
 	if request.VisibilityScope == models.QuickReplyVisibilityUser {
 		if request.VisibilityUserID == "" {
-			return models.QuickReplyRecord{}, errors.New("selecione o usuario visivel para este atalho")
+			return models.QuickReplyRecord{}, errors.New("select the visible user for this shortcut")
 		}
 		user, err := a.store.GetAuthUserByID(ctx, request.VisibilityUserID)
 		if err != nil {
 			return models.QuickReplyRecord{}, err
 		}
 		if user == nil {
-			return models.QuickReplyRecord{}, errors.New("usuario de visibilidade nao encontrado")
+			return models.QuickReplyRecord{}, errors.New("visibility user not found")
 		}
 	}
 
@@ -1715,7 +1715,7 @@ func (a *API) handleSessionStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !a.isDefaultSession(chi.URLParam(r, "id")) {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Sessao nao encontrada."})
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Session not found."})
 		return
 	}
 
@@ -2857,7 +2857,7 @@ func (a *API) buildConversationRecordsFromChats(ctx context.Context, session *mo
 			AvatarURL:     avatarProxyPath(session.ID, canonicalJID, contact.PhotoID),
 			ParticipantID: canonicalJID,
 			Owner:         "Sem responsavel",
-			Status:        "Atendimento geral",
+			Status:        "General support",
 			ChannelName:   session.ChannelName,
 			WaitingTime:   waitingLabel(chat.LastMessageAt),
 			Unread:        chat.UnreadCount,
@@ -3492,12 +3492,12 @@ func normalizeTags(tags []string) []string {
 func buildContactLabelRecord(request models.UpsertContactLabelRequest, labelID, actorName string) (models.ContactLabelRecord, error) {
 	name := strings.TrimSpace(request.Name)
 	if name == "" {
-		return models.ContactLabelRecord{}, errors.New("nome da etiqueta obrigatorio")
+		return models.ContactLabelRecord{}, errors.New("label name is required")
 	}
 
 	color, ok := normalizeContactLabelColor(request.Color)
 	if !ok {
-		return models.ContactLabelRecord{}, errors.New("cor da etiqueta invalida")
+		return models.ContactLabelRecord{}, errors.New("invalid label color")
 	}
 
 	updatedBy := strings.TrimSpace(request.UpdatedBy)
@@ -3536,7 +3536,7 @@ func normalizeContactLabelColor(value string) (string, bool) {
 func normalizeManualContactPhone(value string) (string, string, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
-		return "", "", errors.New("telefone obrigatorio")
+		return "", "", errors.New("phone is required")
 	}
 
 	if strings.Contains(trimmed, "@") {

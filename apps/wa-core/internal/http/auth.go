@@ -52,7 +52,7 @@ func (a *API) requireAuth(next http.Handler) http.Handler {
 		if user == nil || session == nil || !user.IsActive || authSessionExpired(*session) {
 			a.clearSessionCookie(w)
 			a.clearCSRFCookie(w)
-			respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Sessao invalida ou expirada."})
+			respondJSON(w, http.StatusUnauthorized, map[string]any{"message": "Invalid or expired session."})
 			return
 		}
 		if requestUsesCookieAuth(r) && requiresCSRFMitigation(r.Method) && !validateCSRFTokens(r) {
@@ -416,7 +416,7 @@ func (a *API) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if existing != nil {
-		respondJSON(w, http.StatusConflict, map[string]any{"message": "Ja existe um usuario com este email."})
+		respondJSON(w, http.StatusConflict, map[string]any{"message": "A user with this email already exists."})
 		return
 	}
 
@@ -447,7 +447,7 @@ func (a *API) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		Action:       "auth.user.create",
 		ResourceType: "auth_user",
 		ResourceID:   user.ID,
-		Summary:      "Criou um usuario do workspace.",
+		Summary:      "Created a workspace user.",
 		Details: map[string]any{
 			"email":    user.Email,
 			"name":     user.Name,
@@ -468,7 +468,7 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	userID := strings.TrimSpace(chi.URLParam(r, "id"))
 	if userID == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Usuario invalido."})
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Invalid user."})
 		return
 	}
 
@@ -478,7 +478,7 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.TrimSpace(request.Name) == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Nome obrigatorio."})
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Name is required."})
 		return
 	}
 	if !isAllowedRole(request.Role) {
@@ -492,7 +492,7 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user == nil {
-		respondJSON(w, http.StatusNotFound, map[string]any{"message": "Usuario nao encontrado."})
+		respondJSON(w, http.StatusNotFound, map[string]any{"message": "User not found."})
 		return
 	}
 
@@ -526,7 +526,7 @@ func (a *API) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		Action:       "auth.user.update",
 		ResourceType: "auth_user",
 		ResourceID:   updated.ID,
-		Summary:      "Atualizou um usuario do workspace.",
+		Summary:      "Updated a workspace user.",
 		Details: map[string]any{
 			"name":            updated.Name,
 			"role":            updated.Role,
@@ -545,7 +545,7 @@ func (a *API) handleListUserSessions(w http.ResponseWriter, r *http.Request) {
 
 	userID := strings.TrimSpace(chi.URLParam(r, "id"))
 	if userID == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Usuario invalido."})
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Invalid user."})
 		return
 	}
 
@@ -567,7 +567,7 @@ func (a *API) handleRevokeUserSession(w http.ResponseWriter, r *http.Request) {
 	userID := strings.TrimSpace(chi.URLParam(r, "id"))
 	sessionID := strings.TrimSpace(chi.URLParam(r, "sessionId"))
 	if userID == "" || sessionID == "" {
-		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Sessao invalida."})
+		respondJSON(w, http.StatusBadRequest, map[string]any{"message": "Invalid session."})
 		return
 	}
 	if auth.session.ID == sessionID {
@@ -583,7 +583,7 @@ func (a *API) handleRevokeUserSession(w http.ResponseWriter, r *http.Request) {
 		Action:       "auth.session.revoke",
 		ResourceType: "auth_session",
 		ResourceID:   sessionID,
-		Summary:      "Revogou uma sessao ativa de usuario.",
+		Summary:      "Revoked an active user session.",
 		Details: map[string]any{
 			"userId": userID,
 		},

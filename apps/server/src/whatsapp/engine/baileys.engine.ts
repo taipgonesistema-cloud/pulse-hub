@@ -182,7 +182,7 @@ export class BaileysEngine implements WhatsappEngine {
       return (await socket.profilePictureUrl(participantId, 'image')) ?? null;
     } catch (error) {
       this.logger.debug(
-        `Falha ao buscar avatar Baileys para ${participantId}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+        `Failed to fetch Baileys avatar for ${participantId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       return null;
     }
@@ -215,7 +215,7 @@ export class BaileysEngine implements WhatsappEngine {
     const reasonMessage =
       update.lastDisconnect?.error instanceof Error
         ? update.lastDisconnect.error.message
-        : 'Sessao encerrada.';
+        : 'Session closed.';
 
     if (statusCode === DisconnectReason.loggedOut) {
       await callbacks.onAuthFailure(reasonMessage);
@@ -494,7 +494,7 @@ export class BaileysEngine implements WhatsappEngine {
 
     if (!socket) {
       throw new Error(
-        `Sessao ${sessionId} nao esta conectada na engine Baileys.`,
+        `Session ${sessionId} is not connected in the Baileys engine.`,
       );
     }
 

@@ -4,7 +4,7 @@ import { ChevronLeft } from 'lucide-react';
 
 export const metadata: Metadata = {
   title: 'Mekxa | Politica de Privacidade',
-  description: 'Politica de privacidade do aplicativo Mekxa.',
+  description: 'Politica de privacidade do aplicactive Mekxa.',
 };
 
 const sections = [
@@ -14,14 +14,14 @@ const sections = [
       'Podemos coletar alguns dados necessarios para o funcionamento do servico.',
     ],
     items: [
-      'Informacoes fornecidas por voce: nome, numero de telefone, e-mail, mensagens, arquivos e imagens enviados nas conversas.',
+      'Informacoes fornecidas por you: nome, numero de telefone, e-mail, messages, arquivos e imagens enviados nas conversas.',
       'Informacoes coletadas automaticamente: identificadores das plataformas integradas, dados de uso como interacoes e tempo de resposta, endereco IP e informacoes de dispositivo quando aplicavel.',
     ],
   },
   {
     title: '2 Como usamos suas informacoes',
     paragraphs: [
-      'Utilizamos os dados para garantir que o aplicativo funcione corretamente e para melhorar a experiencia de uso.',
+      'Utilizamos os dados para garantir que o aplicactive funcione corretamente e para melhorar a experiencia de uso.',
     ],
     items: [
       'Fornecer e manter o funcionamento do sistema.',
@@ -71,7 +71,7 @@ const sections = [
   {
     title: '7 Uso de APIs da Meta',
     paragraphs: [
-      'O aplicativo utiliza APIs oficiais da Meta para envio e recebimento de mensagens e gerenciamento de interacoes.',
+      'O aplicactive utiliza APIs oficiais da Meta para envio e recebimento de messages e gerenciamento de interacoes.',
       'O uso dessas informacoes segue as diretrizes e politicas da propria Meta.',
     ],
   },
@@ -85,7 +85,7 @@ const sections = [
   {
     title: '9 Consentimento',
     paragraphs: [
-      'Ao utilizar o aplicativo voce concorda com esta politica de privacidade.',
+      'Ao utilizar o aplicactive you concorda com esta politica de privacidade.',
     ],
   },
 ];
@@ -114,13 +114,13 @@ export default function PrivacyPolicyPage() {
             Politica de Privacidade
           </p>
           <h1 className="mt-4 font-headline text-3xl font-semibold text-white sm:text-4xl">
-            Politica de Privacidade - Aplicativo Mekxa
+            Politica de Privacidade - Aplicactive Mekxa
           </h1>
           <p className="mt-4 text-sm text-[var(--muted)]">
             Ultima atualizacao 13/04/2026
           </p>
           <p className="mt-6 text-base leading-7 text-white/82">
-            A sua privacidade e importante para nos. Esta politica explica de forma clara como o aplicativo Mekxa coleta, usa, armazena e protege suas informacoes durante o uso do sistema, principalmente em integracoes com plataformas da Meta como WhatsApp, Instagram e Facebook.
+            A sua privacidade e importante para nos. Esta politica explica de forma clara como o aplicactive Mekxa coleta, usa, armazena e protege suas informacoes durante o uso do sistema, principalmente em integracoes com plataformas da Meta como WhatsApp, Instagram e Facebook.
           </p>
 
           <div className="mt-10 space-y-8">

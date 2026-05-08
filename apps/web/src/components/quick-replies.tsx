@@ -40,7 +40,7 @@ export function QuickRepliesSettingsPanel({
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-            Respostas rapidas
+            Quick replies
           </p>
           <h3 className="font-headline mt-2 text-2xl font-semibold text-white">
             Centralize atalhos de atendimento reutilizaveis
@@ -55,7 +55,7 @@ export function QuickRepliesSettingsPanel({
           type="button"
         >
           <Plus className="h-4 w-4" strokeWidth={2.2} />
-          Nova resposta rapida
+          New quick reply
         </button>
       </div>
 
@@ -82,10 +82,10 @@ export function QuickRepliesSettingsPanel({
                 <th className="px-4 py-4">
                   <input checked={allSelected} onChange={onToggleAll} type="checkbox" />
                 </th>
-                <th className="px-4 py-4">Nome</th>
-                <th className="px-4 py-4">Criada</th>
-                <th className="px-4 py-4">Visivel para</th>
-                <th className="px-4 py-4 text-right">Acoes</th>
+                <th className="px-4 py-4">Name</th>
+                <th className="px-4 py-4">Created</th>
+                <th className="px-4 py-4">Visible to</th>
+                <th className="px-4 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/6">
@@ -100,7 +100,7 @@ export function QuickRepliesSettingsPanel({
               ) : items.length === 0 ? (
                 <tr>
                   <td className="px-4 py-12 text-center text-sm text-zinc-500" colSpan={5}>
-                    Nenhuma resposta rapida encontrada.
+                    No quick reply found.
                   </td>
                 </tr>
               ) : (
@@ -123,15 +123,15 @@ export function QuickRepliesSettingsPanel({
                           {formatVisibilityLabel(item, users)}
                         </span>
                         <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${item.status === 'active' ? 'bg-[var(--secondary)]/14 text-[var(--secondary)]' : 'bg-rose-500/14 text-rose-300'}`}>
-                          {item.status === 'active' ? 'Ativa' : 'Inativa'}
+                          {item.status === 'active' ? 'Active' : 'Inactive'}
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-4 align-top">
                       <div className="flex justify-end gap-2">
-                        <ActionButton icon={<Eye className="h-4 w-4" />} label="Visualizar" onClick={() => onPreview(item)} />
-                        <ActionButton icon={<Pencil className="h-4 w-4" />} label="Editar" onClick={() => onEdit(item)} />
-                        <ActionButton destructive icon={<Trash2 className="h-4 w-4" />} label="Excluir" onClick={() => onDelete(item)} />
+                        <ActionButton icon={<Eye className="h-4 w-4" />} label="Preview" onClick={() => onPreview(item)} />
+                        <ActionButton icon={<Pencil className="h-4 w-4" />} label="Edit" onClick={() => onEdit(item)} />
+                        <ActionButton destructive icon={<Trash2 className="h-4 w-4" />} label="Delete" onClick={() => onDelete(item)} />
                       </div>
                     </td>
                   </tr>
@@ -163,34 +163,34 @@ export function QuickReplyFormModal({
   onSubmit: () => void;
 }) {
   return (
-    <QuickReplyModalShell onClose={onClose} title={mode === 'create' ? 'Nova resposta rapida' : 'Editar resposta rapida'}>
+    <QuickReplyModalShell onClose={onClose} title={mode === 'create' ? 'New quick reply' : 'Edit quick reply'}>
       <div className="space-y-4">
-        <LabeledInput label="Nome" value={value.name} onChange={(name) => onChange({ ...value, name })} />
+        <LabeledInput label="Name" value={value.name} onChange={(name) => onChange({ ...value, name })} />
         <LabeledInput
-          label="Atalho"
+          label="Shortcut"
           prefix="/"
           value={value.shortcut}
           onChange={(shortcut) => onChange({ ...value, shortcut: sanitizeQuickReplyShortcut(shortcut) })}
         />
-        <LabeledTextarea label="Conteudo" value={value.content} onChange={(content) => onChange({ ...value, content })} />
-        <LabeledInput label="Categoria" value={value.category ?? ''} onChange={(category) => onChange({ ...value, category })} />
+        <LabeledTextarea label="Content" value={value.content} onChange={(content) => onChange({ ...value, content })} />
+        <LabeledInput label="Category" value={value.category ?? ''} onChange={(category) => onChange({ ...value, category })} />
 
         <div>
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Visibilidade</p>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Visibility</p>
           <div className="grid gap-2 md:grid-cols-2">
             <button
               className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${value.visibilityScope === 'all' ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-white' : 'border-white/10 bg-white/5 text-zinc-300 hover:text-white'}`}
               onClick={() => onChange({ ...value, visibilityScope: 'all', visibilityUserId: '' })}
               type="button"
             >
-              Todos
+              Everyone
             </button>
             <button
               className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${value.visibilityScope === 'user' ? 'border-[var(--primary)]/30 bg-[var(--primary)]/12 text-white' : 'border-white/10 bg-white/5 text-zinc-300 hover:text-white'}`}
               onClick={() => onChange({ ...value, visibilityScope: 'user' })}
               type="button"
             >
-              Usuario especifico
+              Specific user
             </button>
           </div>
           {value.visibilityScope === 'user' ? (
@@ -199,7 +199,7 @@ export function QuickReplyFormModal({
               onChange={(event) => onChange({ ...value, visibilityUserId: event.target.value })}
               value={value.visibilityUserId ?? ''}
             >
-              <option value="">Selecione o usuario</option>
+              <option value="">Select the user</option>
               {users.map((user) => (
                 <option key={user.id} value={user.id}>
                   {user.name}
@@ -220,14 +220,14 @@ export function QuickReplyFormModal({
                   onClick={() => onChange({ ...value, status })}
                   type="button"
                 >
-                  {status === 'active' ? 'Ativa' : 'Inativa'}
+                  {status === 'active' ? 'Active' : 'Inactive'}
                 </button>
               ))}
             </div>
           </div>
           <div className="rounded-[1.35rem] border border-white/10 bg-white/5 px-4 py-3">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Preview</p>
-            <p className="mt-2 text-sm text-zinc-300">/{value.shortcut || 'atalho'} - {value.name || 'Nome da resposta'}</p>
+            <p className="mt-2 text-sm text-zinc-300">/{value.shortcut || 'atalho'} - {value.name || 'Name da resposta'}</p>
             <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white">{value.content || 'Digite o conteudo para visualizar o texto final.'}</p>
           </div>
         </div>
@@ -235,10 +235,10 @@ export function QuickReplyFormModal({
 
       <div className="mt-6 flex justify-end gap-3">
         <button className="rounded-full bg-white/5 px-4 py-2 text-sm text-zinc-300" onClick={onClose} type="button">
-          Cancelar
+          Cancel
         </button>
         <button className="rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-5 py-2 text-sm font-semibold text-black disabled:opacity-60" disabled={isBusy} onClick={onSubmit} type="button">
-          {mode === 'create' ? 'Criar resposta' : 'Salvar resposta'}
+          {mode === 'create' ? 'Create reply' : 'Save reply'}
         </button>
       </div>
     </QuickReplyModalShell>
@@ -260,24 +260,24 @@ export function QuickReplyPreviewModal({
         <div className="flex flex-wrap gap-2">
           <span className="rounded-full bg-[var(--primary)]/12 px-3 py-1 text-[11px] font-semibold text-[var(--primary)]">/{item.shortcut}</span>
           <span className="rounded-full bg-white/6 px-3 py-1 text-[11px] font-semibold text-zinc-300">{item.category || 'Sem categoria'}</span>
-          <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${item.status === 'active' ? 'bg-[var(--secondary)]/14 text-[var(--secondary)]' : 'bg-rose-500/14 text-rose-300'}`}>{item.status === 'active' ? 'Ativa' : 'Inativa'}</span>
+          <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${item.status === 'active' ? 'bg-[var(--secondary)]/14 text-[var(--secondary)]' : 'bg-rose-500/14 text-rose-300'}`}>{item.status === 'active' ? 'Active' : 'Inactive'}</span>
         </div>
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Visivel para</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Visible to</p>
           <p className="mt-2 text-sm text-white">{formatVisibilityLabel(item, users)}</p>
         </div>
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Conteudo</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Content</p>
           <p className="app-panel-contrast mt-2 whitespace-pre-wrap rounded-[22px] border border-white/8 px-4 py-4 text-sm leading-7 text-white">{item.content}</p>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
-          <MetaCard label="Criada" value={`${formatTimestamp(item.createdAt)} por ${item.createdBy || 'sistema'}`} />
+          <MetaCard label="Created" value={`${formatTimestamp(item.createdAt)} por ${item.createdBy || 'sistema'}`} />
           <MetaCard label="Atualizada" value={`${formatTimestamp(item.updatedAt)} por ${item.updatedBy || 'sistema'}`} />
         </div>
       </div>
       <div className="mt-6 flex justify-end">
         <button className="rounded-full bg-white/5 px-4 py-2 text-sm text-zinc-300" onClick={onClose} type="button">
-          Fechar
+          Close
         </button>
       </div>
     </QuickReplyModalShell>
@@ -296,16 +296,16 @@ export function QuickReplyDeleteModal({
   onConfirm: () => void;
 }) {
   return (
-    <QuickReplyModalShell onClose={onClose} title="Excluir resposta rapida">
+    <QuickReplyModalShell onClose={onClose} title="Delete resposta rapida">
       <p className="text-sm leading-7 text-zinc-300">
         Voce esta prestes a excluir <span className="font-semibold text-white">{item.name}</span> ({`/${item.shortcut}`}). Essa acao remove o atalho do autocomplete do chat.
       </p>
       <div className="mt-6 flex justify-end gap-3">
         <button className="rounded-full bg-white/5 px-4 py-2 text-sm text-zinc-300" onClick={onClose} type="button">
-          Cancelar
+          Cancel
         </button>
         <button className="rounded-full bg-rose-500/90 px-5 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={isBusy} onClick={onConfirm} type="button">
-          Excluir
+          Delete
         </button>
       </div>
     </QuickReplyModalShell>
@@ -339,7 +339,7 @@ export function QuickReplyAutocomplete({
     <div className="absolute bottom-[calc(100%+0.8rem)] left-0 right-0 z-20 overflow-hidden rounded-[26px] border border-white/10 bg-[rgba(12,15,20,0.96)] shadow-[0_24px_48px_-18px_rgba(0,0,0,0.95)] backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Respostas rapidas</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Quick replies</p>
           <p className="mt-1 text-xs text-zinc-400">
             {query
               ? <>Buscando por <span className="font-semibold text-white">/{query}</span></>
@@ -359,7 +359,7 @@ export function QuickReplyAutocomplete({
           </div>
         ) : items.length === 0 ? (
           <div className="rounded-[20px] border border-dashed border-white/8 px-4 py-6 text-center text-sm text-zinc-500">
-            {query ? 'Nenhuma resposta rapida encontrada para este atalho.' : 'Nenhuma resposta rapida disponivel.'}
+            {query ? 'No quick reply found for this shortcut.' : 'No quick reply available.'}
           </div>
         ) : (
           items.map((item, index) => (
@@ -378,7 +378,7 @@ export function QuickReplyAutocomplete({
                   <p className="text-sm font-semibold">{item.name}</p>
                   <p className="mt-1 text-xs text-zinc-500">/{item.shortcut} · {item.category || 'Sem categoria'}</p>
                 </div>
-                <span className="rounded-full bg-white/6 px-2.5 py-1 text-[10px] font-semibold text-zinc-400">{item.visibilityScope === 'all' ? 'Todos' : 'Usuario'}</span>
+                <span className="rounded-full bg-white/6 px-2.5 py-1 text-[10px] font-semibold text-zinc-400">{item.visibilityScope === 'all' ? 'Everyone' : 'User'}</span>
               </div>
               <p className="mt-2 line-clamp-2 text-sm leading-6 text-zinc-400">{item.content}</p>
             </button>
@@ -404,7 +404,7 @@ function QuickReplyModalShell({
         <div className="flex items-center justify-between gap-3">
           <h3 className="font-headline text-2xl font-semibold text-white">{title}</h3>
           <button className="rounded-full bg-white/5 px-3 py-2 text-sm text-zinc-300" onClick={onClose} type="button">
-            Fechar
+            Close
           </button>
         </div>
         <div className="mt-5">{children}</div>
@@ -486,10 +486,10 @@ function MetaCard({ label, value }: { label: string; value: string }) {
 
 function formatVisibilityLabel(item: QuickReplyRecord, users: AuthUser[]) {
   if (item.visibilityScope === 'all') {
-    return 'Todos';
+    return 'Everyone';
   }
 
-  return users.find((user) => user.id === item.visibilityUserId)?.name || 'Usuario especifico';
+  return users.find((user) => user.id === item.visibilityUserId)?.name || 'Specific user';
 }
 
 function formatTimestamp(value: string) {

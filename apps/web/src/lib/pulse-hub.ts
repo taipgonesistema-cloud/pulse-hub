@@ -411,7 +411,7 @@ export async function createWebSocketAuthToken() {
   });
 
   if (!response.ok) {
-    throw new Error('Falha ao preparar conexao em tempo real.');
+    throw new Error('Failed to prepare realtime connection.');
   }
 
   const payload = (await response.json()) as { token?: string };
@@ -430,7 +430,7 @@ export async function getDashboardOverview() {
     });
 
     if (!response.ok) {
-      throw new Error('Falha ao carregar dashboard.');
+      throw new Error('Failed to load dashboard.');
     }
 
     return (await response.json()) as DashboardOverview;
@@ -457,7 +457,7 @@ export async function signIn(payload: SignInPayload) {
       ? errorPayload.message[0]
       : errorPayload?.message;
 
-    throw new Error(message ?? 'Falha ao autenticar usuario.');
+    throw new Error(message ?? 'Failed to authenticate user.');
   }
 
   return (await response.json()) as SignInResponse;
@@ -469,7 +469,7 @@ export async function getCurrentUser() {
   });
 
   if (!response.ok) {
-    throw new Error('Falha ao validar sessao atual.');
+    throw new Error('Failed to validate current session.');
   }
 
   return (await response.json()) as CurrentUserResponse;
@@ -481,7 +481,7 @@ export async function signOutRequest() {
   });
 
   if (!response.ok) {
-    throw new Error('Falha ao encerrar a sessao atual.');
+    throw new Error('Failed to end current session.');
   }
 }
 
@@ -491,7 +491,7 @@ export async function listUsers() {
   });
 
   if (!response.ok) {
-    throw new Error('Falha ao carregar usuarios.');
+    throw new Error('Failed to load users.');
   }
 
   return (await response.json()) as AuthUser[];
@@ -508,7 +508,7 @@ export async function createUser(payload: CreateUserPayload) {
 
   if (!response.ok) {
     const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(errorPayload?.message ?? 'Falha ao criar usuario.');
+    throw new Error(errorPayload?.message ?? 'Failed to create user.');
   }
 
   return (await response.json()) as AuthUser;
@@ -525,7 +525,7 @@ export async function updateUser(userId: string, payload: UpdateUserPayload) {
 
   if (!response.ok) {
     const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(errorPayload?.message ?? 'Falha ao atualizar usuario.');
+    throw new Error(errorPayload?.message ?? 'Failed to update user.');
   }
 
   return (await response.json()) as AuthUser;
@@ -538,7 +538,7 @@ export async function listUserSessions(userId: string) {
 
   if (!response.ok) {
     const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(errorPayload?.message ?? 'Falha ao carregar sessoes do usuario.');
+    throw new Error(errorPayload?.message ?? 'Failed to load user sessions.');
   }
 
   return (await response.json()) as AuthSessionRecord[];
@@ -554,7 +554,7 @@ export async function listAuditLogs(limit = 50) {
 
   if (!response.ok) {
     const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(errorPayload?.message ?? 'Falha ao carregar audit log.');
+    throw new Error(errorPayload?.message ?? 'Failed to load audit log.');
   }
 
   return (await response.json()) as AuditLogRecord[];
@@ -570,7 +570,7 @@ export async function revokeUserSession(userId: string, sessionId: string) {
 
   if (!response.ok) {
     const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(errorPayload?.message ?? 'Falha ao revogar a sessao.');
+    throw new Error(errorPayload?.message ?? 'Failed to revoke the session.');
   }
 }
 
@@ -581,7 +581,7 @@ export async function getInstagramPublishStatus() {
 
 	if (!response.ok) {
 		const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
-		throw new Error(errorPayload?.message ?? 'Falha ao carregar integracao do Instagram.');
+		throw new Error(errorPayload?.message ?? 'Failed to load Instagram integration.');
 	}
 
 	return (await response.json()) as InstagramPublishStatus;
@@ -611,7 +611,7 @@ export async function publishInstagramContent(payload: {
 
 	if (!response.ok) {
 		const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
-		throw new Error(errorPayload?.message ?? 'Falha ao publicar no Instagram.');
+		throw new Error(errorPayload?.message ?? 'Failed to publish to Instagram.');
 	}
 
 	return (await response.json()) as InstagramPublishResult;
@@ -629,7 +629,7 @@ export async function listQuickReplies(query?: string) {
 
   if (!response.ok) {
     const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(errorPayload?.message ?? 'Falha ao carregar respostas rapidas.');
+    throw new Error(errorPayload?.message ?? 'Failed to load quick replies.');
   }
 
   return (await response.json()) as QuickReplyRecord[];
@@ -647,7 +647,7 @@ export async function autocompleteQuickReplies(query: string) {
 
   if (!response.ok) {
     const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(errorPayload?.message ?? 'Falha ao buscar respostas rapidas.');
+    throw new Error(errorPayload?.message ?? 'Failed to search quick replies.');
   }
 
   return (await response.json()) as QuickReplyRecord[];
@@ -664,7 +664,7 @@ export async function createQuickReply(payload: SaveQuickReplyPayload) {
 
   if (!response.ok) {
     const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(errorPayload?.message ?? 'Falha ao criar resposta rapida.');
+    throw new Error(errorPayload?.message ?? 'Failed to create quick reply.');
   }
 
   return (await response.json()) as QuickReplyRecord;
@@ -681,7 +681,7 @@ export async function updateQuickReply(quickReplyId: string, payload: SaveQuickR
 
   if (!response.ok) {
     const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(errorPayload?.message ?? 'Falha ao atualizar resposta rapida.');
+    throw new Error(errorPayload?.message ?? 'Failed to update quick reply.');
   }
 
   return (await response.json()) as QuickReplyRecord;
@@ -694,6 +694,6 @@ export async function deleteQuickReply(quickReplyId: string) {
 
   if (!response.ok) {
     const errorPayload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(errorPayload?.message ?? 'Falha ao excluir resposta rapida.');
+    throw new Error(errorPayload?.message ?? 'Failed to delete quick reply.');
   }
 }

@@ -139,7 +139,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		if session.Status == models.SessionStatusActive || session.Status == models.SessionStatusSyncing || session.Status == models.SessionStatusInitializing {
 			_ = m.updateSessionByID(ctx, session.ID, func(current *models.Session) {
 				current.Status = models.SessionStatusDisconnected
-				current.LastError = "Sessao aguardando nova conexao."
+				current.LastError = "Session waiting for a new connection."
 				current.QRCode = ""
 				current.QRCodeDataURL = ""
 			})

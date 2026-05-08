@@ -73,7 +73,7 @@ export class WppConnectEngine implements WhatsappEngine {
       this.stopPolling(sessionId);
       this.sessions.delete(sessionId);
       const message =
-        error instanceof Error ? error.message : 'Falha ao iniciar sessao WPP.';
+        error instanceof Error ? error.message : 'Failed to start WPP session.';
       await callbacks.onInitError(message);
     }
   }
@@ -94,7 +94,7 @@ export class WppConnectEngine implements WhatsappEngine {
       );
     } catch (error) {
       this.logger.warn(
-        `Falha ao fechar sessao ${sessionId} no WPPConnect: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+        `Failed to close session ${sessionId} no WPPConnect: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     } finally {
       this.stopPolling(sessionId);
@@ -281,7 +281,7 @@ export class WppConnectEngine implements WhatsappEngine {
       }
     } catch (error) {
       this.logger.debug(
-        `Falha ao sincronizar estado da sessao ${sessionId}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+        `Failed to sync session state ${sessionId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -306,7 +306,7 @@ export class WppConnectEngine implements WhatsappEngine {
       }
     } catch (error) {
       this.logger.debug(
-        `Falha ao obter QR da sessao ${sessionId}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+        `Failed to get session QR ${sessionId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -340,7 +340,7 @@ export class WppConnectEngine implements WhatsappEngine {
       }
     } catch (error) {
       this.logger.debug(
-        `Falha ao buscar mensagens novas da sessao ${sessionId}: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+        `Failed to fetch new messages from session ${sessionId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
     }
   }
@@ -685,7 +685,7 @@ export class WppConnectEngine implements WhatsappEngine {
 
     if (!runtime) {
       throw new Error(
-        `Sessao ${sessionId} nao esta ativa na engine WPPConnect.`,
+        `Session ${sessionId} is not active in the WPPConnect engine.`,
       );
     }
 
