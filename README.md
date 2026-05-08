@@ -25,6 +25,16 @@ Main features:
 - Feed and story publishing to Instagram when credentials are configured.
 - Containerized deployment with Docker Compose.
 
+## Screenshots
+
+<p align="center">
+  <img src="https://i.ibb.co/s9WS7h38/Captura-de-tela-2026-05-08-110854.png" alt="Pulse Hub dashboard screenshot" width="100%" />
+</p>
+
+<p align="center">
+  <img src="https://i.ibb.co/qL9HrGhb/Captura-de-tela-2026-05-08-110910.png" alt="Pulse Hub conversations screenshot" width="100%" />
+</p>
+
 ## Architecture
 
 ```txt
