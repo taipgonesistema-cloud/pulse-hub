@@ -97,6 +97,7 @@ import {
   QuickReplyPreviewModal,
   QuickRepliesSettingsPanel,
 } from '@/components/quick-replies';
+import { LanguageToggle } from '@/components/language-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 const statusLabel: Record<SessionRecord['status'], string> = {
@@ -7032,6 +7033,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 {soundEnabled ? <Volume2 className="h-4 w-4" strokeWidth={2.1} /> : <VolumeX className="h-4 w-4" strokeWidth={2.1} />}
               </button>
               <ThemeToggle compact />
+              <LanguageToggle compact />
               <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-full border border-white/20 bg-[var(--surface-high)] text-[11px] font-bold text-white">
                 {authUser?.name
                   ?.split(' ')

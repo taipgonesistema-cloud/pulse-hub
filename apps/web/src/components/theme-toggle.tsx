@@ -63,7 +63,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
 
   return (
     <button
-      aria-label={`Alternar para modo ${isLight ? 'escuro' : 'claro'}`}
+      aria-label={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
       className={`inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--panel-contrast-background)] font-medium text-[var(--foreground)] transition hover:border-[var(--primary)]/30 hover:bg-[var(--surface-high)] ${
         compact ? 'px-3 py-2 text-xs' : 'px-4 py-2 text-sm'
       }`}
@@ -74,7 +74,7 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
       type="button"
     >
       {isLight ? <MoonStar className="h-4 w-4" strokeWidth={2.1} /> : <SunMedium className="h-4 w-4" strokeWidth={2.1} />}
-      <span>{isLight ? 'Escuro' : 'Claro'}</span>
+      <span>{isLight ? 'Dark' : 'Light'}</span>
     </button>
   );
 }

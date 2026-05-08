@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { I18nProvider } from "@/i18n/i18n-provider";
 import "./globals.css";
 
 const themeInitScript = `(() => {
@@ -17,9 +18,9 @@ const themeInitScript = `(() => {
 })();`;
 
 export const metadata: Metadata = {
-  title: "ether command | Atendimento Omnichannel",
+  title: "ether command | Omnichannel Support",
   description:
-    "Dashboard operacional para conectar multiplos numeros de WhatsApp via QR code e evoluir para Instagram e Facebook.",
+    "Operational dashboard for connecting multiple WhatsApp numbers via QR code and evolving toward Instagram and Facebook.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
@@ -32,10 +33,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className="h-full antialiased" suppressHydrationWarning>
+    <html lang="en-US" className="h-full antialiased" suppressHydrationWarning>
       <body className="min-h-full flex flex-col">
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        {children}
+        <I18nProvider>{children}</I18nProvider>
       </body>
     </html>
   );
