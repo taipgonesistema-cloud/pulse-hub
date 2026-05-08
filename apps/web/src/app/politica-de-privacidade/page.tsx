@@ -3,89 +3,89 @@ import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Mekxa | Politica de Privacidade',
-  description: 'Politica de privacidade do aplicactive Mekxa.',
+  title: 'Mekxa | Privacy Policy',
+  description: 'Privacy policy for the Mekxa application.',
 };
 
 const sections = [
   {
-    title: '1 Informacoes que coletamos',
+    title: '1 Information we collect',
     paragraphs: [
-      'Podemos coletar alguns dados necessarios para o funcionamento do servico.',
+      'We may collect some data required for the service to work properly.',
     ],
     items: [
-      'Informacoes fornecidas por you: nome, numero de telefone, e-mail, messages, arquivos e imagens enviados nas conversas.',
-      'Informacoes coletadas automaticamente: identificadores das plataformas integradas, dados de uso como interacoes e tempo de resposta, endereco IP e informacoes de dispositivo quando aplicavel.',
+      'Information provided by you: name, phone number, email, messages, files, and images sent in conversations.',
+      'Information collected automatically: identifiers from integrated platforms, usage data such as interactions and response time, IP address, and device information when applicable.',
     ],
   },
   {
-    title: '2 Como usamos suas informacoes',
+    title: '2 How we use your information',
     paragraphs: [
-      'Utilizamos os dados para garantir que o aplicactive funcione corretamente e para melhorar a experiencia de uso.',
+      'We use data to ensure the application works properly and to improve the user experience.',
     ],
     items: [
-      'Fornecer e manter o funcionamento do sistema.',
-      'Automatizar atendimentos e respostas.',
-      'Gerenciar conversas e interacoes com clientes.',
-      'Melhorar desempenho e estabilidade da plataforma.',
-      'Garantir seguranca e prevenir usos indevidos.',
-      'Cumprir obrigacoes legais quando necessario.',
+      'Provide and maintain system functionality.',
+      'Automate support and replies.',
+      'Manage conversations and customer interactions.',
+      'Improve platform performance and stability.',
+      'Ensure security and prevent misuse.',
+      'Meet legal obligations when required.',
     ],
   },
   {
-    title: '3 Compartilhamento de dados',
+    title: '3 Data sharing',
     paragraphs: [
-      'Nao vendemos suas informacoes.',
-      'Os dados podem ser compartilhados apenas quando necessario para o funcionamento do servico.',
+      'We do not sell your information.',
+      'Data may be shared only when required for the service to work.',
     ],
     items: [
-      'Plataformas integradas como servicos da Meta.',
-      'Ferramentas de infraestrutura como servidores e bancos de dados.',
-      'Autoridades legais quando houver exigencia.',
+      'Integrated platforms such as Meta services.',
+      'Infrastructure tools such as servers and databases.',
+      'Legal authorities when required.',
     ],
   },
   {
-    title: '4 Armazenamento e seguranca',
+    title: '4 Storage and security',
     paragraphs: [
-      'Adotamos medidas para proteger suas informacoes contra acessos nao autorizados, perda ou uso indevido.',
-      'Utilizamos controles de acesso, monitoramento e boas praticas de seguranca.',
-      'Os dados sao mantidos apenas pelo tempo necessario para cumprir suas finalidades.',
+      'We adopt measures to protect your information from unauthorized access, loss, or misuse.',
+      'We use access controls, monitoring, and good security practices.',
+      'Data is kept only for as long as necessary to fulfill its purposes.',
     ],
   },
   {
-    title: '5 Retencao de dados',
+    title: '5 Data retention',
     paragraphs: [
-      'As informacoes sao armazenadas enquanto houver necessidade para o funcionamento do servico ou cumprimento de obrigacoes legais.',
-      'Voce pode solicitar a exclusao dos seus dados a qualquer momento.',
+      'Information is stored while it is needed for service operation or legal obligations.',
+      'You may request deletion of your data at any time.',
     ],
   },
   {
-    title: '6 Seus direitos',
+    title: '6 Your rights',
     items: [
-      'Voce pode solicitar acesso aos seus dados.',
-      'Pode corrigir informacoes incorretas.',
-      'Pode solicitar a exclusao dos dados.',
-      'Pode retirar seu consentimento quando desejar.',
+      'You may request access to your data.',
+      'You may correct incorrect information.',
+      'You may request data deletion.',
+      'You may withdraw your consent whenever you want.',
     ],
   },
   {
-    title: '7 Uso de APIs da Meta',
+    title: '7 Use of Meta APIs',
     paragraphs: [
-      'O aplicactive utiliza APIs oficiais da Meta para envio e recebimento de messages e gerenciamento de interacoes.',
-      'O uso dessas informacoes segue as diretrizes e politicas da propria Meta.',
+      'The application uses official Meta APIs to send and receive messages and manage interactions.',
+      'The use of this information follows Meta guidelines and policies.',
     ],
   },
   {
-    title: '8 Alteracoes nesta politica',
+    title: '8 Changes to this policy',
     paragraphs: [
-      'Esta politica pode ser atualizada ao longo do tempo para refletir melhorias ou mudancas no servico.',
-      'Recomendamos a leitura periodica para se manter informado.',
+      'This policy may be updated over time to reflect improvements or service changes.',
+      'We recommend reading it periodically to stay informed.',
     ],
   },
   {
-    title: '9 Consentimento',
+    title: '9 Consent',
     paragraphs: [
-      'Ao utilizar o aplicactive you concorda com esta politica de privacidade.',
+      'By using the application, you agree to this privacy policy.',
     ],
   },
 ];
@@ -105,22 +105,22 @@ export default function PrivacyPolicyPage() {
             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/72 transition hover:border-white/20 hover:bg-white/8 hover:text-white"
           >
             <ChevronLeft className="h-4 w-4" />
-            Voltar para login
+            Back to login
           </Link>
         </div>
 
         <article className="glass-panel rounded-[2rem] border border-white/10 p-6 shadow-[0_30px_100px_rgba(0,0,0,0.24)] backdrop-blur-2xl sm:p-8 lg:p-10">
           <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[var(--secondary)]">
-            Politica de Privacidade
+            Privacy Policy
           </p>
           <h1 className="mt-4 font-headline text-3xl font-semibold text-white sm:text-4xl">
-            Politica de Privacidade - Aplicactive Mekxa
+            Privacy Policy - Mekxa Application
           </h1>
           <p className="mt-4 text-sm text-[var(--muted)]">
-            Ultima atualizacao 13/04/2026
+            Last updated 04/13/2026
           </p>
           <p className="mt-6 text-base leading-7 text-white/82">
-            A sua privacidade e importante para nos. Esta politica explica de forma clara como o aplicactive Mekxa coleta, usa, armazena e protege suas informacoes durante o uso do sistema, principalmente em integracoes com plataformas da Meta como WhatsApp, Instagram e Facebook.
+            Your privacy is important to us. This policy clearly explains how the Mekxa application collects, uses, stores, and protects your information while using the system, especially in integrations with Meta platforms such as WhatsApp, Instagram, and Facebook.
           </p>
 
           <div className="mt-10 space-y-8">

@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
+import { LanguageToggle } from '@/components/language-toggle';
 import { LoginForm } from '@/components/login-form';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 export const metadata: Metadata = {
   title: 'ether command | Sign in',
-  description: 'Acesso da operacao ether command para atendentes e supervisores.',
+  description: 'Operation access for ether command attendants and supervisors.',
 };
 
 export default function LoginPage() {
@@ -22,6 +23,7 @@ export default function LoginPage() {
               ether command access
             </div>
             <ThemeToggle />
+            <LanguageToggle />
           </div>
         </div>
 

@@ -3537,8 +3537,8 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!name || !phone) {
       pushToast({
         tone: 'error',
-        title: 'Dados incompletos',
-        description: 'Preencha nome e telefone para adicionar o contato.',
+        title: 'Incomplete data',
+        description: 'Fill in name and phone to add the contact.',
       });
       return;
     }
@@ -3890,7 +3890,7 @@ export function DashboardClient({ initialOverview }: Props) {
       pushToast({
         tone: 'error',
         title: 'Required fields',
-        description: 'Name, atalho e conteudo devem ser preenchidos.',
+        description: 'Name, shortcut, and content must be filled in.',
       });
       return;
     }
@@ -3955,8 +3955,8 @@ export function DashboardClient({ initialOverview }: Props) {
     if (!instagramFile && !instagramImageUrl.trim()) {
       pushToast({
         tone: 'error',
-        title: 'Midia obrigatoria',
-        description: 'Envie um arquivo ou informe uma URL publica da midia.',
+        title: 'Media required',
+        description: 'Upload a file or provide a public media URL.',
       });
       return;
     }
@@ -3964,8 +3964,8 @@ export function DashboardClient({ initialOverview }: Props) {
     if (instagramPublishMode === 'feed' && !instagramCaption.trim()) {
       pushToast({
         tone: 'error',
-        title: 'Legenda obrigatoria',
-        description: 'Preencha a legenda antes de publicar no feed.',
+        title: 'Caption required',
+        description: 'Fill in the caption before publishing to the feed.',
       });
       return;
     }
@@ -4274,7 +4274,7 @@ export function DashboardClient({ initialOverview }: Props) {
             </h1>
             <p className="mt-2 flex items-center gap-3 text-sm text-[var(--muted)] md:text-base">
               <span className="h-3 w-3 rounded-full bg-[var(--secondary)] shadow-[0_0_8px_#5dfd8a]" />
-              {dashboardSnapshot.onlineUsers.toLocaleString('pt-BR')} operadores online acompanhando {dashboardSnapshot.recentConversations.toLocaleString('pt-BR')} conversas com atividade nas ultimas 24h.
+              {dashboardSnapshot.onlineUsers.toLocaleString('pt-BR')} online operators tracking {dashboardSnapshot.recentConversations.toLocaleString('pt-BR')} conversations with activity in the last 24h.
             </p>
           </div>
 
@@ -4412,7 +4412,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 <WhatsAppOnboardingCard
                   actionLabel={canAccessSettings ? 'Connect WhatsApp' : 'Open conversations'}
                   onAction={() => navigateToView(canAccessSettings ? 'settings' : 'conversations')}
-                  secondaryActionLabel="Ver conversas"
+                  secondaryActionLabel="View conversations"
                   onSecondaryAction={() => navigateToView('conversations')}
                 />
               )}
@@ -4432,8 +4432,8 @@ export function DashboardClient({ initialOverview }: Props) {
                 ))
               ) : (
                 <EmptyStateCard
-                  description="Assim que houver conversas suficientes, os melhores resultados da operacao aparecem aqui automaticamente."
-                  title="Leaderboard aguardando dados"
+                  description="Once there are enough conversations, the best operation results appear here automatically."
+                  title="Leaderboard waiting for data"
                 />
               )}
             </div>
@@ -4531,7 +4531,7 @@ export function DashboardClient({ initialOverview }: Props) {
               Workflow
             </p>
             <p className="mt-3 text-sm leading-6 text-zinc-400">
-              Arraste cada contato entre colunas para organizar sua operacao comercial sem sair da tela.
+              Drag each contact between columns to organize your commercial operation without leaving the screen.
             </p>
           </div>
         </aside>
@@ -4545,7 +4545,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 </p>
                 <h3 className="mt-2 font-headline text-3xl font-bold text-white">Contact pipeline</h3>
                 <p className="mt-2 text-sm text-zinc-400">
-                  Base filtrada em tempo real com arraste entre etapas e acesso rapido para conversas.
+                  Realtime filtered base with drag between stages and quick access to conversations.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
@@ -4559,7 +4559,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     type="button"
                   >
                     <Plus className="h-4 w-4" strokeWidth={2.1} />
-                    Novo contato
+                    New contact
                   </button>
                 ) : null}
                 <button
@@ -4667,7 +4667,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 actionLabel="Limpar filtros"
                 description="Adjust search, channels, or boards to repopulate the pipeline and drag contacts between stages again."
                 onAction={resetContactsView}
-                title="Nenhum contato disponivel no board"
+                title="No contact available on this board"
               />
             ) : (
               <div className="flex h-full min-h-0 items-start gap-4 pb-2">
@@ -4738,7 +4738,7 @@ export function DashboardClient({ initialOverview }: Props) {
           ) : (
             <EmptyStateCard
               description="Selecione um card no board para ver contexto, mover de etapa e abrir a conversa rapidamente."
-              title="Nenhum contato selecionado"
+              title="No contact selected"
             />
           )}
         </aside>
@@ -4779,9 +4779,9 @@ export function DashboardClient({ initialOverview }: Props) {
         ) : analyticsModel && overview.conversations.length === 0 ? (
           <EmptyStateCard
             actionLabel="Open conversations"
-            description="Quando a operacao receber conversas reais, esta area passa a exibir volume, CSAT e horarios de pico automaticamente."
+            description="When the operation receives real conversations, this area automatically shows volume, CSAT, and peak hours."
             onAction={() => navigateToView('conversations')}
-            title="Analytics aguardando sinal operacional"
+            title="Analytics waiting for operational signal"
           />
         ) : analyticsModel ? (
           <div className="grid grid-cols-12 gap-6">
@@ -4870,7 +4870,7 @@ export function DashboardClient({ initialOverview }: Props) {
                     Peak Service Hours
                   </h3>
                   <p className="mt-1 text-xs italic text-[var(--muted)]">
-                    Distribuicao real das ultimas conversas sincronizadas por dia e horario.
+                    Real distribution of the latest synced conversations by day and time.
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -5290,17 +5290,17 @@ export function DashboardClient({ initialOverview }: Props) {
                   <div className="mt-5">
                     {lastInstagramPublish ? (
                       <div className="rounded-[24px] border border-white/8 bg-white/4 p-4">
-                        <p className="text-sm font-semibold text-white">Publicacao enviada com sucesso</p>
+                        <p className="text-sm font-semibold text-white">Publication sent successfully</p>
                         <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                          O conteudo foi entregue ao Instagram. Use o link abaixo para revisar a midia enviada.
+                          The content was delivered to Instagram. Use the link below to review the uploaded media.
                         </p>
                         <a className="mt-4 inline-flex text-sm text-[var(--primary)] underline-offset-4 hover:underline" href={lastInstagramPublish.imageUrl} rel="noreferrer" target="_blank">
-                          Abrir midia publicada
+                          Open published media
                         </a>
                       </div>
                     ) : (
                       <EmptyStateCard
-                        description="Assim que you publicar um feed ou story daqui, o ultimo resultado aparece nesta area com um resumo simples."
+                        description="Once you publish a feed or story from here, the latest result appears in this area with a simple summary."
                         title="No publication in this session"
                       />
                     )}
@@ -5312,10 +5312,10 @@ export function DashboardClient({ initialOverview }: Props) {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                      Publicar conteudo
+                      Publish content
                     </p>
                     <p className="mt-2 text-sm text-[var(--muted)]">
-                      Selecione uma midia, revise o preview e publique no formato certo para a campanha.
+                      Select media, review the preview, and publish in the right format for the campaign.
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 rounded-[1.35rem] border border-white/10 bg-white/5 p-2">
@@ -5339,7 +5339,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 <div className="mt-6 space-y-4">
                   <div className="app-panel-contrast rounded-[24px] border border-dashed border-white/10 p-4">
                     <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">
-                      Midia local
+                      Local media
                     </p>
                     <input
                       accept="image/*,video/*"
@@ -5349,13 +5349,13 @@ export function DashboardClient({ initialOverview }: Props) {
                       type="file"
                     />
                     <p className="mt-3 text-xs text-[var(--muted)]">
-                      Voce tambem pode usar uma URL publica se a arte ja estiver hospedada.
+                      You can also use a public URL if the asset is already hosted.
                     </p>
                   </div>
 
                   <Field
                     onChange={setInstagramImageUrl}
-                    placeholder="Ou cole uma URL publica da midia"
+                    placeholder="Or paste a public media URL"
                     value={instagramImageUrl}
                   />
 
@@ -7208,9 +7208,9 @@ function DashboardResponseChart({
     return (
       <div className="grid h-48 place-items-center rounded-[28px] border border-dashed border-white/8 bg-white/[0.03] px-6 text-center">
         <div>
-          <p className="text-sm font-semibold text-white">Dados insuficientes para desenhar a tendencia</p>
+          <p className="text-sm font-semibold text-white">Not enough data to draw the trend</p>
           <p className="mt-2 text-sm text-[var(--muted)]">
-            O grafico aparece quando existirem respostas reais suficientes para comparar a variacao ao longo do periodo.
+            The chart appears when there are enough real replies to compare variation over the period.
           </p>
         </div>
       </div>
@@ -7683,7 +7683,7 @@ function WhatsAppOnboardingCard({
   const steps = [
     { label: '1', title: 'Create the session', description: 'Use a simple name to identify the number in the workspace.' },
     { label: '2', title: 'Escaneie o QR', description: 'Abra Aparelhos conectados no WhatsApp e leia o codigo.' },
-    { label: '3', title: 'Atenda em tempo real', description: 'As conversas aparecem aqui assim que chegarem news messages.' },
+    { label: '3', title: 'Handle in realtime', description: 'Conversations appear here as soon as new messages arrive.' },
   ];
 
   return (
@@ -7962,7 +7962,7 @@ function VirtualizedKanbanColumn({
 
           {column.contacts.length === 0 ? (
             <div className="rounded-[22px] border border-dashed border-white/8 bg-white/[0.02] px-4 py-6 text-center text-sm text-zinc-500">
-              Solte um contato aqui.
+              Drop a contact here.
             </div>
           ) : null}
 
@@ -8195,7 +8195,7 @@ function ContactKanbanDetailPanel({
 
       <div className="rounded-[26px] border border-white/6 bg-white/[0.03] p-5">
         <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
-          Sinais do contato
+          Contact signals
         </p>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-white/[0.03] p-3">
@@ -9011,7 +9011,7 @@ function ConversationComposer({
             event.preventDefault();
             queueAttachment(file, { sticker: file.type === 'image/webp' });
           }}
-          placeholder={disabled ? 'Select a conversation...' : selectedAttachment ? 'Add an optional caption...' : 'Digite uma message...'}
+          placeholder={disabled ? 'Select a conversation...' : selectedAttachment ? 'Add an optional caption...' : 'Type a message...'}
           rows={3}
           value={draft}
         />
@@ -9062,7 +9062,7 @@ const MessageBubble = memo(function MessageBubble({
   const repliedMessage = message.replyTo ? messageLookup.get(message.replyTo.messageId) : undefined;
   const replyAuthor = repliedMessage
     ? repliedMessage.direction === 'outgoing'
-      ? 'Voce'
+      ? 'You'
       : repliedMessage.author
     : normalizeReplyAuthor(message.replyTo?.author);
   const replyPreview = repliedMessage
@@ -10011,11 +10011,11 @@ function formatDurationLabel(totalSeconds: number) {
 
 function formatVelocityDelta(deltaSeconds: number, sampleCount = 1, previousSampleCount = 1) {
   if (sampleCount === 0) {
-    return 'Aguardando respostas reais';
+    return 'Waiting for real replies';
   }
 
   if (previousSampleCount === 0) {
-    return 'Sem base anterior';
+    return 'No previous baseline';
   }
 
   if (deltaSeconds > 0) {

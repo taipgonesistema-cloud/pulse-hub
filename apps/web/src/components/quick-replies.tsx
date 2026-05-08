@@ -43,10 +43,10 @@ export function QuickRepliesSettingsPanel({
             Quick replies
           </p>
           <h3 className="font-headline mt-2 text-2xl font-semibold text-white">
-            Centralize atalhos de atendimento reutilizaveis
+            Centralize reusable support shortcuts
           </h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">
-            Crie respostas prontas com visibilidade controlada para acelerar o atendimento e acionar autocomplete no chat ao digitar <code>/</code>.
+            Create ready-to-use replies with controlled visibility to speed up support and trigger chat autocomplete by typing <code>/</code>.
           </p>
         </div>
         <button
@@ -66,12 +66,12 @@ export function QuickRepliesSettingsPanel({
             <input
               className="w-full rounded-[22px] border border-white/10 bg-white/5 py-3 pl-11 pr-4 text-sm text-white outline-none transition focus:border-[var(--primary)]/30"
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Buscar por nome, atalho ou conteudo"
+              placeholder="Search by name, shortcut, or content"
               value={searchTerm}
             />
           </label>
           <span className="rounded-full bg-white/5 px-3 py-1.5 text-[11px] text-[var(--muted)]">
-            {items.length} respostas
+            {items.length} replies
           </span>
         </div>
 
@@ -227,8 +227,8 @@ export function QuickReplyFormModal({
           </div>
           <div className="rounded-[1.35rem] border border-white/10 bg-white/5 px-4 py-3">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Preview</p>
-            <p className="mt-2 text-sm text-zinc-300">/{value.shortcut || 'atalho'} - {value.name || 'Name da resposta'}</p>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white">{value.content || 'Digite o conteudo para visualizar o texto final.'}</p>
+            <p className="mt-2 text-sm text-zinc-300">/{value.shortcut || 'shortcut'} - {value.name || 'Reply name'}</p>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white">{value.content || 'Type the content to preview the final text.'}</p>
           </div>
         </div>
       </div>
@@ -259,7 +259,7 @@ export function QuickReplyPreviewModal({
       <div className="space-y-4 rounded-[24px] border border-white/8 bg-white/5 p-5">
         <div className="flex flex-wrap gap-2">
           <span className="rounded-full bg-[var(--primary)]/12 px-3 py-1 text-[11px] font-semibold text-[var(--primary)]">/{item.shortcut}</span>
-          <span className="rounded-full bg-white/6 px-3 py-1 text-[11px] font-semibold text-zinc-300">{item.category || 'Sem categoria'}</span>
+          <span className="rounded-full bg-white/6 px-3 py-1 text-[11px] font-semibold text-zinc-300">{item.category || 'Uncategorized'}</span>
           <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${item.status === 'active' ? 'bg-[var(--secondary)]/14 text-[var(--secondary)]' : 'bg-rose-500/14 text-rose-300'}`}>{item.status === 'active' ? 'Active' : 'Inactive'}</span>
         </div>
         <div>
@@ -271,8 +271,8 @@ export function QuickReplyPreviewModal({
           <p className="app-panel-contrast mt-2 whitespace-pre-wrap rounded-[22px] border border-white/8 px-4 py-4 text-sm leading-7 text-white">{item.content}</p>
         </div>
         <div className="grid gap-3 md:grid-cols-2">
-          <MetaCard label="Created" value={`${formatTimestamp(item.createdAt)} por ${item.createdBy || 'sistema'}`} />
-          <MetaCard label="Atualizada" value={`${formatTimestamp(item.updatedAt)} por ${item.updatedBy || 'sistema'}`} />
+          <MetaCard label="Created" value={`${formatTimestamp(item.createdAt)} by ${item.createdBy || 'system'}`} />
+          <MetaCard label="Updated" value={`${formatTimestamp(item.updatedAt)} by ${item.updatedBy || 'system'}`} />
         </div>
       </div>
       <div className="mt-6 flex justify-end">
@@ -296,9 +296,9 @@ export function QuickReplyDeleteModal({
   onConfirm: () => void;
 }) {
   return (
-    <QuickReplyModalShell onClose={onClose} title="Delete resposta rapida">
+    <QuickReplyModalShell onClose={onClose} title="Delete quick reply">
       <p className="text-sm leading-7 text-zinc-300">
-        Voce esta prestes a excluir <span className="font-semibold text-white">{item.name}</span> ({`/${item.shortcut}`}). Essa acao remove o atalho do autocomplete do chat.
+        You are about to delete <span className="font-semibold text-white">{item.name}</span> ({`/${item.shortcut}`}). This action removes the shortcut from chat autocomplete.
       </p>
       <div className="mt-6 flex justify-end gap-3">
         <button className="rounded-full bg-white/5 px-4 py-2 text-sm text-zinc-300" onClick={onClose} type="button">
@@ -342,12 +342,12 @@ export function QuickReplyAutocomplete({
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-zinc-500">Quick replies</p>
           <p className="mt-1 text-xs text-zinc-400">
             {query
-              ? <>Buscando por <span className="font-semibold text-white">/{query}</span></>
-              : 'Digite para filtrar ou escolha uma resposta pronta.'}
+              ? <>Searching for <span className="font-semibold text-white">/{query}</span></>
+              : 'Type to filter or choose a ready-to-use reply.'}
           </p>
         </div>
         <span className="rounded-full bg-white/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-          Enter ou Tab
+          Enter or Tab
         </span>
       </div>
       <div className="max-h-72 overflow-y-auto p-2">
@@ -376,7 +376,7 @@ export function QuickReplyAutocomplete({
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold">{item.name}</p>
-                  <p className="mt-1 text-xs text-zinc-500">/{item.shortcut} · {item.category || 'Sem categoria'}</p>
+                  <p className="mt-1 text-xs text-zinc-500">/{item.shortcut} · {item.category || 'Uncategorized'}</p>
                 </div>
                 <span className="rounded-full bg-white/6 px-2.5 py-1 text-[10px] font-semibold text-zinc-400">{item.visibilityScope === 'all' ? 'Everyone' : 'User'}</span>
               </div>

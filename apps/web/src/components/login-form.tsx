@@ -41,7 +41,7 @@ export function LoginForm() {
     if (!email.trim() || !password.trim()) {
       setSubmitState({
         kind: 'error',
-        message: 'Preencha email e senha para continuar.',
+        message: 'Fill in email and password to continue.',
       });
       return;
     }
@@ -58,7 +58,7 @@ export function LoginForm() {
 
       setSubmitState({
         kind: 'success',
-        message: `Acesso liberado para ${result.user.name}. Redirecionando para a dashboard...`,
+        message: `Access granted for ${result.user.name}. Redirecting to the dashboard...`,
       });
 
       setTimeout(() => {
@@ -86,7 +86,7 @@ export function LoginForm() {
               Sign in
             </p>
             <h1 className="font-headline mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Entre na operacao
+              Enter the operation
             </h1>
           </div>
 
@@ -96,8 +96,8 @@ export function LoginForm() {
         </div>
 
         <p className="max-w-md text-sm leading-6 text-white/70 sm:text-base">
-          Acesso enxuto para operadores, supervisores e administradores. So o
-          fluxo essencial para entrar rapido e cair direto no inbox.
+          Lean access for operators, supervisors, and admins. Only the essential
+          flow to sign in fast and land directly in the inbox.
         </p>
 
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -118,7 +118,7 @@ export function LoginForm() {
           </label>
 
           <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-white/72">Senha</span>
+            <span className="text-sm font-medium text-white/72">Password</span>
             <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white transition focus-within:border-[var(--secondary)] focus-within:bg-white/8">
               <KeyRound className="h-4 w-4 text-[var(--secondary)]" />
               <input
@@ -127,7 +127,7 @@ export function LoginForm() {
                 name="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="Sua senha"
+                placeholder="Your password"
                 autoComplete="current-password"
               />
             </div>
@@ -138,7 +138,7 @@ export function LoginForm() {
             type="submit"
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Validando acesso...' : 'Entrar agora'}
+            {isSubmitting ? 'Validating access...' : 'Sign in now'}
             <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
           </button>
         </form>
@@ -150,12 +150,12 @@ export function LoginForm() {
         ) : null}
 
         <div className="border-t border-white/8 pt-4 text-center text-sm text-white/62">
-          Ao continuar, you concorda com a nossa{' '}
+          By continuing, you agree with our{' '}
           <Link
             href="/politica-de-privacidade"
             className="font-medium text-[var(--primary)] underline-offset-4 transition hover:underline"
           >
-            Politica de Privacidade
+            Privacy Policy
           </Link>
           .
         </div>

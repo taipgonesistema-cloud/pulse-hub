@@ -204,6 +204,35 @@ const portugueseDictionary: Record<string, string> = {
   'Create reply': 'Criar resposta',
   'Save reply': 'Salvar resposta',
   'No quick reply available.': 'Nenhuma resposta rapida disponivel.',
+  'Sign in': 'Entrar',
+  'Enter the operation': 'Entre na operacao',
+  'Lean access for operators, supervisors, and admins. Only the essential flow to sign in fast and land directly in the inbox.': 'Acesso enxuto para operadores, supervisores e administradores. So o fluxo essencial para entrar rapido e cair direto no inbox.',
+  'Password': 'Senha',
+  'Your password': 'Sua senha',
+  'Validating access...': 'Validando acesso...',
+  'Sign in now': 'Entrar agora',
+  'Fill in email and password to continue.': 'Preencha email e senha para continuar.',
+  'Access granted for': 'Acesso liberado para',
+  'Redirecting to the dashboard...': 'Redirecionando para a dashboard...',
+  'By continuing, you agree with our': 'Ao continuar, voce concorda com a nossa',
+  'Privacy Policy': 'Politica de Privacidade',
+  'Centralize reusable support shortcuts': 'Centralize atalhos de atendimento reutilizaveis',
+  'Create ready-to-use replies with controlled visibility to speed up support and trigger chat autocomplete by typing': 'Crie respostas prontas com visibilidade controlada para acelerar o atendimento e acionar autocomplete no chat ao digitar',
+  'Search by name, shortcut, or content': 'Buscar por nome, atalho ou conteudo',
+  'replies': 'respostas',
+  'shortcut': 'atalho',
+  'Reply name': 'Nome da resposta',
+  'Type the content to preview the final text.': 'Digite o conteudo para visualizar o texto final.',
+  'Uncategorized': 'Sem categoria',
+  'Updated': 'Atualizada',
+  'by': 'por',
+  'system': 'sistema',
+  'Delete quick reply': 'Excluir resposta rapida',
+  'You are about to delete': 'Voce esta prestes a excluir',
+  'This action removes the shortcut from chat autocomplete.': 'Essa acao remove o atalho do autocomplete do chat.',
+  'Searching for': 'Buscando por',
+  'Type to filter or choose a ready-to-use reply.': 'Digite para filtrar ou escolha uma resposta pronta.',
+  'Enter or Tab': 'Enter ou Tab',
   'Dark': 'Escuro',
   'Light': 'Claro',
   'Switch to dark mode': 'Alternar para modo escuro',
@@ -267,7 +296,9 @@ function translateElement(root: ParentNode, locale: Locale) {
   const textNodes: Text[] = [];
   while (walker.nextNode()) textNodes.push(walker.currentNode as Text);
   textNodes.forEach((node) => {
-    node.nodeValue = translateValue(node.nodeValue ?? '', locale);
+    const current = node.nodeValue ?? '';
+    const translated = translateValue(current, locale);
+    if (translated !== current) node.nodeValue = translated;
   });
 
   const elements = root instanceof Element ? [root, ...Array.from(root.querySelectorAll('*'))] : Array.from(root.querySelectorAll('*'));
@@ -275,7 +306,9 @@ function translateElement(root: ParentNode, locale: Locale) {
     if (shouldSkipAttributes(element)) return;
     ['aria-label', 'title', 'placeholder'].forEach((attribute) => {
       const current = element.getAttribute(attribute);
-      if (current) element.setAttribute(attribute, translateValue(current, locale));
+      if (!current) return;
+      const translated = translateValue(current, locale);
+      if (translated !== current) element.setAttribute(attribute, translated);
     });
   });
 }
@@ -296,14 +329,18 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
           if (node.nodeType === Node.TEXT_NODE) {
-            node.nodeValue = translateValue(node.nodeValue ?? '', locale);
+            const current = node.nodeValue ?? '';
+            const translated = translateValue(current, locale);
+            if (translated !== current) node.nodeValue = translated;
           } else if (node instanceof Element) {
             translateElement(node, locale);
           }
         });
 
         if (mutation.type === 'characterData') {
-          mutation.target.nodeValue = translateValue(mutation.target.nodeValue ?? '', locale);
+          const current = mutation.target.nodeValue ?? '';
+          const translated = translateValue(current, locale);
+          if (translated !== current) mutation.target.nodeValue = translated;
         }
       });
     });
