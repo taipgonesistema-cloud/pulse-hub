@@ -238,6 +238,104 @@ const portugueseDictionary: Record<string, string> = {
   'Switch to dark mode': 'Alternar para modo escuro',
   'Switch to light mode': 'Alternar para modo claro',
   'Language': 'Idioma',
+  'All': 'Todas',
+  'Notifications unavailable': 'Notificacoes indisponiveis',
+  'Permission blocked': 'Permissao bloqueada',
+  'Permission not granted': 'Permissao nao concedida',
+  'Notifications enabled': 'Notificacoes ativadas',
+  'Notifications disabled': 'Notificacoes desativadas',
+  'Sound enabled': 'Som ativado',
+  'Sound disabled': 'Som desativado',
+  'Contact created': 'Contato criado',
+  'CRM updated': 'CRM atualizado',
+  'Label updated': 'Etiqueta atualizada',
+  'Label created': 'Etiqueta criada',
+  'Label removed': 'Etiqueta removida',
+  'Verified only': 'So verificados',
+  'All profiles': 'Todos os perfis',
+  'Search by name, phone, channel, or owner...': 'Buscar por nome, telefone, canal ou responsavel...',
+  'Filters': 'Filtros',
+  'Clear filters': 'Limpar filtros',
+  'Select a card on the board to see context, move stages, and open the conversation quickly.': 'Selecione um card no board para ver contexto, mover de etapa e abrir a conversa rapidamente.',
+  'Publication preview': 'Preview da publicacao',
+  'Publishing to feed and waiting for Instagram confirmation...': 'Publicando no feed e aguardando confirmacao do Instagram...',
+  'Publishing story and waiting for Instagram confirmation...': 'Publicando story e aguardando confirmacao do Instagram...',
+  'Publishing feed...': 'Publicando feed...',
+  'Publishing story...': 'Publicando story...',
+  'Publish to feed': 'Publicar no feed',
+  'Publish story': 'Publicar story',
+  'Only admins and supervisors can publish to Instagram from the dashboard.': 'Apenas administradores e supervisores podem publicar no Instagram pelo dashboard.',
+  'Distinct users in this list': 'Usuarios distintos nesta lista',
+  'Latest 60': '60 ultimos',
+  'Conversations in queue': 'Conversas na fila',
+  'When this conversation has synced history, the complete timeline appears here with messages and media.': 'Quando esta conversa tiver historico sincronizado, a timeline completa aparece aqui com mensagens e midias.',
+  'Connect WhatsApp to see real activity': 'Conecte o WhatsApp para ver atividade real',
+  'Scan the QR': 'Escaneie o QR',
+  'Open Linked devices in WhatsApp and scan the code.': 'Abra Aparelhos conectados no WhatsApp e leia o codigo.',
+  'First support flow': 'Primeiro atendimento',
+  'Media': 'Midia',
+  'No record': 'Sem registro',
+  'Now': 'Agora',
+  'Realtime activity': 'Atividade em tempo real',
+  'Not provided': 'Nao informado',
+  'Contact': 'Contato',
+  'No owner': 'Sem responsavel',
+  'Authentication': 'Autenticacao',
+  'Entering the workspace': 'Entrando no workspace',
+  'Team': 'Equipe',
+  'Preparing your workspace': 'Preparando seu workspace',
+  'Today': 'Hoje',
+  'Opening conversation...': 'Abrindo conversa...',
+  'Feed accepts captions and uses video as a reel when applicable.': 'Feed aceita legenda e usa video como reel quando aplicavel.',
+  'Story prioritizes visual creative; text should be inside the image or video.': 'Story prioriza a arte visual; texto deve estar dentro da imagem ou video.',
+  'Latest publication': 'Ultima publicacao',
+  'Refresh': 'Atualizar',
+  'Queue view': 'Visao da fila',
+  'No synced channel yet.': 'Nenhum canal sincronizado ainda.',
+  'Response, queue, and pipeline in realtime': 'Resposta, fila e pipeline em tempo real',
+  'Active contact': 'Contato ativo',
+  'No label available yet.': 'Nenhuma etiqueta disponivel ainda.',
+  'Notes': 'Observacoes',
+  'Context summary, next action, objections, support details...': 'Resumo do contexto, proxima acao, objeccoes, detalhes do atendimento...',
+  'Open conversation': 'Abrir conversa',
+  'Copy identifier': 'Copiar identificador',
+  'Owner': 'Responsavel',
+  'Owner name': 'Nome do responsavel',
+  'Priority': 'Prioridade',
+  'No priority': 'Sem prioridade',
+  'Interactions': 'Interacoes',
+  'Last message': 'Ultima mensagem',
+  'No recent synced text.': 'Sem texto recente sincronizado.',
+  'The typed message will be sent as the attachment caption.': 'A mensagem digitada sera enviada como legenda do anexo.',
+  'Attendant': 'Atendente',
+  'empty': 'vazio',
+  'yes': 'sim',
+  'no': 'nao',
+  'being followed up': 'em acompanhamento',
+  'synced history': 'historico sincronizado',
+  'no synced interactions': 'sem interacoes sincronizadas',
+  'you@company.com': 'voce@empresa.com',
+  'Custom CRM board': 'Board personalizado do CRM',
+  'Set a short name to create the board.': 'Defina um nome curto para criar o board.',
+  'Board created': 'Board criado',
+  'Board removed': 'Board removido',
+  'Quick reply created': 'Resposta rapida criada',
+  'Quick reply updated': 'Resposta rapida atualizada',
+  'Quick reply deleted': 'Resposta rapida excluida',
+  'Post published on Instagram': 'Post publicado no Instagram',
+  'Story published on Instagram': 'Story publicado no Instagram',
+  'Instagram status updated': 'Status do Instagram atualizado',
+  'to switch between the main sidebar tabs.': 'para alternar entre as abas principais da barra lateral.',
+  'Feed and stories': 'Feed e stories',
+  'Audit': 'Auditoria',
+  'Sensitive events': 'Eventos sensiveis',
+  'Control center': 'Central de controle',
+  'Feed post caption': 'Legenda do post no feed',
+  'Stories use the uploaded creative. Text should be inside the image or video.': 'Stories usam a arte enviada. Texto deve estar na propria imagem ou video.',
+  'Signature name': 'Nome da assinatura',
+  'Refresh panel': 'Atualizar painel',
+  'Open': 'Abrir',
+  'Copy ID': 'Copiar ID',
 };
 
 const portuguesePatterns: Array<[RegExp, (match: RegExpMatchArray) => string]> = [
@@ -248,6 +346,23 @@ const portuguesePatterns: Array<[RegExp, (match: RegExpMatchArray) => string]> =
   [/^(\d+) new messages?$/, (match) => `${match[1]} nova${match[1] === '1' ? '' : 's'} mensagem${match[1] === '1' ? '' : 'ens'}`],
   [/^Load (\d+) previous messages$/, (match) => `Carregar ${match[1]} mensagens anteriores`],
   [/^\+(\d+) labels$/, (match) => `+${match[1]} etiquetas`],
+  [/^Consolidated queue · (.+)$/, (match) => `Fila consolidada · ${match[1]}`],
+  [/^Queue (.+)$/, (match) => `Fila ${match[1]}`],
+  [/^New message received in (.+)\.$/, (match) => `Nova mensagem recebida em ${match[1]}.`],
+  [/^(\d+) results?$/, (match) => `${match[1]} resultado${match[1] === '1' ? '' : 's'}`],
+  [/^color (.+)$/, (match) => `cor ${match[1]}`],
+  [/^usage (\d+)$/, (match) => `uso ${match[1]}`],
+  [/^by (.+)$/, (match) => `por ${match[1]}`],
+  [/^action (.+)$/, (match) => `acao ${match[1]}`],
+  [/^resource (.+)$/, (match) => `recurso ${match[1]}`],
+  [/^(\d+) unread$/, (match) => `${match[1]} nao lidas`],
+  [/^(\d+) pending$/, (match) => `${match[1]} pendentes`],
+  [/^(\d+) min ago$/, (match) => `Ha ${match[1]} min`],
+  [/^(\d+)h ago$/, (match) => `Ha ${match[1]}h`],
+  [/^(\d+)d ago$/, (match) => `Ha ${match[1]}d`],
+  [/^Opening (.+)\.\.\.$/, (match) => `Abrindo ${match[1]}...`],
+  [/^Loading conversations, contacts, and operational data for (.+)\.$/, (match) => `Carregando conversas, contatos e dados operacionais para ${match[1]}.`],
+  [/^(\d+) recent items$/, (match) => `${match[1]} itens recentes`],
 ];
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -324,28 +439,24 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (locale !== 'pt-BR') return undefined;
 
-    translateElement(document.body, locale);
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === Node.TEXT_NODE) {
-            const current = node.nodeValue ?? '';
-            const translated = translateValue(current, locale);
-            if (translated !== current) node.nodeValue = translated;
-          } else if (node instanceof Element) {
-            translateElement(node, locale);
-          }
-        });
-
-        if (mutation.type === 'characterData') {
-          const current = mutation.target.nodeValue ?? '';
-          const translated = translateValue(current, locale);
-          if (translated !== current) mutation.target.nodeValue = translated;
-        }
+    let animationFrameId = 0;
+    const scheduleTranslation = () => {
+      if (animationFrameId) return;
+      animationFrameId = window.requestAnimationFrame(() => {
+        animationFrameId = 0;
+        translateElement(document.body, locale);
       });
+    };
+
+    translateElement(document.body, locale);
+    const observer = new MutationObserver(() => {
+      scheduleTranslation();
     });
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-    return () => observer.disconnect();
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+      if (animationFrameId) window.cancelAnimationFrame(animationFrameId);
+    };
   }, [locale]);
 
   const value = useMemo<I18nContextValue>(() => ({

@@ -925,7 +925,7 @@ export function DashboardClient({ initialOverview }: Props) {
       return [
       {
         id: 'all' as const,
-        label: 'Todas',
+        label: 'All',
         count: allSessionConversations.length,
       },
       {
@@ -942,7 +942,7 @@ export function DashboardClient({ initialOverview }: Props) {
       },
       {
         id: 'unread' as const,
-        label: 'Nao lidas',
+        label: 'Unread',
         count: allSessionConversations.filter((conversation) => conversation.unread > 0).length,
       },
       ];
@@ -1131,14 +1131,14 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     if (conversationSessionScope === 'all') {
-      return `Fila consolidada · ${selectedConversationScopeSummary}`;
+      return `Consolidated queue · ${selectedConversationScopeSummary}`;
     }
 
     if (!selectedSession) {
       return 'No session selected';
     }
 
-    return `Fila ${selectedSession.channelName}`;
+    return `Queue ${selectedSession.channelName}`;
   }, [conversationSessionScope, isConversationsView, selectedConversationScopeSummary, selectedSession]);
 
   const signOut = useCallback(() => {
@@ -1246,7 +1246,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
     const sessionName = overviewRef.current.sessions.find((session) => session.id === payload.sessionId)?.name;
     const title = matchedConversation?.contact || sessionName || 'New message';
-    const body = payload.text?.trim() || `New message received${sessionName ? ` em ${sessionName}` : ''}.`;
+    const body = payload.text?.trim() || `New message received${sessionName ? ` in ${sessionName}` : ''}.`;
 
     try {
       const notification = new Notification(title, {
@@ -1268,7 +1268,7 @@ export function DashboardClient({ initialOverview }: Props) {
       if (typeof window === 'undefined' || !('Notification' in window)) {
         pushToast({
           tone: 'error',
-          title: 'Notificacoes indisponiveis',
+          title: 'Notifications unavailable',
           description: 'This browser does not support system notifications.',
         });
         setNotificationPermission('unsupported');
@@ -1279,7 +1279,7 @@ export function DashboardClient({ initialOverview }: Props) {
         setNotificationPermission('denied');
         pushToast({
           tone: 'info',
-          title: 'Permissao bloqueada',
+          title: 'Permission blocked',
           description: 'Allow site notifications in the browser to enable this alert.',
         });
         return;
@@ -1291,7 +1291,7 @@ export function DashboardClient({ initialOverview }: Props) {
         if (permission !== 'granted') {
           pushToast({
             tone: 'info',
-            title: 'Permissao nao concedida',
+            title: 'Permission not granted',
             description: 'Browser notifications remain disabled.',
           });
           return;
@@ -1309,12 +1309,12 @@ export function DashboardClient({ initialOverview }: Props) {
       } catch {
         // Ignore preview failures after permission grant.
       }
-      pushToast({ tone: 'success', title: 'Notificacoes ativadas' });
+      pushToast({ tone: 'success', title: 'Notifications enabled' });
       return;
     }
 
     setNotificationsEnabled(false);
-    pushToast({ tone: 'success', title: 'Notificacoes desativadas' });
+    pushToast({ tone: 'success', title: 'Notifications disabled' });
   }, [notificationsEnabled, pushToast]);
 
   const toggleSoundNotifications = useCallback(() => {
@@ -1323,7 +1323,7 @@ export function DashboardClient({ initialOverview }: Props) {
       if (next) {
         playNotificationSound();
       }
-      pushToast({ tone: 'success', title: next ? 'Som ativado' : 'Som desativado' });
+      pushToast({ tone: 'success', title: next ? 'Sound enabled' : 'Sound disabled' });
       return next;
     });
   }, [playNotificationSound, pushToast]);
@@ -3419,12 +3419,12 @@ export function DashboardClient({ initialOverview }: Props) {
     }
 
     const label = newBoardForm.label.trim();
-    const description = newBoardForm.description.trim() || 'Board personalizado do CRM';
+    const description = newBoardForm.description.trim() || 'Custom CRM board';
     if (!label) {
       pushToast({
         tone: 'error',
         title: 'Board name required',
-        description: 'Defina um nome curto para criar o board.',
+        description: 'Set a short name to create the board.',
       });
       return;
     }
@@ -3466,7 +3466,7 @@ export function DashboardClient({ initialOverview }: Props) {
       }
 
       await loadContactBoards();
-    }, { successMessage: 'Board criado' });
+    }, { successMessage: 'Board created' });
 
     if (created) {
       setCustomContactsBoards((current) => {
@@ -3516,7 +3516,7 @@ export function DashboardClient({ initialOverview }: Props) {
         }
 
         setCustomContactsBoards(removedBoards);
-      }, { successMessage: 'Board removido' });
+      }, { successMessage: 'Board removed' });
 
       if (!removed && activeContactsBoard === boardId) {
         setActiveContactsBoard(boardId);
@@ -3562,7 +3562,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
       await loadOverview();
       await loadContactKanbanStages();
-    }, { successMessage: 'Contato criado' });
+    }, { successMessage: 'Contact created' });
 
     if (created) {
       setNewContactForm({ name: '', phone: '' });
@@ -3627,7 +3627,7 @@ export function DashboardClient({ initialOverview }: Props) {
         if (!response.ok) {
           throw new Error('Could not save CRM data.');
         }
-      }, { successMessage: 'CRM atualizado' });
+      }, { successMessage: 'CRM updated' });
 
       if (!saved) {
         setContactCrmProfileMap((current) => {
@@ -3697,7 +3697,7 @@ export function DashboardClient({ initialOverview }: Props) {
       if (!response.ok) {
         throw new Error('Could not save the label.');
       }
-    }, { successMessage: contactLabelForm.id ? 'Etiqueta atualizada' : 'Etiqueta criada' });
+    }, { successMessage: contactLabelForm.id ? 'Label updated' : 'Label created' });
 
     if (saved) {
       await loadContactLabels().catch(() => undefined);
@@ -3736,7 +3736,7 @@ export function DashboardClient({ initialOverview }: Props) {
       if (!response.ok) {
         throw new Error('Could not remove the label.');
       }
-    }, { successMessage: 'Etiqueta removida' });
+    }, { successMessage: 'Label removed' });
 
     if (deleted) {
       if (contactLabelForm.id === label.id) {
@@ -3911,7 +3911,7 @@ export function DashboardClient({ initialOverview }: Props) {
       setQuickReplies((current) => [record, ...current.filter((item) => item.id !== record.id)]);
       setShowQuickReplyFormModal(false);
       setEditingQuickReplyId(null);
-    }, { successMessage: quickReplyFormMode === 'create' ? 'Resposta rapida criada' : 'Resposta rapida atualizada' });
+    }, { successMessage: quickReplyFormMode === 'create' ? 'Quick reply created' : 'Quick reply updated' });
 
     if (saved) {
       await loadQuickRepliesList(deferredQuickReplySearch).catch(() => undefined);
@@ -3927,7 +3927,7 @@ export function DashboardClient({ initialOverview }: Props) {
     const deleted = await executeAction(async () => {
       await deleteQuickReply(quickReplyToDelete.id);
       setQuickReplyToDelete(null);
-    }, { successMessage: 'Resposta rapida excluida' });
+    }, { successMessage: 'Quick reply deleted' });
 
     if (deleted) {
       await loadQuickRepliesList(deferredQuickReplySearch).catch(() => undefined);
@@ -3985,7 +3985,7 @@ export function DashboardClient({ initialOverview }: Props) {
       setInstagramFile(null);
       await loadInstagramIntegrationStatus().catch(() => undefined);
     }, {
-      successMessage: instagramPublishMode === 'feed' ? 'Post publicado no Instagram' : 'Story publicado no Instagram',
+      successMessage: instagramPublishMode === 'feed' ? 'Post published on Instagram' : 'Story published on Instagram',
     }).finally(() => {
       setIsPublishingInstagram(false);
     });
@@ -4009,7 +4009,7 @@ export function DashboardClient({ initialOverview }: Props) {
     await executeAction(async () => {
       await loadInstagramIntegrationStatus();
     }, {
-      successMessage: 'Status do Instagram atualizado',
+      successMessage: 'Instagram status updated',
     }).finally(() => {
       setIsRefreshingInstagramStatus(false);
     });
@@ -4238,11 +4238,11 @@ export function DashboardClient({ initialOverview }: Props) {
     return (
       <WorkspaceBootstrapScreen
         items={[
-          { label: 'Autenticacao', ready: false },
+          { label: 'Authentication', ready: false },
           { label: 'Workspace', ready: false },
         ]}
         subtitle="Validating credentials and restoring your access session."
-        title="Entrando no workspace"
+        title="Entering the workspace"
       />
     );
   }
@@ -4255,11 +4255,11 @@ export function DashboardClient({ initialOverview }: Props) {
           { label: 'Kanban', ready: hasLoadedInitialContactKanban },
           { label: 'Boards', ready: hasLoadedInitialContactBoards },
           { label: 'CRM', ready: hasLoadedInitialContactCRM },
-          { label: 'Equipe', ready: hasLoadedInitialUsers },
+          { label: 'Team', ready: hasLoadedInitialUsers },
           { label: 'Quick replies', ready: hasLoadedInitialQuickReplies },
         ]}
-        subtitle={`Loading conversations, contacts, and operational data${authUser?.name ? ` para ${authUser.name}` : ''}.`}
-        title="Preparando seu workspace"
+        subtitle={`Loading conversations, contacts, and operational data${authUser?.name ? ` for ${authUser.name}` : ''}.`}
+        title="Preparing your workspace"
       />
     );
   }
@@ -4568,7 +4568,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   type="button"
                 >
                   <BadgeCheck className="h-4 w-4" strokeWidth={2.1} />
-                  {contactsAudienceFilter === 'verified' ? 'So verificados' : 'Everyone os perfis'}
+                  {contactsAudienceFilter === 'verified' ? 'Verified only' : 'All profiles'}
                 </button>
                 <button
                   className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#7fafff,#64a1ff)] px-4 py-2 text-sm font-semibold text-black shadow-[0_0_18px_rgba(127,175,255,0.26)] transition hover:scale-[1.01]"
@@ -4588,7 +4588,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   <input
                     className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
                     onChange={(event) => setContactsSearch(event.target.value)}
-                    placeholder="Buscar por nome, telefone, canal ou responsavel..."
+                    placeholder="Search by name, phone, channel, or owner..."
                     value={contactsSearch}
                   />
                 </div>
@@ -4625,7 +4625,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 type="button"
               >
                 <SlidersHorizontal className="h-4 w-4" strokeWidth={2.1} />
-                Filtros
+                Filters
               </button>
             </div>
 
@@ -4664,7 +4664,7 @@ export function DashboardClient({ initialOverview }: Props) {
               </div>
             ) : filteredContacts.length === 0 ? (
               <EmptyStateCard
-                actionLabel="Limpar filtros"
+                actionLabel="Clear filters"
                 description="Adjust search, channels, or boards to repopulate the pipeline and drag contacts between stages again."
                 onAction={resetContactsView}
                 title="No contact available on this board"
@@ -4737,7 +4737,7 @@ export function DashboardClient({ initialOverview }: Props) {
             />
           ) : (
             <EmptyStateCard
-              description="Selecione um card no board para ver contexto, mover de etapa e abrir a conversa rapidamente."
+              description="Select a card on the board to see context, move stages, and open the conversation quickly."
               title="No contact selected"
             />
           )}
@@ -4814,7 +4814,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       {analyticsModel.healthScore.toFixed(1)}
                     </span>
                     <span className="mt-1 text-sm font-bold text-[var(--secondary)]">
-                      Resposta, fila e pipeline em tempo real
+                      Response, queue, and pipeline in realtime
                     </span>
                   </div>
                 </div>
@@ -4918,7 +4918,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   Recent Resolved Conversations
                 </h3>
                 <span className="rounded-full bg-[var(--surface-highest)] px-4 py-2 text-xs text-zinc-300">
-                  {analyticsModel.resolvedTickets.length.toLocaleString('pt-BR')} itens recentes
+                  {analyticsModel.resolvedTickets.length.toLocaleString('pt-BR')} recent items
                 </span>
               </div>
               <div className="overflow-x-auto">
@@ -5087,7 +5087,7 @@ export function DashboardClient({ initialOverview }: Props) {
               <div className="mt-5 rounded-[24px] border border-[var(--primary)]/18 bg-[var(--primary)]/10 p-4">
                 <p className="text-sm font-semibold text-white">Useful shortcut</p>
                 <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
-                  Use <span className="font-semibold text-[var(--primary)]">Alt + number</span> para alternar entre as abas principais da barra lateral.
+                  Use <span className="font-semibold text-[var(--primary)]">Alt + number</span> to switch between the main sidebar tabs.
                 </p>
               </div>
             </div>
@@ -5160,7 +5160,7 @@ export function DashboardClient({ initialOverview }: Props) {
       {
         id: 'instagram' as const,
         label: 'Instagram',
-        description: 'Feed e stories',
+        description: 'Feed and stories',
         icon: Camera,
         enabled: canManageInstagram,
         accent: 'from-pink-400/28 to-rose-500/10 text-pink-100',
@@ -5168,8 +5168,8 @@ export function DashboardClient({ initialOverview }: Props) {
       },
       {
         id: 'audit' as const,
-        label: 'Auditoria',
-        description: 'Events sensiveis',
+        label: 'Audit',
+        description: 'Sensitive events',
         icon: BarChart3,
         enabled: canViewAuditLogs,
         accent: 'from-zinc-200/18 to-white/5 text-zinc-200',
@@ -5187,7 +5187,7 @@ export function DashboardClient({ initialOverview }: Props) {
             <div className="max-w-3xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.22em] text-[var(--muted)]">
                 <Sparkles className="h-3.5 w-3.5 text-[var(--primary)]" strokeWidth={2.1} />
-                Central de controle
+                Control center
               </div>
               <h2 className="font-headline mt-4 text-3xl font-semibold tracking-[-0.04em] text-white md:text-4xl">
                 {settingsHeading}
@@ -5220,7 +5220,7 @@ export function DashboardClient({ initialOverview }: Props) {
               type="button"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${settingsSection === 'instagram' && isRefreshingInstagramStatus ? 'animate-spin' : ''}`} strokeWidth={2.1} />
-              Atualizar painel
+              Refresh panel
             </button>
           </div>
 
@@ -5262,10 +5262,10 @@ export function DashboardClient({ initialOverview }: Props) {
                     </div>
                     <div className="mt-5 grid gap-3 text-sm text-zinc-300">
                       <div className="rounded-2xl border border-white/8 bg-black/12 px-4 py-3">
-                        Feed aceita legenda e usa video como reel quando aplicavel.
+                        Feed accepts captions and uses video as a reel when applicable.
                       </div>
                       <div className="rounded-2xl border border-white/8 bg-black/12 px-4 py-3">
-                        Story prioriza a arte visual; texto deve estar dentro da imagem ou video.
+                        Story prioritizes visual creative; text should be inside the image or video.
                       </div>
                     </div>
                     {!isLoadingInstagramStatus && instagramStatus && !instagramStatus.configured ? (
@@ -5279,7 +5279,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 <div className="glass-panel rounded-[30px] p-6">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                      Ultima publicacao
+                      Latest publication
                     </p>
                     {lastInstagramPublish ? (
                       <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
@@ -5364,12 +5364,12 @@ export function DashboardClient({ initialOverview }: Props) {
                       className="min-h-[132px] w-full rounded-[24px] border-0 border-b-2 border-transparent bg-[var(--surface-high)] px-4 py-3 text-sm text-white outline-none transition focus:border-[var(--primary)]"
                       disabled={isPublishingInstagram}
                       onChange={(event) => setInstagramCaption(event.target.value)}
-                      placeholder="Legenda do post no feed"
+                      placeholder="Feed post caption"
                       value={instagramCaption}
                     />
                   ) : (
                     <div className="rounded-[24px] border border-white/8 bg-white/4 px-4 py-4 text-sm text-[var(--muted)]">
-                      Stories usam a arte enviada. Texto deve estar na propria imagem ou video.
+                      Stories use the uploaded creative. Text should be inside the image or video.
                     </div>
                   )}
 
@@ -5385,7 +5385,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          alt="Preview da publicacao"
+                          alt="Publication preview"
                           className="max-h-[360px] w-full rounded-[22px] object-contain"
                           src={instagramPreviewSource}
                         />
@@ -5403,8 +5403,8 @@ export function DashboardClient({ initialOverview }: Props) {
                     <div className="inline-flex items-center gap-2 rounded-full border border-pink-400/20 bg-pink-400/10 px-3 py-2 text-xs text-pink-100">
                       <RefreshCw className="h-3.5 w-3.5 animate-spin" strokeWidth={2.1} />
                       {instagramPublishMode === 'feed'
-                        ? 'Publicando no feed e aguardando confirmacao do Instagram...'
-                        : 'Publicando story e aguardando confirmacao do Instagram...'}
+                        ? 'Publishing to feed and waiting for Instagram confirmation...'
+                        : 'Publishing story and waiting for Instagram confirmation...'}
                     </div>
                   ) : null}
 
@@ -5419,8 +5419,8 @@ export function DashboardClient({ initialOverview }: Props) {
                         <RefreshCw className="h-4 w-4 animate-spin" strokeWidth={2.1} />
                       ) : null}
                       {isPublishingInstagram
-                        ? (instagramPublishMode === 'feed' ? 'Publicando feed...' : 'Publicando story...')
-                        : (instagramPublishMode === 'feed' ? 'Publicar no feed' : 'Publicar story')}
+                        ? (instagramPublishMode === 'feed' ? 'Publishing feed...' : 'Publishing story...')
+                        : (instagramPublishMode === 'feed' ? 'Publish to feed' : 'Publish story')}
                     </button>
                     <button
                       className="rounded-full bg-white/5 px-5 py-3 text-sm text-[var(--muted)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
@@ -5440,7 +5440,7 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
           ) : (
             <EmptyStateCard
-              description="Apenas administradores e supervisores podem publicar no Instagram pelo dashboard."
+              description="Only admins and supervisors can publish to Instagram from the dashboard."
               title="Restricted access"
             />
           )
@@ -5547,9 +5547,9 @@ export function DashboardClient({ initialOverview }: Props) {
                             <span className="truncate">{label.name}</span>
                           </span>
                           <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-400">
-                            <span className="rounded-full bg-white/5 px-2.5 py-1">cor {label.color}</span>
-                            <span className="rounded-full bg-white/5 px-2.5 py-1">uso {contactLabelUsageMap[label.id] ?? 0}</span>
-                            {label.updatedBy ? <span className="rounded-full bg-white/5 px-2.5 py-1">por {label.updatedBy}</span> : null}
+                            <span className="rounded-full bg-white/5 px-2.5 py-1">color {label.color}</span>
+                            <span className="rounded-full bg-white/5 px-2.5 py-1">usage {contactLabelUsageMap[label.id] ?? 0}</span>
+                            {label.updatedBy ? <span className="rounded-full bg-white/5 px-2.5 py-1">by {label.updatedBy}</span> : null}
                           </div>
                         </div>
                         <div className="flex gap-2">
@@ -5596,7 +5596,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 </p>
                 <div className="mt-5 grid gap-4 md:grid-cols-3 xl:grid-cols-1">
                   <MetricCard label="Events" value={auditLogs.length} detail="Latest loaded records" tone="primary" compact />
-                  <MetricCard label="Actors" value={new Set(auditLogs.map((item) => item.actorUserId || item.actorName || item.id)).size} detail="Users distintos nesta lista" tone="secondary" compact />
+                  <MetricCard label="Actors" value={new Set(auditLogs.map((item) => item.actorUserId || item.actorName || item.id)).size} detail="Distinct users in this list" tone="secondary" compact />
                   <MetricCard label="Resources" value={new Set(auditLogs.map((item) => item.resourceType)).size} detail="Tracked resource types" tone="tertiary" compact />
                 </div>
               </div>
@@ -5605,14 +5605,14 @@ export function DashboardClient({ initialOverview }: Props) {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.24em] text-[var(--muted)]">
-                      Events recentes
+                      Recent events
                     </p>
                     <p className="mt-2 text-sm text-[var(--muted)]">
                       User, action, resource, and operational context of the latest sensitive changes.
                     </p>
                   </div>
                   <span className="rounded-full bg-white/5 px-3 py-1 text-[11px] text-[var(--muted)]">
-                    60 ultimos
+                    Latest 60
                   </span>
                 </div>
 
@@ -5639,8 +5639,8 @@ export function DashboardClient({ initialOverview }: Props) {
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-zinc-400">
-                        <span className="rounded-full bg-white/5 px-2.5 py-1">acao {entry.action}</span>
-                        <span className="rounded-full bg-white/5 px-2.5 py-1">recurso {entry.resourceType}</span>
+                        <span className="rounded-full bg-white/5 px-2.5 py-1">action {entry.action}</span>
+                        <span className="rounded-full bg-white/5 px-2.5 py-1">resource {entry.resourceType}</span>
                         {entry.resourceId ? <span className="rounded-full bg-white/5 px-2.5 py-1">id {entry.resourceId}</span> : null}
                         {entry.remoteAddr ? <span className="rounded-full bg-white/5 px-2.5 py-1">ip {entry.remoteAddr}</span> : null}
                       </div>
@@ -6027,7 +6027,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
                     <div className="mt-6 grid gap-4 md:grid-cols-3">
                       <MetricCard label="Unread" value={selectedSession.unread} detail="Pending messages" tone="primary" compact />
-                      <MetricCard label="Waiting" value={selectedSession.waiting} detail="Conversations na fila" tone="tertiary" compact />
+                      <MetricCard label="Waiting" value={selectedSession.waiting} detail="Conversations in queue" tone="tertiary" compact />
                       <MetricCard label="Attendants" value={selectedSession.attendants} detail="Linked attendants" tone="secondary" compact />
                     </div>
 
@@ -6162,14 +6162,14 @@ export function DashboardClient({ initialOverview }: Props) {
               type="button"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2.1} />
-              Filtros
+              Filters
             </button>
             <button
               className="rounded-full bg-white/5 px-3 py-1.5 text-[11px] text-[var(--muted)] hover:text-white"
               onClick={() => runAction(loadOverview)}
               type="button"
             >
-              Atualizar
+              Refresh
             </button>
           </div>
         </div>
@@ -6178,7 +6178,7 @@ export function DashboardClient({ initialOverview }: Props) {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                Visao da fila
+                Queue view
               </p>
               <p className="mt-1 text-xs text-[var(--muted)]">
                 {selectedConversationScopeSummary}
@@ -6186,7 +6186,7 @@ export function DashboardClient({ initialOverview }: Props) {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-300">
-                {visibleSessionConversations.length} resultado{visibleSessionConversations.length === 1 ? '' : 's'}
+                {visibleSessionConversations.length} result{visibleSessionConversations.length === 1 ? '' : 's'}
               </span>
               {(conversationSearchTerm || conversationFilter !== 'all' || conversationSessionScope !== 'selected' || conversationSessionFilterIds.length > 0) ? (
                 <button
@@ -6194,7 +6194,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   onClick={resetConversationView}
                   type="button"
                 >
-                  Limpar filtros
+                  Clear filters
                 </button>
               ) : null}
             </div>
@@ -6250,7 +6250,7 @@ export function DashboardClient({ initialOverview }: Props) {
                       onClick={() => setConversationSessionFilterIds([])}
                       type="button"
                     >
-                      Todas
+                      All
                     </button>
                     {conversationSessionOptions.map((session) => {
                       const active = conversationSessionFilterIds.includes(session.id);
@@ -6276,7 +6276,7 @@ export function DashboardClient({ initialOverview }: Props) {
 
               <div>
                 <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                  Tipo de conversa
+                  Conversation type
                 </p>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   {conversationFilterOptions.map((option) => {
@@ -6313,7 +6313,7 @@ export function DashboardClient({ initialOverview }: Props) {
                 {overview.channels.length > 0 ? (
                   overview.channels.map((channel) => <ChannelPill key={channel.id} channel={channel} />)
                 ) : (
-                  <span className="text-xs text-[var(--muted)]">Nenhum canal sincronizado ainda.</span>
+                  <span className="text-xs text-[var(--muted)]">No synced channel yet.</span>
                 )}
               </div>
 
@@ -6599,8 +6599,8 @@ export function DashboardClient({ initialOverview }: Props) {
 
                   {timelineMessages.length === 0 && !isLoadingMessages ? (
                     <EmptyStateCard
-                      description="Quando esta conversa tiver historico sincronizado, a timeline completa aparece aqui com messages e midias."
-                      title="Timeline aguardando messages"
+                      description="When this conversation has synced history, the complete timeline appears here with messages and media."
+                      title="Timeline waiting for messages"
                     />
                   ) : null}
                 </div>
@@ -6849,7 +6849,7 @@ export function DashboardClient({ initialOverview }: Props) {
               value={newBoardForm.description}
             />
             <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-xs leading-6 text-zinc-400">
-              The board will be created with the current filters: fila <strong className="text-white">{contactsFilter}</strong>, audiencia <strong className="text-white">{contactsAudienceFilter}</strong> e canal <strong className="text-white">{contactsChannelFilter}</strong>.
+              The board will be created with the current filters: queue <strong className="text-white">{contactsFilter}</strong>, audience <strong className="text-white">{contactsAudienceFilter}</strong>, and channel <strong className="text-white">{contactsChannelFilter}</strong>.
             </div>
             <div className="flex justify-end gap-2">
               <button
@@ -7018,7 +7018,7 @@ export function DashboardClient({ initialOverview }: Props) {
                   ? 'Notification permission blocked in the browser'
                   : notificationsEnabled
                     ? 'Browser notifications active'
-                    : 'Enable notifications do navegador'}
+                    : 'Enable browser notifications'}
                 type="button"
               >
                 {notificationsEnabled ? <Bell className="h-4 w-4" strokeWidth={2.1} /> : <BellOff className="h-4 w-4" strokeWidth={2.1} />}
@@ -7593,10 +7593,10 @@ function ConversationLoadingState({ contact }: { contact?: string }) {
 
         <div>
           <span className="inline-flex rounded-full bg-white/6 px-3 py-1 text-[11px] font-medium text-[var(--muted)]">
-            Hoje
+            Today
           </span>
           <p className="mt-4 text-sm text-[var(--muted)]">
-            {contact ? `Abrindo ${contact}...` : 'Abrindo conversa...'}
+            {contact ? `Opening ${contact}...` : 'Opening conversation...'}
           </p>
         </div>
 
@@ -7666,7 +7666,7 @@ function EmptyStateCard({
 }
 
 function WhatsAppOnboardingCard({
-  title = 'Conecte o WhatsApp para ver atividade real',
+  title = 'Connect WhatsApp to see real activity',
   description = 'Create a session, scan the QR, and start receiving messages in the panel without refreshing the page.',
   actionLabel,
   onAction,
@@ -7682,7 +7682,7 @@ function WhatsAppOnboardingCard({
 }) {
   const steps = [
     { label: '1', title: 'Create the session', description: 'Use a simple name to identify the number in the workspace.' },
-    { label: '2', title: 'Escaneie o QR', description: 'Abra Aparelhos conectados no WhatsApp e leia o codigo.' },
+    { label: '2', title: 'Scan the QR', description: 'Open Linked devices in WhatsApp and scan the code.' },
     { label: '3', title: 'Handle in realtime', description: 'Conversations appear here as soon as new messages arrive.' },
   ];
 
@@ -7690,7 +7690,7 @@ function WhatsAppOnboardingCard({
     <div className="overflow-hidden rounded-[30px] border border-[var(--primary)]/18 bg-[linear-gradient(145deg,rgba(127,175,255,0.12),rgba(255,255,255,0.03))] p-5 text-left shadow-[0_24px_70px_-42px_rgba(0,0,0,0.8)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-xl">
-          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[var(--primary)]">Primeiro atendimento</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[var(--primary)]">First support flow</p>
           <h3 className="mt-3 font-headline text-2xl font-semibold text-white">{title}</h3>
           <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{description}</p>
         </div>
@@ -8088,7 +8088,7 @@ function ContactKanbanCard({
           }}
           type="button"
         >
-          Abrir
+          Open
         </button>
         <button
           className="rounded-full bg-white/6 px-3 py-1.5 text-[11px] font-semibold text-zinc-400 transition hover:bg-white/10 hover:text-white"
@@ -8098,7 +8098,7 @@ function ContactKanbanCard({
           }}
           type="button"
         >
-          Copiar ID
+          Copy ID
         </button>
       </div>
     </article>
@@ -8150,7 +8150,7 @@ function ContactKanbanDetailPanel({
           <AvatarBadge className="h-16 w-16 text-lg" label={contact.contact} src={contact.avatarUrl} />
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-zinc-500">
-              Contato active
+              Active contact
             </p>
             <h3 className="mt-2 text-xl font-semibold text-white">{contact.contact}</h3>
             <p className="mt-1 text-sm text-zinc-400">{contact.owner} · {contact.channelName}</p>
@@ -8199,7 +8199,7 @@ function ContactKanbanDetailPanel({
         </p>
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-white/[0.03] p-3">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Interacoes</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Interactions</p>
             <p className="mt-2 text-2xl font-semibold text-white">{interactionMetric.value}</p>
             <p className={`mt-1 text-[11px] font-semibold ${interactionMetric.tone}`}>{interactionMetric.label}</p>
           </div>
@@ -8211,8 +8211,8 @@ function ContactKanbanDetailPanel({
         </div>
 
         <div className="mt-4 rounded-2xl bg-white/[0.03] p-3">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Ultima message</p>
-          <p className="mt-2 text-sm leading-6 text-zinc-300">{contact.preview || 'Sem texto recente sincronizado.'}</p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Last message</p>
+          <p className="mt-2 text-sm leading-6 text-zinc-300">{contact.preview || 'No recent synced text.'}</p>
           <div className="mt-3 flex items-center gap-2 text-xs">
             <span className={`h-2.5 w-2.5 rounded-full ${connectivity.dot}`} />
             <span className={connectivity.tone}>{connectivity.label}</span>
@@ -8244,19 +8244,19 @@ function ContactKanbanDetailPanel({
         <div className="mt-4 space-y-3">
           <div>
             <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
-              Responsavel
+              Owner
             </label>
             <input
               className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
               onChange={(event) => setDraftAssignee(event.target.value)}
-              placeholder="Name do responsavel"
+              placeholder="Owner name"
               value={draftAssignee}
             />
           </div>
 
           <div>
             <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
-              Prioridade
+              Priority
             </label>
             <div className="grid grid-cols-2 gap-2">
               {(['', 'low', 'medium', 'high', 'urgent'] as const).map((priority) => (
@@ -8266,7 +8266,7 @@ function ContactKanbanDetailPanel({
                   onClick={() => setDraftPriority(priority)}
                   type="button"
                 >
-                  {priority || 'Sem prioridade'}
+                  {priority || 'No priority'}
                 </button>
               ))}
             </div>
@@ -8319,7 +8319,7 @@ function ContactKanbanDetailPanel({
                 </div>
               ) : (
                 <div className="rounded-2xl border border-dashed border-white/8 bg-black/10 px-4 py-3 text-sm text-zinc-500">
-                  No label available ainda.
+                  No label available yet.
                 </div>
               )}
 
@@ -8337,12 +8337,12 @@ function ContactKanbanDetailPanel({
 
           <div>
             <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
-              Observacoes
+              Notes
             </label>
             <textarea
               className="min-h-28 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500"
               onChange={(event) => setDraftNotes(event.target.value)}
-              placeholder="Summary do contexto, proxima acao, objeccoes, detalhes do atendimento..."
+              placeholder="Context summary, next action, objections, support details..."
               value={draftNotes}
             />
           </div>
@@ -8360,7 +8360,7 @@ function ContactKanbanDetailPanel({
             type="button"
           >
             <MessageCircle className="h-4 w-4" strokeWidth={2.1} />
-            Abrir conversa
+            Open conversation
           </button>
           <button
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
@@ -8368,7 +8368,7 @@ function ContactKanbanDetailPanel({
             type="button"
           >
             <MoreVertical className="h-4 w-4" strokeWidth={2.1} />
-            Copiar identificador
+            Copy identifier
           </button>
         </div>
       </div>
@@ -8794,7 +8794,7 @@ function ConversationComposer({
                 {selectedAttachment.sticker
                   ? 'Ready to send as a sticker.'
                   : draft.trim()
-                    ? 'A message digitada sera enviada como legenda do anexo.'
+                    ? 'The typed message will be sent as the attachment caption.'
                     : 'Add an optional caption or send directly.'}
               </p>
             </div>
@@ -8888,7 +8888,7 @@ function ConversationComposer({
               className="w-full min-w-0 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white outline-none transition focus:border-[var(--primary)]/40 md:py-2.5"
               disabled={composerBusy}
               onChange={(event) => setSignatureName(event.target.value)}
-              placeholder="Name da assinatura"
+              placeholder="Signature name"
               value={signatureName}
             />
           </div>
@@ -9432,7 +9432,7 @@ const LazyMessageMedia = memo(function LazyMessageMedia({
         )
       ) : (
         <div className="grid h-full w-full place-items-center rounded-2xl bg-white/5 text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
-          {kind === 'video' ? 'Video' : kind === 'audio' ? 'Audio' : 'Midia'}
+          {kind === 'video' ? 'Video' : kind === 'audio' ? 'Audio' : 'Media'}
         </div>
       )}
     </div>
@@ -9565,7 +9565,7 @@ function formatRoleLabel(role: AuthUser['role']) {
     case 'supervisor':
       return 'Supervisor';
     default:
-      return 'Atendente';
+      return 'Attendant';
   }
 }
 
@@ -9578,10 +9578,10 @@ function formatAuditDetailLabel(value: string) {
 
 function formatAuditDetailValue(value: unknown) {
   if (value == null) {
-    return 'vazio';
+    return 'empty';
   }
   if (typeof value === 'boolean') {
-    return value ? 'sim' : 'nao';
+    return value ? 'yes' : 'no';
   }
   if (typeof value === 'string' || typeof value === 'number') {
     return String(value);
@@ -9700,7 +9700,7 @@ function formatRelativePulse(timestamp: string) {
   const parsed = Date.parse(timestamp);
   if (!Number.isFinite(parsed)) {
     return {
-      primary: 'Sem registro',
+      primary: 'No record',
       secondary: 'No activity detected',
     };
   }
@@ -9710,14 +9710,14 @@ function formatRelativePulse(timestamp: string) {
 
   if (minutes < 2) {
     return {
-      primary: 'Agora',
-      secondary: 'Atividade em tempo real',
+      primary: 'Now',
+      secondary: 'Realtime activity',
     };
   }
 
   if (minutes < 60) {
     return {
-      primary: `Ha ${minutes} min`,
+      primary: `${minutes} min ago`,
       secondary: 'Active session',
     };
   }
@@ -9725,14 +9725,14 @@ function formatRelativePulse(timestamp: string) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) {
     return {
-      primary: `Ha ${hours}h`,
+      primary: `${hours}h ago`,
       secondary: formatClock(timestamp),
     };
   }
 
   const days = Math.floor(hours / 24);
   return {
-    primary: `Ha ${days}d`,
+    primary: `${days}d ago`,
     secondary: formatDateLabel(timestamp),
   };
 }
@@ -9740,13 +9740,13 @@ function formatRelativePulse(timestamp: string) {
 function formatParticipantReference(value: string) {
   const trimmed = value.trim();
   if (!trimmed) {
-    return 'Nao informado';
+    return 'Not provided';
   }
 
   return trimmed
     .replace(/@s\.whatsapp\.net$/i, '')
     .replace(/@c\.us$/i, '')
-    .replace(/@g\.us$/i, ' (grupo)');
+    .replace(/@g\.us$/i, ' (group)');
 }
 
 function slugifyContact(label: string) {
@@ -9840,7 +9840,7 @@ function getContactInteractionMetric(contact: ConversationRecord) {
   if (interactionCount > 0) {
     return {
       value: interactionCount.toLocaleString('pt-BR'),
-      label: contact.unread > 0 ? `${contact.unread} nao lidas` : 'historico sincronizado',
+      label: contact.unread > 0 ? `${contact.unread} unread` : 'synced history',
       tone: contact.unread > 0 ? 'text-[var(--secondary)]' : 'text-[var(--muted)]',
     };
   }
@@ -9848,7 +9848,7 @@ function getContactInteractionMetric(contact: ConversationRecord) {
   if (contact.unread > 0) {
     return {
       value: contact.unread.toLocaleString('pt-BR'),
-      label: `${contact.unread.toLocaleString('pt-BR')} pendentes`,
+      label: `${contact.unread.toLocaleString('pt-BR')} pending`,
       tone: 'text-[var(--secondary)]',
     };
   }
@@ -9857,14 +9857,14 @@ function getContactInteractionMetric(contact: ConversationRecord) {
   if (waitingMinutes > 0) {
     return {
       value: formatCompactDuration(waitingMinutes),
-      label: 'em acompanhamento',
+      label: 'being followed up',
       tone: 'text-[var(--muted)]',
     };
   }
 
   return {
     value: '0',
-    label: 'sem interacoes sincronizadas',
+    label: 'no synced interactions',
     tone: 'text-[var(--muted)]',
   };
 }
@@ -10518,7 +10518,7 @@ function buildRealtimeMessageRecord(event: RealtimeSocketEvent) {
     mimeType: message.mimeType || undefined,
     fileName: message.fileName || undefined,
     timestamp: message.timestamp || event.occurredAt || new Date().toISOString(),
-    author: message.author || (message.fromMe ? 'Operator' : 'Contato'),
+    author: message.author || (message.fromMe ? 'Operator' : 'Contact'),
   } satisfies MessageRecord;
 }
 
@@ -10567,7 +10567,7 @@ function applyRealtimeMessageToOverview(
       unread: isActivelyViewed ? 0 : nextUnread,
       preview: summarizeConversationPreview(message),
       lastMessageAt: message.timestamp,
-      waitingTime: 'agora',
+      waitingTime: 'now',
     };
   });
 
@@ -10583,10 +10583,10 @@ function applyRealtimeMessageToOverview(
       contact: message.direction === 'incoming' ? message.author : contactNameFromJid(conversationId),
       avatarUrl: null,
       participantId: conversationId,
-      owner: 'Sem responsavel',
+      owner: 'No owner',
       status: 'Active',
       channelName: session?.channelName ?? 'WhatsApp',
-      waitingTime: 'agora',
+      waitingTime: 'now',
       unread,
       preview: summarizeConversationPreview(message),
       lastMessageAt: message.timestamp,
@@ -10706,7 +10706,7 @@ function isSameConversationId(left: string, right: string) {
 
 function contactNameFromJid(value: string) {
   const localPart = value.split('@')[0]?.split(':')[0]?.trim();
-  return localPart || value || 'Contato';
+  return localPart || value || 'Contact';
 }
 
 function dedupeConversations(conversations: ConversationRecord[]) {

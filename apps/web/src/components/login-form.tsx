@@ -111,7 +111,7 @@ export function LoginForm() {
                 name="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@empresa.com"
+                placeholder="you@company.com"
                 autoComplete="email"
               />
             </div>
