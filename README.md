@@ -252,14 +252,6 @@ npm run build:web
 npm run build:server
 ```
 
-## Security
-
-- Do not commit real `.env` files.
-- Change the seed password in any shared or production environment.
-- Configure CORS explicitly in production.
-- Use secure cookies (`AUTH_COOKIE_SECURE=true`) over HTTPS.
-- Protect Instagram tokens, Cloudinary credentials, database DSNs, and Redis URLs.
-
 ## License
 
 This project is licensed under the MIT License. See [`LICENSE`](LICENSE) for more details.
